@@ -348,7 +348,9 @@ async function fetchAPI<T>(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `API Error: ${response.status}`);
+    const err = new Error(error.detail || `API Error: ${response.status}`);
+    (err as any).status = response.status;
+    throw err;
   }
 
   return response.json();

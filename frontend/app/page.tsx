@@ -157,7 +157,14 @@ const PRIORITY_STYLE: Record<string, string> = {
 
 function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [sectors, setSectors] = useState<SectorData[]>([]);
+  const FALLBACK_SECTORS: SectorData[] = [
+    { code: "supermarche", name: "Grande Distribution", competitors_count: 6 },
+    { code: "bricolage", name: "Bricolage & Maison", competitors_count: 2 },
+    { code: "mode", name: "Mode & Habillement", competitors_count: 4 },
+    { code: "beaute", name: "Beauté & Cosmétiques", competitors_count: 3 },
+    { code: "electromenager", name: "Électroménager & High-Tech", competitors_count: 3 },
+  ];
+  const [sectors, setSectors] = useState<SectorData[]>(FALLBACK_SECTORS);
   const [sector, setSector] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [website, setWebsite] = useState("");
@@ -486,7 +493,15 @@ export default function DashboardPage() {
           setData(d);
         }
       })
-      .catch(() => setNeedsOnboarding(true))
+      .catch((err) => {
+        // 404 = no brand configured → show onboarding
+        // Other errors = actual API failure → show error
+        if ((err as any).status === 404) {
+          setNeedsOnboarding(true);
+        } else {
+          setError("Le serveur est en cours de démarrage, veuillez patienter...");
+        }
+      })
       .finally(() => setLoading(false));
   }
 
@@ -507,12 +522,18 @@ export default function DashboardPage() {
   if (needsOnboarding)
     return <OnboardingScreen onComplete={loadDashboard} />;
 
-  if (!data)
+  if (error || !data)
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center space-y-2">
-          <AlertTriangle className="h-8 w-8 text-red-400 mx-auto" />
-          <p className="text-red-500 font-medium">Erreur inconnue</p>
+        <div className="text-center space-y-3">
+          <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto" />
+          <p className="text-muted-foreground font-medium">{error || "Erreur inconnue"}</p>
+          <button
+            onClick={loadDashboard}
+            className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+          >
+            Réessayer
+          </button>
         </div>
       </div>
     );
