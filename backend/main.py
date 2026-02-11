@@ -30,6 +30,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _enrich_missing_stores():
+    """Background: enrich competitors that have 0 BANCO store locations."""
+    try:
+        from database import SessionLocal, Competitor, StoreLocation
+        from services.banco import banco_service
+        from sqlalchemy import func
+
+        db = SessionLocal()
+        try:
+            competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+            if not competitors:
+                return
+
+            # Find which competitors already have stores
+            existing = dict(
+                db.query(StoreLocation.competitor_id, func.count(StoreLocation.id))
+                .filter(StoreLocation.source == "BANCO")
+                .group_by(StoreLocation.competitor_id)
+                .all()
+            )
+
+            missing = [c for c in competitors if existing.get(c.id, 0) == 0]
+            if not missing:
+                return
+
+            logger.info(f"BANCO startup: enriching {len(missing)} competitors without stores")
+            for comp in missing:
+                try:
+                    count = await banco_service.search_and_store(comp.id, comp.name, db)
+                    logger.info(f"BANCO: {count} stores for '{comp.name}'")
+                except Exception as e:
+                    logger.error(f"BANCO enrich failed for '{comp.name}': {e}")
+
+            # Free memory after enrichment
+            banco_service._data = None
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"BANCO startup enrichment error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle management."""
@@ -38,6 +79,10 @@ async def lifespan(app: FastAPI):
 
     await scheduler.start()
     logger.info("Scheduler started")
+
+    # Enrich competitors missing BANCO stores (background)
+    import asyncio
+    asyncio.create_task(_enrich_missing_stores())
 
     yield
 

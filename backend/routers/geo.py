@@ -465,16 +465,31 @@ async def get_heatmap_data(
 # =============================================================================
 
 COMPETITOR_COLORS = {
+    # Grande distribution
     "carrefour": "#3b82f6",
     "leclerc": "#22c55e",
-    "lidl": "#eab308",
+    "lidl": "#fbbf24",
     "auchan": "#ef4444",
     "intermarché": "#f97316",
     "casino": "#8b5cf6",
     "monoprix": "#ec4899",
     "système u": "#14b8a6",
     "cora": "#6366f1",
-    "lidl": "#fbbf24",
+    # Bricolage / Maison
+    "castorama": "#f97316",
+    "leroy merlin": "#22c55e",
+    "brico dépôt": "#eab308",
+    "bricomarché": "#3b82f6",
+    "mr bricolage": "#ef4444",
+    "ikea": "#0ea5e9",
+    "conforama": "#ec4899",
+    "but": "#8b5cf6",
+    # Sport
+    "decathlon": "#3b82f6",
+    "intersport": "#ef4444",
+    # Mode
+    "kiabi": "#ec4899",
+    "zara": "#000000",
 }
 
 

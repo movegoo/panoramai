@@ -23,6 +23,7 @@ BANCO_CSV_URL = "https://www.data.gouv.fr/api/1/datasets/r/3d612ad7-f726-4fe5-a3
 # Mapping noms concurrents -> termes de recherche BANCO
 # Permet de gérer les variantes d'enseigne
 BRAND_ALIASES = {
+    # Grande distribution
     "carrefour": ["carrefour", "carrefour market", "carrefour city", "carrefour express", "carrefour contact"],
     "leclerc": ["leclerc", "e.leclerc", "e leclerc"],
     "lidl": ["lidl"],
@@ -36,6 +37,29 @@ BRAND_ALIASES = {
     "système u": ["super u", "hyper u", "u express", "système u"],
     "cora": ["cora"],
     "match": ["match", "supermarché match"],
+    # Bricolage / Maison
+    "leroy merlin": ["leroy merlin"],
+    "castorama": ["castorama"],
+    "brico dépôt": ["brico dépôt", "brico depot", "bricodépôt", "bricodepot"],
+    "bricomarché": ["bricomarché", "bricomarche"],
+    "mr bricolage": ["mr bricolage", "mr.bricolage", "monsieur bricolage"],
+    "point p": ["point p", "point.p"],
+    "lapeyre": ["lapeyre"],
+    "ikea": ["ikea"],
+    "conforama": ["conforama"],
+    "but": ["but"],
+    "maisons du monde": ["maisons du monde"],
+    # Sport
+    "decathlon": ["decathlon"],
+    "intersport": ["intersport"],
+    "go sport": ["go sport"],
+    # Mode
+    "kiabi": ["kiabi"],
+    "zara": ["zara"],
+    "h&m": ["h&m", "h & m"],
+    # Auto
+    "norauto": ["norauto"],
+    "feu vert": ["feu vert"],
 }
 
 
