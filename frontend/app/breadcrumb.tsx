@@ -1,6 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { brandAPI } from "@/lib/api";
 import {
   LayoutDashboard,
   Users,
@@ -26,6 +28,11 @@ export function Breadcrumb() {
   const pathname = usePathname();
   const meta = PAGE_META[pathname] || PAGE_META["/"];
   const Icon = meta.icon;
+  const [brandName, setBrandName] = useState<string | null>(null);
+
+  useEffect(() => {
+    brandAPI.getProfile().then((p) => setBrandName(p.company_name)).catch(() => {});
+  }, []);
 
   return (
     <div className="h-12 shrink-0 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between px-6">
@@ -46,12 +53,14 @@ export function Breadcrumb() {
       </div>
 
       {/* Right side: brand info */}
-      <div className="flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
-          A
+      {brandName && (
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
+            {brandName.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-[13px] font-semibold text-foreground">{brandName}</span>
         </div>
-        <span className="text-[13px] font-semibold text-foreground">Auchan</span>
-      </div>
+      )}
     </div>
   );
 }

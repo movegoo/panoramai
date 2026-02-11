@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   competitorsAPI,
   facebookAPI,
+  brandAPI,
   Ad,
 } from "@/lib/api";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -1095,20 +1096,20 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
   );
 }
 
-function MobsuccessRecommendations({ filteredAds }: { filteredAds: AdWithCompetitor[] }) {
+function MobsuccessRecommendations({ filteredAds, brandName }: { filteredAds: AdWithCompetitor[]; brandName: string }) {
   const recs = useMemo(() => {
     const r: { bu: string; grad: string; title: string; text: string; icon: React.ReactNode }[] = [];
     const hasLocal = filteredAds.some(a => a.location_audience && a.location_audience.some(l => l.type !== "country"));
     if (hasLocal) {
       r.push({ bu: "WIDELY", grad: "from-teal-500 to-emerald-500", title: "Activez le marketing multilocal", text: "Vos concurrents utilisent du ciblage local granulaire. WIDELY transforme vos campagnes nationales en strategies multilocales avec DMP proprietaire et drive-to-store.", icon: <MapPin className="h-4 w-4" /> });
     }
-    const brandFmts = new Set(filteredAds.filter(a => a.competitor_name === "Auchan").map(a => a.display_format).filter(Boolean));
+    const brandFmts = new Set(filteredAds.filter(a => brandName && a.competitor_name === brandName).map(a => a.display_format).filter(Boolean));
     const allFmts = new Set(filteredAds.map(a => a.display_format).filter(Boolean));
     if (brandFmts.size < allFmts.size) {
       const missing = Array.from(allFmts).filter(f => !brandFmts.has(f)).map(f => FORMAT_LABELS[f as string]?.label || f);
       r.push({ bu: "STORY", grad: "from-pink-500 to-rose-500", title: "Diversifiez vos creatives", text: `Formats inexploites : ${missing.join(", ")}. STORY produit du contenu social, video et carrousel haute performance.`, icon: <Play className="h-4 w-4" /> });
     }
-    const brandReach = filteredAds.filter(a => a.competitor_name === "Auchan").reduce((s, a) => s + (a.eu_total_reach || 0), 0);
+    const brandReach = filteredAds.filter(a => brandName && a.competitor_name === brandName).reduce((s, a) => s + (a.eu_total_reach || 0), 0);
     const totalReach = filteredAds.reduce((s, a) => s + (a.eu_total_reach || 0), 0);
     const pct = totalReach > 0 ? Math.round((brandReach / totalReach) * 100) : 0;
     r.push({ bu: "SPARKLY", grad: "from-violet-500 to-purple-500", title: "Boostez vos performances digitales", text: `Votre couverture EU represente ${pct}% du marche. SPARKLY optimise vos budgets avec l'IA pour maximiser couverture et ROAS.`, icon: <Zap className="h-4 w-4" /> });
@@ -1173,17 +1174,20 @@ export default function AdsPage() {
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
   const [locationSearch, setLocationSearch] = useState("");
   const [advertiserSearch, setAdvertiserSearch] = useState("");
+  const [brandName, setBrandName] = useState<string>("");
 
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
     try {
-      const [adsRes, compRes] = await Promise.allSettled([
+      const [adsRes, compRes, brandRes] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         competitorsAPI.list(),
+        brandAPI.getProfile(),
       ]);
       if (adsRes.status === "fulfilled") setAllAds(adsRes.value);
       if (compRes.status === "fulfilled") setCompetitors(compRes.value);
+      if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1907,7 +1911,7 @@ export default function AdsPage() {
       </div>
 
       {/* ── Solutions Mobsuccess ──────── */}
-      <MobsuccessRecommendations filteredAds={filteredAds} />
+      <MobsuccessRecommendations filteredAds={filteredAds} brandName={brandName} />
 
       {/* ── Ads Grid ─────────────────────────── */}
       {filteredAds.length === 0 ? (
