@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,14 +208,17 @@ function SmartChannelInput({
 }) {
   const [raw, setRaw] = useState(value || "");
   const [focused, setFocused] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  // Track the last value WE sent to parent, so we can distinguish
+  // our own updates from external ones (profile load, cancel, save)
+  const lastSentValue = useRef(value || "");
 
-  // Sync from parent only on external changes (e.g. profile load), not during editing
   useEffect(() => {
-    if (!isEditing) {
+    // Only sync when parent value changed for an external reason
+    if (value !== lastSentValue.current) {
+      lastSentValue.current = value || "";
       setRaw(value || "");
     }
-  }, [value, isEditing]);
+  }, [value]);
 
   const parsed = channel.parse(raw);
   const isUrl = raw.includes("://") || raw.includes("www.");
@@ -223,20 +226,17 @@ function SmartChannelInput({
 
   function handleBlur() {
     setFocused(false);
-    setIsEditing(false);
     if (raw && parsed) {
+      lastSentValue.current = parsed;
       onChange(parsed);
-      // After blur, show the parsed ID in the input
-      setRaw(parsed);
     }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
-    setIsEditing(true);
     setRaw(v);
-    // Send parsed value to parent but keep raw URL visible in input
     const p = channel.parse(v);
+    lastSentValue.current = p;
     onChange(p);
   }
 
