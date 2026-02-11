@@ -778,7 +778,7 @@ export default function FranceMap() {
   const competitorStoreDataRef = useRef<CompetitorStoreGroup[]>([]);
 
   const loadCompetitorStoresLayer = async (map: any, L: any) => {
-    const res = await fetch(`${API_BASE}/geo/competitor-stores`);
+    const res = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`);
     if (!res.ok) return;
 
     const data = await res.json();
