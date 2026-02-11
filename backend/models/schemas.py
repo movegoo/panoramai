@@ -256,6 +256,14 @@ class CompetitorCard(BaseModel):
         from_attributes = True
 
 
+class ChannelData(BaseModel):
+    """Données d'un canal pour un concurrent."""
+    channel: str
+    is_configured: bool
+    last_updated: Optional[datetime] = None
+    metrics: Dict[str, MetricValue]
+
+
 class CompetitorDetail(BaseModel):
     """Profil détaillé d'un concurrent."""
     id: int
@@ -274,7 +282,7 @@ class CompetitorDetail(BaseModel):
     rank: int
 
     # Données par canal
-    channels: Dict[str, "ChannelData"]
+    channels: Dict[str, ChannelData]
 
     # Historique récent
     recent_changes: List[Alert]
@@ -283,14 +291,6 @@ class CompetitorDetail(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ChannelData(BaseModel):
-    """Données d'un canal pour un concurrent."""
-    channel: str
-    is_configured: bool
-    last_updated: Optional[datetime] = None
-    metrics: Dict[str, MetricValue]
 
 
 class CompetitorSuggestion(BaseModel):
