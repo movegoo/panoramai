@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { competitorsAPI, Competitor, CompetitorCreate } from "@/lib/api";
+import { competitorsAPI, Competitor, CompetitorCreate, API_BASE } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import {
   Plus,
@@ -90,7 +90,7 @@ export default function CompetitorsPage() {
 
       // Fetch store counts
       try {
-        const res = await fetch("http://localhost:8000/api/geo/competitor-stores");
+        const res = await fetch(`${API_BASE}/geo/competitor-stores`);
         if (res.ok) {
           const storeData = await res.json();
           const counts: Record<number, number> = {};
