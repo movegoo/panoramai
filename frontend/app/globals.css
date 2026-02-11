@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Mobsuccess Design System - Navy / Indigo / Violet */
+    --background: 225 20% 97%;
+    --foreground: 243 47% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 243 47% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 243 47% 15%;
+
+    --primary: 258 80% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 20% 94%;
+    --secondary-foreground: 243 47% 15%;
+
+    --muted: 225 20% 94%;
+    --muted-foreground: 225 12% 50%;
+
+    --accent: 255 90% 97%;
+    --accent-foreground: 258 80% 50%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 20% 90%;
+    --input: 225 20% 88%;
+    --ring: 258 80% 55%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Smooth scrollbar */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+}

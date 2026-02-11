@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/venv/
+
+# Build
+frontend/.next/
+frontend/out/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+!.env.example
+
+# Cache
+cache/
+backend/cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

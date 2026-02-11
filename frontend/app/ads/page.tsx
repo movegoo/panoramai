@@ -1,0 +1,1859 @@
+"use client";
+
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  competitorsAPI,
+  facebookAPI,
+  Ad,
+} from "@/lib/api";
+import { formatDate, formatNumber } from "@/lib/utils";
+import {
+  RefreshCw,
+  ExternalLink,
+  ArrowUpRight,
+  Zap,
+  Eye,
+  Globe,
+  Users,
+  ThumbsUp,
+  Sparkles,
+  Link2,
+  Tag,
+  Monitor,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Calendar,
+  BarChart3,
+  Search,
+  X,
+  Building2,
+  Layers,
+  Play,
+  Image,
+  SlidersHorizontal,
+  MapPin,
+  UserCheck,
+  Target,
+  Shield,
+  TrendingUp,
+  PieChart,
+  Megaphone,
+} from "lucide-react";
+
+/* ─────────────── Platform icons (inline SVG) ─────────────── */
+
+function FacebookIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+    </svg>
+  );
+}
+
+function InstagramIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+    </svg>
+  );
+}
+
+function MessengerIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12 0C5.373 0 0 4.974 0 11.111c0 3.498 1.744 6.614 4.469 8.654V24l4.088-2.242c1.092.3 2.246.464 3.443.464 6.627 0 12-4.975 12-11.111S18.627 0 12 0zm1.191 14.963l-3.055-3.26-5.963 3.26L10.732 8.2l3.131 3.259L19.752 8.2l-6.561 6.763z"/>
+    </svg>
+  );
+}
+
+function TikTokIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+    </svg>
+  );
+}
+
+function YouTubeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+
+function GooglePlayIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-1.707l2.755 1.593a1 1 0 0 1 0 1.732l-2.755 1.593-2.534-2.534 2.534-2.384zM5.864 3.458L16.8 9.79l-2.302 2.302-8.634-8.634z"/>
+    </svg>
+  );
+}
+
+function AppStoreIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M8.809 14.92l6.11-11.037c.084-.152.12-.32.104-.487a.801.801 0 0 0-.312-.564.802.802 0 0 0-.629-.144.798.798 0 0 0-.512.372L7.38 14.92H2.498a.8.8 0 0 0 0 1.6h3.762l-2.534 4.576a.8.8 0 1 0 1.4.776l2.774-5.009h8.2l2.774 5.009a.8.8 0 1 0 1.4-.776l-2.534-4.576h3.762a.8.8 0 1 0 0-1.6H8.809zm4.798-8.652L17.21 14.92h-7.206l3.603-8.652z"/>
+    </svg>
+  );
+}
+
+/* ─────────────── Constants ─────────────── */
+
+const PLATFORM_CONFIGS: Record<string, { label: string; color: string; iconColor: string; bg: string }> = {
+  FACEBOOK: { label: "Facebook", color: "bg-blue-100 text-blue-700 border-blue-200", iconColor: "text-blue-600", bg: "bg-blue-500" },
+  INSTAGRAM: { label: "Instagram", color: "bg-gradient-to-r from-pink-100 to-purple-100 text-pink-700 border-pink-200", iconColor: "text-pink-600", bg: "bg-gradient-to-r from-pink-500 to-purple-500" },
+  AUDIENCE_NETWORK: { label: "Audience Network", color: "bg-teal-100 text-teal-700 border-teal-200", iconColor: "text-teal-600", bg: "bg-teal-500" },
+  MESSENGER: { label: "Messenger", color: "bg-violet-100 text-violet-700 border-violet-200", iconColor: "text-violet-600", bg: "bg-violet-500" },
+  THREADS: { label: "Threads", color: "bg-stone-100 text-stone-700 border-stone-200", iconColor: "text-stone-600", bg: "bg-stone-500" },
+  TIKTOK: { label: "TikTok", color: "bg-slate-100 text-slate-800 border-slate-200", iconColor: "text-slate-800", bg: "bg-slate-800" },
+  YOUTUBE: { label: "YouTube", color: "bg-red-100 text-red-700 border-red-200", iconColor: "text-red-600", bg: "bg-red-500" },
+  GOOGLE_PLAY: { label: "Google Play", color: "bg-green-100 text-green-700 border-green-200", iconColor: "text-green-600", bg: "bg-green-500" },
+  APP_STORE: { label: "App Store", color: "bg-sky-100 text-sky-700 border-sky-200", iconColor: "text-sky-600", bg: "bg-sky-500" },
+};
+
+const FORMAT_LABELS: Record<string, { label: string; icon: string }> = {
+  VIDEO: { label: "Video", icon: "play" },
+  IMAGE: { label: "Image", icon: "image" },
+  DCO: { label: "Multi-creative", icon: "layers" },
+  CAROUSEL: { label: "Carrousel", icon: "layers" },
+  DPA: { label: "Catalogue", icon: "layers" },
+};
+
+const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
+
+type AdWithCompetitor = Ad & { competitor_name: string };
+
+/* ─────────────── Sub-components ─────────────── */
+
+function PlatformIcon({ name, className = "h-3.5 w-3.5" }: { name: string; className?: string }) {
+  switch (name) {
+    case "FACEBOOK": return <FacebookIcon className={className} />;
+    case "INSTAGRAM": return <InstagramIcon className={className} />;
+    case "MESSENGER": return <MessengerIcon className={className} />;
+    case "TIKTOK": return <TikTokIcon className={className} />;
+    case "YOUTUBE": return <YouTubeIcon className={className} />;
+    case "GOOGLE_PLAY": case "PLAYSTORE": return <GooglePlayIcon className={className} />;
+    case "APP_STORE": case "APPSTORE": return <AppStoreIcon className={className} />;
+    default: return <Globe className={className} />;
+  }
+}
+
+function PlatformPill({ name }: { name: string }) {
+  const config = PLATFORM_CONFIGS[name];
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${config?.color || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+      <PlatformIcon name={name} className="h-3 w-3" />
+      {config?.label || name.toLowerCase().replace("_", " ")}
+    </span>
+  );
+}
+
+function FilterChip({ label, active, onClick, count, icon }: { label: string; active: boolean; onClick: () => void; count?: number; icon?: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+        active
+          ? "bg-foreground text-background shadow-sm"
+          : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      }`}
+    >
+      {icon}
+      {label}
+      {count !== undefined && (
+        <span className={`text-[10px] tabular-nums ${active ? "text-background/70" : "text-muted-foreground/60"}`}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function AdvertiserAvatar({ ad, size = "sm" }: { ad: AdWithCompetitor; size?: "sm" | "md" | "lg" }) {
+  const sizeClasses = { sm: "h-6 w-6", md: "h-8 w-8", lg: "h-10 w-10" };
+  const textSizes = { sm: "text-[9px]", md: "text-[10px]", lg: "text-xs" };
+  if (ad.page_profile_picture_url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={ad.page_profile_picture_url} alt="" className={`${sizeClasses[size]} rounded-full object-cover border-2 border-background shrink-0`} />
+    );
+  }
+  const initials = (ad.page_name || ad.competitor_name || "?").slice(0, 2).toUpperCase();
+  return (
+    <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center shrink-0 border-2 border-background`}>
+      <span className={`${textSizes[size]} font-bold text-slate-600`}>{initials}</span>
+    </div>
+  );
+}
+
+function GenderBar({ male, female, unknown, compact = false }: { male: number; female: number; unknown: number; compact?: boolean }) {
+  const total = male + female + unknown;
+  if (total === 0) return null;
+  const malePct = Math.round((male / total) * 100);
+  const femalePct = Math.round((female / total) * 100);
+  const unknownPct = 100 - malePct - femalePct;
+  return (
+    <div>
+      <div className={`flex rounded-full overflow-hidden ${compact ? "h-2" : "h-3"}`}>
+        <div className="bg-blue-500 transition-all" style={{ width: `${malePct}%` }} title={`Hommes: ${malePct}%`} />
+        <div className="bg-pink-500 transition-all" style={{ width: `${femalePct}%` }} title={`Femmes: ${femalePct}%`} />
+        {unknownPct > 0 && <div className="bg-gray-300 transition-all" style={{ width: `${unknownPct}%` }} title={`Inconnu: ${unknownPct}%`} />}
+      </div>
+      {!compact && (
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[10px] text-blue-600 font-semibold tabular-nums">{malePct}% H</span>
+          <span className="text-[10px] text-pink-600 font-semibold tabular-nums">{femalePct}% F</span>
+          {unknownPct > 1 && <span className="text-[10px] text-gray-400 font-semibold tabular-nums">{unknownPct}%</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetitor; expanded: boolean; onToggle: () => void; advertiserLogo?: string }) {
+  const durationDays = ad.start_date ? Math.ceil(((ad.end_date ? new Date(ad.end_date) : new Date()).getTime() - new Date(ad.start_date).getTime()) / 86400000) : 0;
+  return (
+    <div className="group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+      {/* Image */}
+      {ad.creative_url ? (
+        <a href={ad.creative_url} target="_blank" rel="noopener noreferrer" className="block">
+          <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ad.creative_url}
+              alt=""
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/40 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+            {/* Status dot */}
+            <div className="absolute top-3 right-3">
+              <span className={`relative flex h-2.5 w-2.5 rounded-full ${ad.is_active ? "bg-emerald-400" : "bg-gray-400"}`}>
+                {ad.is_active && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+              </span>
+            </div>
+            {/* Tags */}
+            <div className="absolute top-3 left-3 flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-md bg-white/20 text-white">
+                {FORMAT_LABELS[ad.display_format || ""]?.label || ad.display_format || ad.platform}
+              </span>
+              {ad.contains_ai_content && (
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full backdrop-blur-md bg-violet-500/30 text-white flex items-center gap-1">
+                  <Sparkles className="h-2.5 w-2.5" />IA
+                </span>
+              )}
+            </div>
+            {/* Advertiser badge with logo */}
+            <div className="absolute bottom-3 left-3 flex items-center gap-2">
+              {advertiserLogo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={advertiserLogo} alt="" className="h-7 w-7 rounded-full object-cover border-2 border-white/60 shadow-sm" />
+              )}
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-md bg-black/40 text-white">
+                {ad.competitor_name}
+              </span>
+            </div>
+            {/* Platform icons */}
+            {ad.publisher_platforms && ad.publisher_platforms.length > 0 && (
+              <div className="absolute bottom-3 right-3 flex items-center gap-1">
+                {ad.publisher_platforms.map(p => (
+                  <span key={p} className="h-6 w-6 rounded-full backdrop-blur-md bg-white/30 flex items-center justify-center text-white">
+                    <PlatformIcon name={p} className="h-3 w-3" />
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </a>
+      ) : (
+        <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2">
+          <Eye className="h-8 w-8 text-muted-foreground/20" />
+          <div className="flex items-center gap-2">
+            {advertiserLogo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={advertiserLogo} alt="" className="h-6 w-6 rounded-full object-cover" />
+            )}
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+              {ad.competitor_name}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="p-4 space-y-2.5">
+        {ad.title && <p className="text-sm font-semibold leading-snug line-clamp-2">{ad.title}</p>}
+        {ad.ad_text && <p className="text-[13px] leading-relaxed line-clamp-2 text-foreground/70">{ad.ad_text}</p>}
+
+        {/* Quick metrics strip (always visible) */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {ad.eu_total_reach != null && ad.eu_total_reach > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+              <Target className="h-2.5 w-2.5" />{formatNumber(ad.eu_total_reach)}
+            </span>
+          )}
+          {durationDays > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+              <Calendar className="h-2.5 w-2.5" />{durationDays}j
+            </span>
+          )}
+          {ad.cta && (
+            <span className="inline-block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+              {ad.cta}
+            </span>
+          )}
+          {ad.link_url && (
+            <a href={ad.link_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-700 transition-colors truncate max-w-[140px]">
+              <Link2 className="h-2.5 w-2.5 shrink-0" />
+              {(() => { try { return new URL(ad.link_url!).hostname.replace("www.", ""); } catch { return ad.link_url; } })()}
+            </a>
+          )}
+        </div>
+
+        {/* Expand toggle */}
+        <button onClick={onToggle} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors w-full">
+          {expanded ? <><ChevronUp className="h-3 w-3" />Moins</> : <><ChevronDown className="h-3 w-3" />Details</>}
+        </button>
+
+        {/* Expanded */}
+        {expanded && (
+          <div className="space-y-3 pt-2 border-t border-border/50">
+            {/* Payer & Advertiser */}
+            {ad.page_name && (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
+                <AdvertiserAvatar ad={ad} size="lg" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold truncate">{ad.page_name}</span>
+                    {ad.page_profile_uri && (
+                      <a href={ad.page_profile_uri} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground shrink-0">
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                      Payeur
+                    </span>
+                    {ad.page_like_count != null && ad.page_like_count > 0 && (
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <ThumbsUp className="h-3 w-3" />{formatNumber(ad.page_like_count)} likes
+                      </span>
+                    )}
+                    {ad.page_categories && ad.page_categories.length > 0 && (
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Tag className="h-3 w-3" />{ad.page_categories.join(", ")}
+                      </span>
+                    )}
+                  </div>
+                  {(ad.byline || ad.disclaimer_label) && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700">
+                      <span className="font-medium">Financeur declare :</span>
+                      <span className="font-semibold">{ad.byline || ad.disclaimer_label}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Diffusion / Audience */}
+            <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100 space-y-2.5">
+              <div className="text-[10px] uppercase tracking-widest text-blue-600 font-semibold">Diffusion & Audience</div>
+
+              {/* EU Transparency: Age, Gender, Location, Reach */}
+              {(ad.age_min != null || ad.eu_total_reach != null) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {ad.age_min != null && (
+                    <div className="p-2 rounded-lg bg-white/70">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                        <UserCheck className="h-3 w-3" />Age
+                      </div>
+                      <div className="text-sm font-bold tabular-nums">{ad.age_min}-{ad.age_max}+ ans</div>
+                    </div>
+                  )}
+                  {ad.gender_audience && (
+                    <div className="p-2 rounded-lg bg-white/70">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                        <Users className="h-3 w-3" />Genre
+                      </div>
+                      <div className="text-sm font-bold">
+                        {ad.gender_audience === "All" ? "Tous" : ad.gender_audience === "Male" ? "Hommes" : ad.gender_audience === "Female" ? "Femmes" : ad.gender_audience}
+                      </div>
+                    </div>
+                  )}
+                  {ad.eu_total_reach != null && ad.eu_total_reach > 0 && (
+                    <div className="p-2 rounded-lg bg-white/70">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                        <Target className="h-3 w-3" />Couverture EU
+                      </div>
+                      <div className="text-sm font-bold tabular-nums">{formatNumber(ad.eu_total_reach)}</div>
+                    </div>
+                  )}
+                  {ad.location_audience && ad.location_audience.length > 0 && (
+                    <div className="p-2 rounded-lg bg-white/70">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                        <MapPin className="h-3 w-3" />Lieu
+                      </div>
+                      <div className="text-xs font-medium leading-snug">
+                        {ad.location_audience.map(l => l.name).join(", ")}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Age/Gender breakdown mini chart */}
+              {ad.age_country_gender_reach && ad.age_country_gender_reach.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1.5">Repartition age / genre</div>
+                  <div className="space-y-1">
+                    {ad.age_country_gender_reach[0].age_gender_breakdowns
+                      .filter(b => b.age_range !== "Unknown")
+                      .sort((a, b) => AGE_ORDER.indexOf(a.age_range) - AGE_ORDER.indexOf(b.age_range))
+                      .map((b) => {
+                        const total = b.male + b.female + b.unknown;
+                        const maxReach = Math.max(
+                          ...ad.age_country_gender_reach![0].age_gender_breakdowns
+                            .filter(x => x.age_range !== "Unknown")
+                            .map(x => x.male + x.female + x.unknown)
+                        );
+                        const barPct = maxReach > 0 ? (total / maxReach) * 100 : 0;
+                        const malePct = total > 0 ? Math.round((b.male / total) * 100) : 0;
+                        const femalePct = total > 0 ? Math.round((b.female / total) * 100) : 0;
+                        return (
+                          <div key={b.age_range} className="flex items-center gap-2">
+                            <span className="text-[10px] tabular-nums text-muted-foreground w-10 text-right shrink-0">{b.age_range}</span>
+                            <div className="flex-1 h-3 rounded-full bg-white/50 overflow-hidden flex">
+                              <div className="h-full bg-blue-400" style={{ width: `${(b.male / (maxReach || 1)) * 100}%` }} title={`H: ${formatNumber(b.male)} (${malePct}%)`} />
+                              <div className="h-full bg-pink-400" style={{ width: `${(b.female / (maxReach || 1)) * 100}%` }} title={`F: ${formatNumber(b.female)} (${femalePct}%)`} />
+                            </div>
+                            <span className="text-[9px] tabular-nums text-muted-foreground w-12 shrink-0">{formatNumber(total)}</span>
+                          </div>
+                        );
+                      })}
+                    <div className="flex items-center gap-3 mt-1 text-[9px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-blue-400" />Hommes</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-pink-400" />Femmes</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Platforms */}
+              {ad.publisher_platforms && ad.publisher_platforms.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Plateformes de diffusion</div>
+                  <div className="flex flex-wrap gap-1">
+                    {ad.publisher_platforms.map((p) => <PlatformPill key={p} name={p} />)}
+                  </div>
+                </div>
+              )}
+              {/* Location from targeted_countries (if available) */}
+              {ad.targeted_countries && ad.targeted_countries.length > 0 && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-1">Pays cibles</div>
+                  <div className="flex flex-wrap gap-1">
+                    {ad.targeted_countries.map((c) => (
+                      <span key={c} className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white border text-foreground/80">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Duration */}
+              {ad.start_date && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground mb-0.5">Duree de diffusion</div>
+                  <div className="text-xs font-medium tabular-nums">
+                    {formatDate(ad.start_date)}
+                    {ad.end_date ? ` \u2192 ${formatDate(ad.end_date)}` : " \u2192 En cours"}
+                    {ad.start_date && (
+                      <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                        ({(() => {
+                          const start = new Date(ad.start_date!);
+                          const end = ad.end_date ? new Date(ad.end_date) : new Date();
+                          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+                          return days <= 0 ? "< 1 jour" : days === 1 ? "1 jour" : `${days} jours`;
+                        })()})
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* AI content */}
+              {ad.contains_ai_content && (
+                <div className="flex items-center gap-1.5 text-[11px] text-violet-600">
+                  <Sparkles className="h-3 w-3" />
+                  <span className="font-medium">Contenu genere par IA</span>
+                </div>
+              )}
+            </div>
+
+            {/* Description */}
+            {ad.link_description && (
+              <div className="space-y-1">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Description</div>
+                <p className="text-xs text-foreground/70 leading-relaxed line-clamp-6">{ad.link_description}</p>
+              </div>
+            )}
+
+            {/* Spend & impressions */}
+            {((ad.estimated_spend_min && ad.estimated_spend_min > 0) || (ad.impressions_min && ad.impressions_min > 0)) && (
+              <div className="grid grid-cols-2 gap-2">
+                {ad.estimated_spend_min != null && ad.estimated_spend_min > 0 && (
+                  <div className="p-2 rounded-lg bg-emerald-50/50">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Budget</div>
+                    <div className="text-sm font-bold mt-0.5 tabular-nums">
+                      {formatNumber(ad.estimated_spend_min)}&ndash;{formatNumber(ad.estimated_spend_max || 0)} &euro;
+                    </div>
+                  </div>
+                )}
+                {ad.impressions_min != null && ad.impressions_min > 0 && (
+                  <div className="p-2 rounded-lg bg-blue-50/50">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Impressions</div>
+                    <div className="text-sm font-bold mt-0.5 tabular-nums">
+                      {formatNumber(ad.impressions_min)}&ndash;{formatNumber(ad.impressions_max || 0)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+          {ad.start_date && (
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {formatDate(ad.start_date)}
+              {ad.end_date && ` \u2192 ${formatDate(ad.end_date)}`}
+            </span>
+          )}
+          <a
+            href={ad.ad_library_url || `https://www.facebook.com/ads/library/?id=${ad.ad_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+          >
+            <ArrowUpRight className="h-3 w-3" />Ad Library
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Demographics Panel ─────────────── */
+
+function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] }) {
+  const [demoCountry, setDemoCountry] = useState<string>("all");
+  const [demoAgeFilter, setDemoAgeFilter] = useState<string>("all");
+
+  // Collect all available countries from age_country_gender_reach
+  const availableCountries = useMemo(() => {
+    const set = new Set<string>();
+    filteredAds.forEach(a => {
+      (a.age_country_gender_reach || []).forEach(c => set.add(c.country));
+    });
+    return Array.from(set).sort();
+  }, [filteredAds]);
+
+  // Aggregate demographics across all filtered ads
+  const demographics = useMemo(() => {
+    let totalMale = 0, totalFemale = 0, totalUnknown = 0;
+    const ageRanges: Record<string, { male: number; female: number; unknown: number }> = {};
+    let adsWithData = 0;
+    let totalReach = 0;
+
+    filteredAds.forEach(a => {
+      if (!a.age_country_gender_reach || a.age_country_gender_reach.length === 0) return;
+      adsWithData++;
+      if (a.eu_total_reach) totalReach += a.eu_total_reach;
+
+      a.age_country_gender_reach.forEach(countryData => {
+        if (demoCountry !== "all" && countryData.country !== demoCountry) return;
+
+        countryData.age_gender_breakdowns
+          .filter(b => b.age_range !== "Unknown")
+          .forEach(b => {
+            // Apply age filter for gender stats
+            if (demoAgeFilter !== "all" && b.age_range !== demoAgeFilter) {
+              // Still count in age distribution but not in gender totals
+            } else {
+              totalMale += b.male;
+              totalFemale += b.female;
+              totalUnknown += b.unknown;
+            }
+
+            // Always aggregate age ranges (for age distribution chart)
+            if (!ageRanges[b.age_range]) ageRanges[b.age_range] = { male: 0, female: 0, unknown: 0 };
+            ageRanges[b.age_range].male += b.male;
+            ageRanges[b.age_range].female += b.female;
+            ageRanges[b.age_range].unknown += b.unknown;
+          });
+      });
+    });
+
+    const genderTotal = totalMale + totalFemale + totalUnknown;
+    const malePct = genderTotal > 0 ? Math.round((totalMale / genderTotal) * 100) : 0;
+    const femalePct = genderTotal > 0 ? Math.round((totalFemale / genderTotal) * 100) : 0;
+    const unknownPct = genderTotal > 0 ? 100 - malePct - femalePct : 0;
+
+    // Sort age ranges
+    const sortedAges = AGE_ORDER
+      .filter(age => ageRanges[age])
+      .map(age => ({
+        range: age,
+        ...ageRanges[age],
+        total: ageRanges[age].male + ageRanges[age].female + ageRanges[age].unknown,
+      }));
+
+    const maxAgeTotal = Math.max(...sortedAges.map(a => a.total), 1);
+
+    return {
+      totalMale, totalFemale, totalUnknown, genderTotal,
+      malePct, femalePct, unknownPct,
+      sortedAges, maxAgeTotal,
+      adsWithData, totalReach,
+    };
+  }, [filteredAds, demoCountry, demoAgeFilter]);
+
+  if (demographics.adsWithData === 0) return null;
+
+  return (
+    <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b bg-gradient-to-r from-violet-50/50 to-pink-50/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 shadow-md shadow-violet-200/30">
+              <PieChart className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <h3 className="text-[14px] font-semibold text-foreground">Audience & D&eacute;mographiques</h3>
+              <p className="text-[11px] text-muted-foreground">{demographics.adsWithData} pubs avec donn&eacute;es de transparence EU</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-bold tabular-nums">{formatNumber(demographics.totalReach)}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Couverture EU totale</div>
+          </div>
+        </div>
+
+        {/* Sub-filters row */}
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <Globe className="h-3 w-3 text-muted-foreground" />
+            <select
+              value={demoCountry}
+              onChange={(e) => setDemoCountry(e.target.value)}
+              className="text-xs bg-white border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            >
+              <option value="all">Tous les pays</option>
+              {availableCountries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <UserCheck className="h-3 w-3 text-muted-foreground" />
+            <select
+              value={demoAgeFilter}
+              onChange={(e) => setDemoAgeFilter(e.target.value)}
+              className="text-xs bg-white border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            >
+              <option value="all">Toutes les tranches</option>
+              {AGE_ORDER.map(age => <option key={age} value={age}>{age} ans</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 grid gap-6 lg:grid-cols-2">
+        {/* Gender Distribution */}
+        <div className="space-y-3">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Repartition par genre
+            {demoAgeFilter !== "all" && <span className="text-violet-600 ml-1">({demoAgeFilter} ans)</span>}
+          </div>
+
+          {/* Big donut-style display */}
+          <div className="flex items-center gap-6">
+            {/* Male */}
+            <div className="flex-1 text-center">
+              <div className="relative inline-flex items-center justify-center">
+                <svg viewBox="0 0 36 36" className="h-20 w-20 -rotate-90">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-blue-500"
+                    strokeDasharray={`${demographics.malePct} ${100 - demographics.malePct}`} strokeLinecap="round" />
+                </svg>
+                <span className="absolute text-lg font-bold text-blue-600 tabular-nums">{demographics.malePct}%</span>
+              </div>
+              <div className="mt-1.5 text-xs font-semibold text-blue-600">Hommes</div>
+              <div className="text-[10px] text-muted-foreground tabular-nums">{formatNumber(demographics.totalMale)}</div>
+            </div>
+
+            {/* Female */}
+            <div className="flex-1 text-center">
+              <div className="relative inline-flex items-center justify-center">
+                <svg viewBox="0 0 36 36" className="h-20 w-20 -rotate-90">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-muted/30" />
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" strokeWidth="3" className="text-pink-500"
+                    strokeDasharray={`${demographics.femalePct} ${100 - demographics.femalePct}`} strokeLinecap="round" />
+                </svg>
+                <span className="absolute text-lg font-bold text-pink-600 tabular-nums">{demographics.femalePct}%</span>
+              </div>
+              <div className="mt-1.5 text-xs font-semibold text-pink-600">Femmes</div>
+              <div className="text-[10px] text-muted-foreground tabular-nums">{formatNumber(demographics.totalFemale)}</div>
+            </div>
+
+            {demographics.unknownPct > 1 && (
+              <div className="text-center">
+                <div className="text-sm font-bold text-gray-400 tabular-nums">{demographics.unknownPct}%</div>
+                <div className="text-[10px] text-muted-foreground">Inconnu</div>
+              </div>
+            )}
+          </div>
+
+          {/* Combined bar */}
+          <GenderBar male={demographics.totalMale} female={demographics.totalFemale} unknown={demographics.totalUnknown} />
+        </div>
+
+        {/* Age Distribution */}
+        <div className="space-y-3">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Repartition par tranche d&apos;age
+          </div>
+
+          <div className="space-y-2">
+            {demographics.sortedAges.map((age) => {
+              const pct = demographics.maxAgeTotal > 0 ? Math.round((age.total / demographics.maxAgeTotal) * 100) : 0;
+              const totalAll = demographics.sortedAges.reduce((s, a) => s + a.total, 0);
+              const pctOfTotal = totalAll > 0 ? Math.round((age.total / totalAll) * 100) : 0;
+              const malePct = age.total > 0 ? Math.round((age.male / age.total) * 100) : 0;
+              const femalePct = age.total > 0 ? Math.round((age.female / age.total) * 100) : 0;
+              return (
+                <div key={age.range} className="group/age">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] tabular-nums text-muted-foreground w-10 text-right shrink-0 font-medium">{age.range}</span>
+                    <div className="flex-1 h-5 rounded-lg bg-muted/50 overflow-hidden flex relative">
+                      <div className="h-full bg-blue-400/90 transition-all" style={{ width: `${(age.male / demographics.maxAgeTotal) * 100}%` }} />
+                      <div className="h-full bg-pink-400/90 transition-all" style={{ width: `${(age.female / demographics.maxAgeTotal) * 100}%` }} />
+                      {/* Percentage label inside bar */}
+                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white mix-blend-difference tabular-nums">
+                        {pctOfTotal}%
+                      </span>
+                    </div>
+                    <span className="text-[10px] tabular-nums text-muted-foreground w-16 text-right shrink-0">
+                      {formatNumber(age.total)}
+                    </span>
+                  </div>
+                  {/* Hover detail */}
+                  <div className="hidden group-hover/age:flex items-center gap-3 ml-12 mt-0.5 text-[9px] text-muted-foreground">
+                    <span className="text-blue-600">{malePct}% H</span>
+                    <span className="text-pink-600">{femalePct}% F</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-3 text-[9px] text-muted-foreground pt-1">
+            <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-blue-400" />Hommes</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-pink-400" />Femmes</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Insights & Intelligence ─────────────── */
+
+function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor[]; stats: any }) {
+  const insights = useMemo(() => {
+    const result: { icon: React.ReactNode; text: string; severity: string; detail?: string }[] = [];
+    if (filteredAds.length === 0) return result;
+
+    const reachByComp = new Map<string, number>();
+    const durationByComp = new Map<string, { total: number; count: number }>();
+    const formatsByComp = new Map<string, Set<string>>();
+
+    filteredAds.forEach(a => {
+      if (a.eu_total_reach) reachByComp.set(a.competitor_name, (reachByComp.get(a.competitor_name) || 0) + a.eu_total_reach);
+      if (a.start_date) {
+        const days = Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date).getTime()) / 86400000);
+        if (days > 0) {
+          const d = durationByComp.get(a.competitor_name) || { total: 0, count: 0 };
+          d.total += days; d.count++;
+          durationByComp.set(a.competitor_name, d);
+        }
+      }
+      if (a.display_format) {
+        if (!formatsByComp.has(a.competitor_name)) formatsByComp.set(a.competitor_name, new Set());
+        formatsByComp.get(a.competitor_name)!.add(a.display_format);
+      }
+    });
+
+    // Reach leader
+    const reachSorted = Array.from(reachByComp.entries()).sort((a, b) => b[1] - a[1]);
+    if (reachSorted.length > 0) {
+      result.push({
+        icon: <Target className="h-4 w-4" />,
+        text: `${reachSorted[0][0]} domine la couverture EU avec ${formatNumber(reachSorted[0][1])} personnes atteintes`,
+        severity: "info",
+        detail: reachSorted.length > 1 ? `Suivi par ${reachSorted.slice(1).map(([n, v]) => `${n} (${formatNumber(v)})`).join(", ")}` : undefined,
+      });
+    }
+
+    // Duration gap
+    const avgDurations = Array.from(durationByComp.entries())
+      .map(([name, d]) => ({ name, avg: Math.round(d.total / d.count) }))
+      .sort((a, b) => b.avg - a.avg);
+    if (avgDurations.length >= 2) {
+      const longest = avgDurations[0], shortest = avgDurations[avgDurations.length - 1];
+      if (longest.avg > shortest.avg * 2) {
+        result.push({
+          icon: <Calendar className="h-4 w-4" />,
+          text: `${longest.name} maintient ses campagnes ${Math.round(longest.avg / shortest.avg)}x plus longtemps que ${shortest.name}`,
+          detail: `${longest.name}: ${longest.avg}j en moy. vs ${shortest.name}: ${shortest.avg}j`,
+          severity: "warning",
+        });
+      }
+    }
+
+    // Format diversity
+    const fmtDiv = Array.from(formatsByComp.entries())
+      .map(([name, fmts]) => ({ name, count: fmts.size, formats: Array.from(fmts) }))
+      .sort((a, b) => b.count - a.count);
+    if (fmtDiv.length >= 2 && fmtDiv[0].count > fmtDiv[fmtDiv.length - 1].count) {
+      result.push({
+        icon: <Layers className="h-4 w-4" />,
+        text: `${fmtDiv[0].name} exploite ${fmtDiv[0].count} formats differents vs ${fmtDiv[fmtDiv.length - 1].count} pour ${fmtDiv[fmtDiv.length - 1].name}`,
+        detail: `Leader: ${fmtDiv[0].formats.map(f => FORMAT_LABELS[f]?.label || f).join(", ")}`,
+        severity: "success",
+      });
+    }
+
+    // Volume leader
+    const volumes = Array.from((stats.byCompetitor as Map<string, any>).entries())
+      .map(([n, d]: [string, any]) => ({ name: n, total: d.total })).sort((a, b) => b.total - a.total);
+    if (volumes.length >= 2) {
+      const pct = Math.round((volumes[0].total / filteredAds.length) * 100);
+      result.push({ icon: <BarChart3 className="h-4 w-4" />, text: `${volumes[0].name} mene en volume avec ${volumes[0].total} creations (${pct}% du marche)`, severity: "info" });
+    }
+
+    // Top formats
+    const topFmts = Array.from((stats.byFormat as Map<string, number>).entries()).sort((a, b) => b[1] - a[1]);
+    if (topFmts.length >= 2) {
+      const pct = Math.round(((topFmts[0][1] + topFmts[1][1]) / filteredAds.length) * 100);
+      result.push({ icon: <TrendingUp className="h-4 w-4" />, text: `${FORMAT_LABELS[topFmts[0][0]]?.label || topFmts[0][0]} et ${FORMAT_LABELS[topFmts[1][0]]?.label || topFmts[1][0]} representent ${pct}% du secteur`, severity: "success" });
+    }
+    return result;
+  }, [filteredAds, stats]);
+
+  if (insights.length === 0) return null;
+  const sevStyles: Record<string, { bg: string; iconBg: string; iconColor: string; accent: string }> = {
+    info: { bg: "bg-blue-50/60 border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", accent: "text-blue-700" },
+    success: { bg: "bg-emerald-50/60 border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", accent: "text-emerald-700" },
+    warning: { bg: "bg-amber-50/60 border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", accent: "text-amber-700" },
+    danger: { bg: "bg-red-50/60 border-red-100", iconBg: "bg-red-100", iconColor: "text-red-600", accent: "text-red-700" },
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200/40">
+          <Sparkles className="h-5 w-5 text-white" />
+        </div>
+        <div>
+          <h3 className="text-[15px] font-semibold text-foreground">Insights Stratégiques</h3>
+          <p className="text-[12px] text-muted-foreground">Analyse automatique du paysage publicitaire</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {insights.map((ins, i) => {
+          const s = sevStyles[ins.severity] || sevStyles.info;
+          return (
+            <div key={i} className={`rounded-xl border p-4 transition-all hover:shadow-sm ${s.bg}`}>
+              <div className="flex items-start gap-3">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${s.iconBg}`}>
+                  <div className={s.iconColor}>{ins.icon}</div>
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-[13px] font-semibold leading-snug ${s.accent}`}>{ins.text}</p>
+                  {ins.detail && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{ins.detail}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompetitor[]; stats: any }) {
+  const data = useMemo(() => {
+    return Array.from((stats.byCompetitor as Map<string, any>).entries())
+      .map(([name, d]: [string, any]) => {
+        const ads = filteredAds.filter(a => a.competitor_name === name);
+        const reach = ads.reduce((s, a) => s + (a.eu_total_reach || 0), 0);
+        const fmts = Array.from(new Set(ads.map(a => a.display_format).filter(Boolean)));
+        const plats = Array.from(new Set(ads.flatMap(a => a.publisher_platforms || []))) as string[];
+        const durs = ads.filter(a => a.start_date).map(a => Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date!).getTime()) / 86400000)).filter(x => x > 0);
+        const avgDur = durs.length > 0 ? Math.round(durs.reduce((s, x) => s + x, 0) / durs.length) : 0;
+        const logo = ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
+        return { name, total: d.total, active: d.active, reach, fmts, plats, avgDur, logo };
+      })
+      .sort((a, b) => b.reach - a.reach);
+  }, [filteredAds, stats]);
+
+  if (data.length === 0) return null;
+  const maxReach = Math.max(...data.map(c => c.reach), 1);
+
+  return (
+    <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b bg-gradient-to-r from-violet-50/50 to-indigo-50/50">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-violet-200/30">
+            <BarChart3 className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold text-foreground">Comparatif Concurrentiel</h3>
+            <p className="text-[11px] text-muted-foreground">Vue d&apos;ensemble des strat&eacute;gies publicitaires</p>
+          </div>
+        </div>
+      </div>
+      <div className="divide-y">
+        {data.map((c, i) => (
+          <div key={c.name} className="px-5 py-4 hover:bg-muted/20 transition-colors">
+            <div className="flex items-center gap-4">
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-slate-100 text-slate-600" : "bg-orange-50 text-orange-600"}`}>
+                {i + 1}
+              </div>
+              <div className="flex items-center gap-2.5 min-w-0 w-36 shrink-0">
+                {c.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.logo} alt="" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center shrink-0">
+                    <span className="text-[10px] font-bold text-slate-600">{c.name.slice(0, 2).toUpperCase()}</span>
+                  </div>
+                )}
+                <span className="text-sm font-semibold truncate">{c.name}</span>
+              </div>
+              <div className="flex-1 grid grid-cols-4 gap-4">
+                <div className="text-center">
+                  <div className="text-lg font-bold tabular-nums">{c.total}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase tracking-widest">pubs</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold tabular-nums text-blue-600">{formatNumber(c.reach)}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase tracking-widest">reach EU</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold tabular-nums">{c.avgDur}<span className="text-xs font-normal text-muted-foreground">j</span></div>
+                  <div className="text-[9px] text-muted-foreground uppercase tracking-widest">duree moy</div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    {c.plats.slice(0, 4).map(p => (
+                      <span key={p} className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
+                        <PlatformIcon name={p} className="h-2.5 w-2.5" />
+                      </span>
+                    ))}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">plateformes</div>
+                </div>
+              </div>
+            </div>
+            <div className="ml-12 mt-2">
+              <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
+                <div className={`h-full rounded-full ${i === 0 ? "bg-gradient-to-r from-blue-500 to-blue-600" : "bg-blue-300"}`} style={{ width: `${(c.reach / maxReach) * 100}%` }} />
+              </div>
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {c.fmts.map(f => (
+                  <span key={f} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{FORMAT_LABELS[f]?.label || f}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobsuccessRecommendations({ filteredAds }: { filteredAds: AdWithCompetitor[] }) {
+  const recs = useMemo(() => {
+    const r: { bu: string; grad: string; title: string; text: string; icon: React.ReactNode }[] = [];
+    const hasLocal = filteredAds.some(a => a.location_audience && a.location_audience.some(l => l.type !== "country"));
+    if (hasLocal) {
+      r.push({ bu: "WIDELY", grad: "from-teal-500 to-emerald-500", title: "Activez le marketing multilocal", text: "Vos concurrents utilisent du ciblage local granulaire. WIDELY transforme vos campagnes nationales en strategies multilocales avec DMP proprietaire et drive-to-store.", icon: <MapPin className="h-4 w-4" /> });
+    }
+    const brandFmts = new Set(filteredAds.filter(a => a.competitor_name === "Auchan").map(a => a.display_format).filter(Boolean));
+    const allFmts = new Set(filteredAds.map(a => a.display_format).filter(Boolean));
+    if (brandFmts.size < allFmts.size) {
+      const missing = Array.from(allFmts).filter(f => !brandFmts.has(f)).map(f => FORMAT_LABELS[f]?.label || f);
+      r.push({ bu: "STORY", grad: "from-pink-500 to-rose-500", title: "Diversifiez vos creatives", text: `Formats inexploites : ${missing.join(", ")}. STORY produit du contenu social, video et carrousel haute performance.`, icon: <Play className="h-4 w-4" /> });
+    }
+    const brandReach = filteredAds.filter(a => a.competitor_name === "Auchan").reduce((s, a) => s + (a.eu_total_reach || 0), 0);
+    const totalReach = filteredAds.reduce((s, a) => s + (a.eu_total_reach || 0), 0);
+    const pct = totalReach > 0 ? Math.round((brandReach / totalReach) * 100) : 0;
+    r.push({ bu: "SPARKLY", grad: "from-violet-500 to-purple-500", title: "Boostez vos performances digitales", text: `Votre couverture EU represente ${pct}% du marche. SPARKLY optimise vos budgets avec l'IA pour maximiser couverture et ROAS.`, icon: <Zap className="h-4 w-4" /> });
+    r.push({ bu: "FARLY", grad: "from-blue-500 to-cyan-500", title: "Accelerez l'acquisition mobile", text: "Completez votre strategie media avec l'acquisition mobile. FARLY combine ASO, Sensego AI et UA pour maximiser installations et retention.", icon: <GooglePlayIcon className="h-4 w-4" /> });
+    return r;
+  }, [filteredAds]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+          <Shield className="h-4 w-4 text-white" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold">Solutions Mobsuccess</h3>
+          <p className="text-[10px] text-muted-foreground">Recommandations basees sur l&apos;analyse concurrentielle</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {recs.map(rec => (
+          <div key={rec.bu} className="group rounded-2xl border bg-card p-4 hover:shadow-lg transition-all hover:-translate-y-0.5">
+            <div className="flex items-start gap-3">
+              <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${rec.grad} flex items-center justify-center shrink-0 text-white shadow-sm`}>
+                {rec.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full bg-gradient-to-r ${rec.grad} text-white`}>
+                  {rec.bu}
+                </span>
+                <h4 className="text-sm font-semibold leading-snug mt-1">{rec.title}</h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">{rec.text}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────── Page ─────────────── */
+
+export default function AdsPage() {
+  const [allAds, setAllAds] = useState<AdWithCompetitor[]>([]);
+  const [competitors, setCompetitors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
+  const [expandedAds, setExpandedAds] = useState<Set<string>>(new Set());
+
+  // Filters
+  const [filterCompetitors, setFilterCompetitors] = useState<Set<string>>(new Set());
+  const [filterPlatforms, setFilterPlatforms] = useState<Set<string>>(new Set());
+  const [filterFormats, setFilterFormats] = useState<Set<string>>(new Set());
+  const [filterAdvertisers, setFilterAdvertisers] = useState<Set<string>>(new Set());
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterGender, setFilterGender] = useState<"all" | "All" | "Male" | "Female">("all");
+  const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
+  const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
+  const [locationSearch, setLocationSearch] = useState("");
+  const [advertiserSearch, setAdvertiserSearch] = useState("");
+
+  useEffect(() => { loadAll(); }, []);
+
+  async function loadAll() {
+    try {
+      const [adsRes, compRes] = await Promise.allSettled([
+        facebookAPI.getAllAds(),
+        competitorsAPI.list(),
+      ]);
+      if (adsRes.status === "fulfilled") setAllAds(adsRes.value);
+      if (compRes.status === "fulfilled") setCompetitors(compRes.value);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleFetchAll() {
+    setFetching(true);
+    try {
+      for (const c of competitors) {
+        try { await facebookAPI.fetchAds(c.id); } catch {}
+      }
+      // Enrich with EU transparency data
+      try { await facebookAPI.enrichTransparency(); } catch {}
+      const ads = await facebookAPI.getAllAds();
+      setAllAds(ads);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  function toggleFilter(set: Set<string>, value: string, setter: (s: Set<string>) => void) {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    setter(next);
+  }
+
+  function clearAllFilters() {
+    setFilterCompetitors(new Set());
+    setFilterPlatforms(new Set());
+    setFilterFormats(new Set());
+    setFilterAdvertisers(new Set());
+    setFilterStatus("all");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setSearchQuery("");
+    setFilterGender("all");
+    setFilterLocations(new Set());
+  }
+
+  // Build advertiser logos map (first profile pic per page_name)
+  const advertiserLogos = useMemo(() => {
+    const map = new Map<string, string>();
+    allAds.forEach(a => {
+      if (a.page_name && a.page_profile_picture_url && !map.has(a.page_name)) {
+        map.set(a.page_name, a.page_profile_picture_url);
+      }
+    });
+    return map;
+  }, [allAds]);
+
+  // Derive available filter values from all ads
+  const availableCompetitors = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => map.set(a.competitor_name, (map.get(a.competitor_name) || 0) + 1));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availablePlatforms = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => (a.publisher_platforms || []).forEach(p => map.set(p, (map.get(p) || 0) + 1)));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableFormats = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => { if (a.display_format) map.set(a.display_format, (map.get(a.display_format) || 0) + 1); });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableAdvertisers = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => { if (a.page_name) map.set(a.page_name, (map.get(a.page_name) || 0) + 1); });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableLocations = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      (a.location_audience || []).forEach(loc => {
+        const name = loc.name.split(":")[0].trim();
+        map.set(name, (map.get(name) || 0) + 1);
+      });
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const genderCounts = useMemo(() => {
+    const counts = { All: 0, Male: 0, Female: 0 };
+    allAds.forEach(a => {
+      if (a.gender_audience === "All") counts.All++;
+      else if (a.gender_audience === "Male") counts.Male++;
+      else if (a.gender_audience === "Female") counts.Female++;
+    });
+    return counts;
+  }, [allAds]);
+
+  // Apply filters
+  const filteredAds = useMemo(() => {
+    return allAds.filter(ad => {
+      if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
+      if (filterPlatforms.size > 0 && !(ad.publisher_platforms || []).some(p => filterPlatforms.has(p))) return false;
+      if (filterFormats.size > 0 && (!ad.display_format || !filterFormats.has(ad.display_format))) return false;
+      if (filterAdvertisers.size > 0 && (!ad.page_name || !filterAdvertisers.has(ad.page_name))) return false;
+      if (filterStatus === "active" && !ad.is_active) return false;
+      if (filterStatus === "inactive" && ad.is_active) return false;
+      if (filterDateFrom && ad.start_date && ad.start_date < filterDateFrom) return false;
+      if (filterDateTo && ad.start_date && ad.start_date > filterDateTo) return false;
+      if (filterGender !== "all" && ad.gender_audience !== filterGender) return false;
+      if (filterLocations.size > 0) {
+        const adLocs = (ad.location_audience || []).map(l => l.name.split(":")[0].trim());
+        if (!adLocs.some(l => filterLocations.has(l))) return false;
+      }
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const match = (ad.title || "").toLowerCase().includes(q)
+          || (ad.ad_text || "").toLowerCase().includes(q)
+          || (ad.page_name || "").toLowerCase().includes(q)
+          || (ad.link_description || "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [allAds, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+
+  // Filtered stats
+  const activeFilters = filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
+    + (filterStatus !== "all" ? 1 : 0) + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0) + (searchQuery ? 1 : 0)
+    + (filterGender !== "all" ? 1 : 0) + filterLocations.size;
+
+  const stats = useMemo(() => {
+    const active = filteredAds.filter(a => a.is_active).length;
+    const byCompetitor = new Map<string, { total: number; active: number }>();
+    const byAdvertiser = new Map<string, { total: number; active: number; likes?: number; categories?: string[]; logo?: string }>();
+    const byFormat = new Map<string, number>();
+    const byPlatform = new Map<string, number>();
+    const competitorPlatforms = new Map<string, Map<string, number>>();
+    let totalDurationDays = 0;
+    let durationCount = 0;
+
+    filteredAds.forEach(a => {
+      // By competitor
+      const cc = byCompetitor.get(a.competitor_name) || { total: 0, active: 0 };
+      cc.total++;
+      if (a.is_active) cc.active++;
+      byCompetitor.set(a.competitor_name, cc);
+
+      // By advertiser (page_name = payeur)
+      const pn = a.page_name || "Inconnu";
+      const aa = byAdvertiser.get(pn) || { total: 0, active: 0, likes: 0, categories: [], logo: undefined };
+      aa.total++;
+      if (a.is_active) aa.active++;
+      if (a.page_like_count && a.page_like_count > (aa.likes || 0)) aa.likes = a.page_like_count;
+      if (a.page_profile_picture_url && !aa.logo) aa.logo = a.page_profile_picture_url;
+      if (a.page_categories) {
+        a.page_categories.forEach(c => { if (!aa.categories!.includes(c)) aa.categories!.push(c); });
+      }
+      byAdvertiser.set(pn, aa);
+
+      // By format
+      const fmt = a.display_format || "UNKNOWN";
+      byFormat.set(fmt, (byFormat.get(fmt) || 0) + 1);
+
+      // By platform
+      (a.publisher_platforms || []).forEach(p => byPlatform.set(p, (byPlatform.get(p) || 0) + 1));
+
+      // Competitor x platform matrix
+      if (!competitorPlatforms.has(a.competitor_name)) competitorPlatforms.set(a.competitor_name, new Map());
+      const cpMap = competitorPlatforms.get(a.competitor_name)!;
+      (a.publisher_platforms || []).forEach(p => cpMap.set(p, (cpMap.get(p) || 0) + 1));
+
+      // Duration stats
+      if (a.start_date) {
+        const start = new Date(a.start_date);
+        const end = a.end_date ? new Date(a.end_date) : new Date();
+        const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        if (days > 0) { totalDurationDays += days; durationCount++; }
+      }
+    });
+
+    const avgDuration = durationCount > 0 ? Math.round(totalDurationDays / durationCount) : 0;
+
+    return { active, byCompetitor, byAdvertiser, byFormat, byPlatform, competitorPlatforms, avgDuration };
+  }, [filteredAds]);
+
+  function toggleExpand(adId: string) {
+    setExpandedAds(prev => {
+      const next = new Set(prev);
+      if (next.has(adId)) next.delete(adId); else next.add(adId);
+      return next;
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+          <span className="text-sm text-muted-foreground">Chargement des publicit&eacute;s...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ─────────────────────────── */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
+            <Megaphone className="h-5 w-5 text-violet-600" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
+            <p className="text-[13px] text-muted-foreground">
+              Meta Ad Library &mdash; Analyse et surveillance des campagnes
+            </p>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2">
+          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+          Scanner tout
+        </Button>
+      </div>
+
+      {/* ── KPI Banner ─────────────────────── */}
+      <div className="rounded-2xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-8 py-6 text-white relative overflow-hidden">
+        <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-violet-400/[0.05]" />
+        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-400/[0.04]" />
+        <div className="relative flex items-center gap-8 flex-wrap">
+          <div>
+            <div className="text-3xl font-bold tabular-nums">{filteredAds.length}</div>
+            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">
+              {activeFilters > 0 ? "Filtrées" : "Publicités"}
+            </div>
+          </div>
+          <div className="h-10 w-px bg-white/10" />
+          <div>
+            <div className="text-3xl font-bold tabular-nums text-emerald-400">{stats.active}</div>
+            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives</div>
+          </div>
+          <div className="h-10 w-px bg-white/10" />
+          <div>
+            <div className="text-3xl font-bold tabular-nums">{stats.byAdvertiser.size}</div>
+            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Payeurs</div>
+          </div>
+          <div className="h-10 w-px bg-white/10" />
+          <div>
+            <div className="text-3xl font-bold tabular-nums">{stats.byCompetitor.size}</div>
+            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Concurrents</div>
+          </div>
+          <div className="h-10 w-px bg-white/10" />
+          <div>
+            <div className="text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-lg font-normal text-violet-300/50">j</span></div>
+            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur&eacute;e moy.</div>
+          </div>
+          {/* Platform breakdown with icons */}
+          {stats.byPlatform.size > 0 && (
+            <>
+              <div className="h-10 w-px bg-white/10" />
+              <div className="flex items-center gap-3">
+                {Array.from(stats.byPlatform.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, count]) => (
+                  <div key={p} className="text-center flex flex-col items-center gap-1">
+                    <div className="h-7 w-7 rounded-lg bg-white/[0.08] backdrop-blur-sm flex items-center justify-center border border-white/[0.06]">
+                      <PlatformIcon name={p} className="h-3.5 w-3.5 text-white/80" />
+                    </div>
+                    <div className="text-sm font-semibold tabular-nums">{count}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── Filters (collapsible, closed by default) ─ */}
+      <div className="rounded-2xl border bg-card overflow-hidden">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Filtres & Recherche
+            </span>
+            {activeFilters > 0 && (
+              <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                {activeFilters}
+              </span>
+            )}
+            {activeFilters > 0 && !showFilters && (
+              <span className="text-[10px] text-blue-600 font-medium ml-1">
+                {filteredAds.length} resultat{filteredAds.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          {showFilters ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+
+        {showFilters && (
+          <div className="px-5 pb-5 space-y-4 border-t">
+            {/* Search */}
+            <div className="pt-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher dans les pubs (titre, texte, annonceur...)"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 1: Period + Status + Gender (compact) */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">P&eacute;riode</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                  <span className="text-xs text-muted-foreground shrink-0">&agrave;</span>
+                  <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                  {(filterDateFrom || filterDateTo) && (
+                    <button onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); }} className="text-muted-foreground hover:text-foreground shrink-0">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Statut</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <FilterChip label="Toutes" active={filterStatus === "all"} onClick={() => setFilterStatus("all")} />
+                  <FilterChip label="Actives" active={filterStatus === "active"} onClick={() => setFilterStatus("active")} count={allAds.filter(a => a.is_active).length} />
+                  <FilterChip label="Termin&eacute;es" active={filterStatus === "inactive"} onClick={() => setFilterStatus("inactive")} count={allAds.filter(a => !a.is_active).length} />
+                </div>
+              </div>
+              {(genderCounts.All > 0 || genderCounts.Male > 0 || genderCounts.Female > 0) && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Genre cible</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <FilterChip label="Tous" active={filterGender === "all"} onClick={() => setFilterGender("all")} />
+                    {genderCounts.All > 0 && <FilterChip label="Mixte" count={genderCounts.All} active={filterGender === "All"} onClick={() => setFilterGender(filterGender === "All" ? "all" : "All")} />}
+                    {genderCounts.Male > 0 && <FilterChip label="Hommes" count={genderCounts.Male} active={filterGender === "Male"} onClick={() => setFilterGender(filterGender === "Male" ? "all" : "Male")} />}
+                    {genderCounts.Female > 0 && <FilterChip label="Femmes" count={genderCounts.Female} active={filterGender === "Female"} onClick={() => setFilterGender(filterGender === "Female" ? "all" : "Female")} />}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Row 2: Concurrent + Platform + Format (bounded) */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Concurrent</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {availableCompetitors.map(([name, count]) => (
+                    <FilterChip key={name} label={name} count={count} active={filterCompetitors.has(name)} onClick={() => toggleFilter(filterCompetitors, name, setFilterCompetitors)} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plateforme</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {availablePlatforms.map(([name, count]) => (
+                    <FilterChip key={name} label={PLATFORM_CONFIGS[name]?.label || name.toLowerCase().replace("_", " ")} count={count} active={filterPlatforms.has(name)} onClick={() => toggleFilter(filterPlatforms, name, setFilterPlatforms)} icon={<PlatformIcon name={name} className="h-3.5 w-3.5" />} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Format</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {availableFormats.map(([name, count]) => (
+                    <FilterChip key={name} label={FORMAT_LABELS[name]?.label || name} count={count} active={filterFormats.has(name)} onClick={() => toggleFilter(filterFormats, name, setFilterFormats)} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: Annonceur + Lieu - collapsible with search */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Annonceur - collapsible */}
+              {availableAdvertisers.length > 0 && (
+                <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedFilterSections(prev => { const n = new Set(prev); if (n.has("advertiser")) n.delete("advertiser"); else n.add("advertiser"); return n; })}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Annonceur</span>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{availableAdvertisers.length}</span>
+                      {filterAdvertisers.size > 0 && (
+                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterAdvertisers.size}</span>
+                      )}
+                    </div>
+                    {expandedFilterSections.has("advertiser") ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {expandedFilterSections.has("advertiser") && (
+                    <div className="px-3.5 pb-3 space-y-2">
+                      {availableAdvertisers.length > 6 && (
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={advertiserSearch}
+                            onChange={(e) => setAdvertiserSearch(e.target.value)}
+                            placeholder="Filtrer les annonceurs..."
+                            className="w-full pl-7 pr-7 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                          />
+                          {advertiserSearch && (
+                            <button onClick={() => setAdvertiserSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                        {availableAdvertisers
+                          .filter(([name]) => !advertiserSearch || name.toLowerCase().includes(advertiserSearch.toLowerCase()))
+                          .map(([name, count]) => {
+                            const logo = advertiserLogos.get(name);
+                            const active = filterAdvertisers.has(name);
+                            return (
+                              <button
+                                key={name}
+                                onClick={() => toggleFilter(filterAdvertisers, name, setFilterAdvertisers)}
+                                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors ${active ? "bg-violet-100 text-violet-800" : "hover:bg-muted/60"}`}
+                              >
+                                <div className={`flex items-center justify-center h-4 w-4 rounded border shrink-0 ${active ? "bg-violet-600 border-violet-600 text-white" : "border-border bg-background"}`}>
+                                  {active && <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                                {logo ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={logo} alt="" className="h-5 w-5 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                    <span className="text-[8px] font-bold text-muted-foreground">{name.slice(0, 2).toUpperCase()}</span>
+                                  </div>
+                                )}
+                                <span className="text-xs font-medium truncate flex-1">{name}</span>
+                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{count}</span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Lieu de diffusion - collapsible with search */}
+              {availableLocations.length > 0 && (
+                <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedFilterSections(prev => { const n = new Set(prev); if (n.has("location")) n.delete("location"); else n.add("location"); return n; })}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Lieu de diffusion</span>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{availableLocations.length}</span>
+                      {filterLocations.size > 0 && (
+                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterLocations.size}</span>
+                      )}
+                    </div>
+                    {expandedFilterSections.has("location") ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {expandedFilterSections.has("location") && (
+                    <div className="px-3.5 pb-3 space-y-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={locationSearch}
+                          onChange={(e) => setLocationSearch(e.target.value)}
+                          placeholder="Rechercher un lieu..."
+                          className="w-full pl-7 pr-7 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                        />
+                        {locationSearch && (
+                          <button onClick={() => setLocationSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                        {availableLocations
+                          .filter(([name]) => !locationSearch || name.toLowerCase().includes(locationSearch.toLowerCase()))
+                          .map(([name, count]) => {
+                            const active = filterLocations.has(name);
+                            const isCountry = !name.includes(",") && !/^\d/.test(name);
+                            return (
+                              <button
+                                key={name}
+                                onClick={() => toggleFilter(filterLocations, name, setFilterLocations)}
+                                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors ${active ? "bg-violet-100 text-violet-800" : "hover:bg-muted/60"}`}
+                              >
+                                <div className={`flex items-center justify-center h-4 w-4 rounded border shrink-0 ${active ? "bg-violet-600 border-violet-600 text-white" : "border-border bg-background"}`}>
+                                  {active && <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                </div>
+                                <span className={`text-xs truncate flex-1 ${isCountry ? "font-semibold" : "font-medium"}`}>{name}</span>
+                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{count}</span>
+                              </button>
+                            );
+                          })}
+                        {availableLocations.filter(([name]) => !locationSearch || name.toLowerCase().includes(locationSearch.toLowerCase())).length === 0 && (
+                          <div className="text-xs text-muted-foreground text-center py-3">Aucun lieu trouv&eacute;</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Clear all */}
+            {activeFilters > 0 && (
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  onClick={clearAllFilters}
+                  className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Effacer tous les filtres ({activeFilters})
+                </button>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {filteredAds.length} r&eacute;sultat{filteredAds.length > 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Demographics Panel ────────────── */}
+      <DemographicsPanel filteredAds={filteredAds} />
+
+      {/* ── Insights Strategiques ────── */}
+      <InsightsSection filteredAds={filteredAds} stats={stats} />
+
+      {/* ── Comparatif Concurrentiel ── */}
+      <CompetitorComparison filteredAds={filteredAds} stats={stats} />
+
+      {/* ── Payeurs & Diffusion ────── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Payeurs with logos */}
+        {stats.byAdvertiser.size > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
+                <Building2 className="h-4 w-4 text-emerald-600" />
+              </div>
+              <h3 className="text-[13px] font-semibold text-foreground">
+                Payeurs (annonceurs)
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {Array.from(stats.byAdvertiser.entries())
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([name, data]) => {
+                  const maxTotal = Math.max(...Array.from(stats.byAdvertiser.values()).map(v => v.total), 1);
+                  const pct = (data.total / maxTotal) * 100;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => toggleFilter(filterAdvertisers, name, setFilterAdvertisers)}
+                      className={`w-full text-left rounded-xl border p-3.5 transition-all hover:shadow-md ${
+                        filterAdvertisers.has(name) ? "border-emerald-300 bg-emerald-50/50 shadow-sm" : "bg-card hover:bg-accent/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {data.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={data.logo} alt="" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center shrink-0">
+                              <Building2 className="h-4 w-4 text-emerald-600" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="text-sm font-semibold truncate block">{name}</span>
+                            <span className="shrink-0 inline-flex items-center text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                              Payeur
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-lg font-bold tabular-nums shrink-0 ml-2">{data.total}</span>
+                      </div>
+                      <div className="h-1 rounded-full bg-muted overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+                        <span className="text-emerald-600 font-medium">{data.active} actives</span>
+                        {data.likes != null && data.likes > 0 && (
+                          <span className="flex items-center gap-1">
+                            <ThumbsUp className="h-3 w-3" />{formatNumber(data.likes)}
+                          </span>
+                        )}
+                        {data.categories && data.categories.length > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Tag className="h-3 w-3" />{data.categories.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Diffusion / Audience */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
+              <Globe className="h-4 w-4 text-blue-600" />
+            </div>
+            <h3 className="text-[13px] font-semibold text-foreground">
+              Diffusion & Audience
+            </h3>
+          </div>
+
+          {/* Platform reach per competitor with platform icons */}
+          <div className="rounded-xl border bg-card p-4 space-y-3">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plateformes par concurrent</div>
+            {Array.from(stats.competitorPlatforms.entries())
+              .sort((a, b) => {
+                const totalA = Array.from(a[1].values()).reduce((s, v) => s + v, 0);
+                const totalB = Array.from(b[1].values()).reduce((s, v) => s + v, 0);
+                return totalB - totalA;
+              })
+              .map(([competitor, platforms]) => (
+                <div key={competitor} className="space-y-1.5">
+                  <div className="text-xs font-semibold">{competitor}</div>
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from(platforms.entries())
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([platform, count]) => {
+                        const competitorTotal = stats.byCompetitor.get(competitor)?.total || 1;
+                        const pctOfAds = Math.round((count / competitorTotal) * 100);
+                        return (
+                          <span key={platform} className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg border ${PLATFORM_CONFIGS[platform]?.color || "bg-gray-100 text-gray-600 border-gray-200"}`}>
+                            <PlatformIcon name={platform} className="h-3 w-3" />
+                            {PLATFORM_CONFIGS[platform]?.label || platform.toLowerCase().replace("_", " ")}
+                            <span className="font-bold tabular-nums">{pctOfAds}%</span>
+                          </span>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          {/* Key diffusion metrics */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border bg-card p-3">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Duree moyenne</div>
+              <div className="text-xl font-bold mt-1 tabular-nums">{stats.avgDuration}<span className="text-sm font-normal text-muted-foreground ml-1">jours</span></div>
+            </div>
+            <div className="rounded-xl border bg-card p-3">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Plateformes</div>
+              <div className="text-xl font-bold mt-1 tabular-nums">{stats.byPlatform.size}<span className="text-sm font-normal text-muted-foreground ml-1">actives</span></div>
+            </div>
+          </div>
+
+          {/* Platform total distribution with icons */}
+          <div className="rounded-xl border bg-card p-4 space-y-2">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Distribution globale</div>
+            {Array.from(stats.byPlatform.entries())
+              .sort((a, b) => b[1] - a[1])
+              .map(([platform, count]) => {
+                const maxPlatform = Math.max(...Array.from(stats.byPlatform.values()), 1);
+                const pct = Math.round((count / maxPlatform) * 100);
+                const pctTotal = filteredAds.length > 0 ? Math.round((count / filteredAds.length) * 100) : 0;
+                return (
+                  <div key={platform} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-medium">
+                        <PlatformIcon name={platform} className={`h-3.5 w-3.5 ${PLATFORM_CONFIGS[platform]?.iconColor || "text-gray-500"}`} />
+                        {PLATFORM_CONFIGS[platform]?.label || platform.toLowerCase().replace("_", " ")}
+                      </span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{count} pubs ({pctTotal}%)</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Solutions Mobsuccess ──────── */}
+      <MobsuccessRecommendations filteredAds={filteredAds} />
+
+      {/* ── Ads Grid ─────────────────────────── */}
+      {filteredAds.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
+              <Megaphone className="h-7 w-7 text-violet-400" />
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-1">
+            {activeFilters > 0 ? "Aucun résultat avec ces filtres" : "Aucune publicité enregistrée"}
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
+            {activeFilters > 0
+              ? "Essayez d'élargir vos critères de recherche."
+              : "Cliquez sur Scanner tout pour chercher dans la Meta Ad Library."
+            }
+          </p>
+          {activeFilters > 0 && (
+            <Button variant="outline" size="sm" onClick={clearAllFilters} className="mt-4 gap-2">
+              <X className="h-3.5 w-3.5" />Effacer les filtres
+            </Button>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
+              <Eye className="h-4 w-4 text-violet-600" />
+            </div>
+            <h3 className="text-[13px] font-semibold text-foreground">
+              {filteredAds.length} publicit&eacute;{filteredAds.length > 1 ? "s" : ""}
+            </h3>
+            {activeFilters > 0 && (
+              <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                {activeFilters} filtre{activeFilters > 1 ? "s" : ""} actif{activeFilters > 1 ? "s" : ""}
+              </span>
+            )}
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredAds.map((ad) => (
+              <AdCard
+                key={ad.ad_id}
+                ad={ad}
+                expanded={expandedAds.has(ad.ad_id)}
+                onToggle={() => toggleExpand(ad.ad_id)}
+                advertiserLogo={ad.page_name ? advertiserLogos.get(ad.page_name) : undefined}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
