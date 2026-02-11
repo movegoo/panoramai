@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: panoramai-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./competitive.db
+      - key: DATAGOUV_CACHE_DIR
+        value: ./cache/datagouv
+      - key: DATAGOUV_CACHE_DAYS
+        value: "7"
+      - key: SCHEDULER_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS
+        value: https://panoramai-eight.vercel.app
+      - key: META_ACCESS_TOKEN
+        sync: false
+      - key: SCRAPECREATORS_API_KEY
+        sync: false

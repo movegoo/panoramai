@@ -14,8 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create data directory
-RUN mkdir -p /app/data
+# Create cache directory
+RUN mkdir -p /app/cache/datagouv
 
 # Expose port
 EXPOSE 8000
