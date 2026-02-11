@@ -1185,9 +1185,26 @@ export default function AdsPage() {
         competitorsAPI.list(),
         brandAPI.getProfile(),
       ]);
-      if (adsRes.status === "fulfilled") setAllAds(adsRes.value);
-      if (compRes.status === "fulfilled") setCompetitors(compRes.value);
+      const ads = adsRes.status === "fulfilled" ? adsRes.value : [];
+      const comps = compRes.status === "fulfilled" ? compRes.value : [];
+      setAllAds(ads);
+      if (compRes.status === "fulfilled") setCompetitors(comps);
       if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
+
+      // Auto-fetch if DB is empty but competitors exist
+      if (ads.length === 0 && comps.length > 0) {
+        setFetching(true);
+        try {
+          for (const c of comps) {
+            try { await facebookAPI.fetchAds(c.id); } catch {}
+          }
+          try { await facebookAPI.enrichTransparency(); } catch {}
+          const freshAds = await facebookAPI.getAllAds();
+          setAllAds(freshAds);
+        } finally {
+          setFetching(false);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {

@@ -84,6 +84,9 @@ class DataCollectionScheduler:
         """Fetch all data sources for a single competitor."""
         name = competitor.name
 
+        # Facebook/Instagram ads
+        await self._fetch_ads(db, competitor, name)
+
         if competitor.playstore_app_id:
             await self._fetch_playstore(db, competitor, name)
 
@@ -98,6 +101,62 @@ class DataCollectionScheduler:
 
         if competitor.youtube_channel_id:
             await self._fetch_youtube(db, competitor, name)
+
+    async def _fetch_ads(self, db: Session, competitor: Competitor, name: str):
+        """Fetch Facebook/Instagram ads from Ad Library."""
+        try:
+            from services.scrapecreators import scrapecreators
+            from routers.facebook import _name_matches, _parse_date
+            import json
+
+            result = await scrapecreators.search_facebook_ads(
+                company_name=name, country="FR", limit=50
+            )
+            if not result.get("success"):
+                return
+
+            from database import Ad
+            new_count = 0
+            for ad in result.get("ads", []):
+                ad_id = str(ad.get("ad_archive_id", ""))
+                if not ad_id:
+                    continue
+                snapshot = ad.get("snapshot", {})
+                page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
+                if not _name_matches(name, page_name_val):
+                    continue
+                if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                    continue
+
+                cards = snapshot.get("cards", [])
+                first_card = cards[0] if cards else {}
+                start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+                end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+                pub_platforms = ad.get("publisher_platform", [])
+                if not isinstance(pub_platforms, list):
+                    pub_platforms = [pub_platforms] if pub_platforms else []
+
+                new_ad = Ad(
+                    competitor_id=competitor.id,
+                    ad_id=ad_id,
+                    platform="instagram" if any("INSTAGRAM" in str(p).upper() for p in pub_platforms) else "facebook",
+                    creative_url=first_card.get("original_image_url") or first_card.get("resized_image_url") or "",
+                    ad_text=first_card.get("body") or snapshot.get("body", {}).get("text", "") or "",
+                    cta=first_card.get("cta_text") or snapshot.get("cta_text", ""),
+                    start_date=start_date,
+                    end_date=end_date,
+                    is_active=ad.get("is_active", not bool(end_date)),
+                    page_name=page_name_val or None,
+                    ad_library_url=ad.get("url", "") or None,
+                )
+                db.add(new_ad)
+                new_count += 1
+
+            if new_count:
+                db.commit()
+                logger.info(f"Ads: {new_count} new ads stored for {name}")
+        except Exception as e:
+            logger.error(f"Ads fetch failed for {name}: {e}")
 
     async def _fetch_playstore(self, db: Session, competitor: Competitor, name: str):
         """Fetch Play Store data."""
