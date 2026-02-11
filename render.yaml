@@ -1,3 +1,9 @@
+databases:
+  - name: panoramai-db
+    plan: free
+    databaseName: competitive
+    user: competitive
+
 services:
   - type: web
     name: panoramai-api
@@ -7,7 +13,9 @@ services:
     plan: free
     envVars:
       - key: DATABASE_URL
-        value: sqlite:///./competitive.db
+        fromDatabase:
+          name: panoramai-db
+          property: connectionString
       - key: DATAGOUV_CACHE_DIR
         value: ./cache/datagouv
       - key: DATAGOUV_CACHE_DAYS

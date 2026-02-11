@@ -158,7 +158,6 @@ class DataGouvService:
     def __init__(self):
         self.cache_dir = settings.DATAGOUV_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._memory_cache: Dict[str, List[Dict]] = {}
 
     # =========================================================================
     # Cache Management
@@ -176,24 +175,16 @@ class DataGouvService:
         return cache_time > expiry
 
     def _read_cache(self, key: str) -> Optional[List[Dict]]:
-        # Mémoire d'abord
-        if key in self._memory_cache:
-            return self._memory_cache[key]
-
-        # Puis fichier
         path = self._cache_path(key)
         if path.exists():
             try:
                 with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self._memory_cache[key] = data
-                    return data
+                    return json.load(f)
             except Exception as e:
                 logger.error(f"Cache read error {key}: {e}")
         return None
 
     def _write_cache(self, key: str, data: List[Dict]):
-        self._memory_cache[key] = data
         path = self._cache_path(key)
         try:
             with open(path, "w", encoding="utf-8") as f:

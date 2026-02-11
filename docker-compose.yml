@@ -1,6 +1,18 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: competitive
+      POSTGRES_PASSWORD: competitive
+      POSTGRES_DB: competitive
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -9,10 +21,12 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:///./data/competitive.db
+      - DATABASE_URL=postgresql://competitive:competitive@postgres:5432/competitive
       - META_ACCESS_TOKEN=${META_ACCESS_TOKEN:-}
+      - SCRAPECREATORS_API_KEY=${SCRAPECREATORS_API_KEY:-}
+    depends_on:
+      - postgres
     restart: unless-stopped
 
   frontend:
@@ -28,4 +42,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  data:
+  pgdata:

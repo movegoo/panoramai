@@ -479,47 +479,81 @@ COMPETITOR_COLORS = {
 
 
 @router.get("/competitor-stores")
-async def get_all_competitor_stores(db: Session = Depends(get_db)):
-    """Retourne tous les magasins concurrents groupés par concurrent pour la carte."""
-    stores = db.query(StoreLocation).filter(
-        StoreLocation.source == "BANCO",
-        StoreLocation.competitor_id.isnot(None),
-        StoreLocation.latitude.isnot(None),
-        StoreLocation.longitude.isnot(None),
-    ).all()
+async def get_all_competitor_stores(
+    include_stores: bool = False,
+    db: Session = Depends(get_db),
+):
+    """Retourne les magasins concurrents groupés par concurrent.
 
-    # Group by competitor
-    grouped: Dict[int, Dict] = {}
-    for s in stores:
-        if s.competitor_id not in grouped:
-            comp = db.query(Competitor).filter(Competitor.id == s.competitor_id).first()
-            comp_name = comp.name if comp else "Inconnu"
-            color = COMPETITOR_COLORS.get(comp_name.lower(), "#6b7280")
-            grouped[s.competitor_id] = {
-                "competitor_id": s.competitor_id,
-                "competitor_name": comp_name,
-                "color": color,
-                "stores": [],
-            }
+    Par défaut ne renvoie que les comptages (léger).
+    Passer include_stores=true pour obtenir le détail de chaque magasin (carte).
+    """
+    from sqlalchemy import func
 
-        grouped[s.competitor_id]["stores"].append({
-            "id": s.id,
-            "name": s.name,
-            "brand_name": s.brand_name,
-            "category": s.category,
-            "city": s.city,
-            "postal_code": s.postal_code,
-            "latitude": s.latitude,
-            "longitude": s.longitude,
-        })
+    # Always get counts via aggregate query (lightweight)
+    counts = (
+        db.query(
+            StoreLocation.competitor_id,
+            func.count(StoreLocation.id).label("total"),
+        )
+        .filter(
+            StoreLocation.source == "BANCO",
+            StoreLocation.competitor_id.isnot(None),
+            StoreLocation.latitude.isnot(None),
+            StoreLocation.longitude.isnot(None),
+        )
+        .group_by(StoreLocation.competitor_id)
+        .all()
+    )
 
-    result = list(grouped.values())
-    for group in result:
-        group["total"] = len(group["stores"])
+    # Build competitor info
+    comp_ids = [c[0] for c in counts]
+    competitors_map = {}
+    if comp_ids:
+        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all()
+        competitors_map = {c.id: c for c in comps}
+
+    result = []
+    total_stores = 0
+    for comp_id, count in counts:
+        comp = competitors_map.get(comp_id)
+        comp_name = comp.name if comp else "Inconnu"
+        color = COMPETITOR_COLORS.get(comp_name.lower(), "#6b7280")
+        total_stores += count
+
+        entry = {
+            "competitor_id": comp_id,
+            "competitor_name": comp_name,
+            "color": color,
+            "total": count,
+        }
+
+        if include_stores:
+            stores = db.query(StoreLocation).filter(
+                StoreLocation.source == "BANCO",
+                StoreLocation.competitor_id == comp_id,
+                StoreLocation.latitude.isnot(None),
+                StoreLocation.longitude.isnot(None),
+            ).all()
+            entry["stores"] = [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "brand_name": s.brand_name,
+                    "category": s.category,
+                    "city": s.city,
+                    "postal_code": s.postal_code,
+                    "latitude": s.latitude,
+                    "longitude": s.longitude,
+                }
+                for s in stores
+            ]
+
+        result.append(entry)
 
     return {
         "total_competitors": len(result),
-        "total_stores": len(stores),
+        "total_stores": total_stores,
         "competitors": result,
     }
 

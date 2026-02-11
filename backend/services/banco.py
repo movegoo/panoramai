@@ -59,12 +59,19 @@ class BancoService:
 
     async def download(self, force: bool = False) -> int:
         """Télécharge et cache la base BANCO. Retourne le nombre de commerces."""
-        if not force and self._is_cache_valid() and self._data:
-            return len(self._data)
-
-        # Check file cache
+        # Check file cache first (don't load into memory)
         if not force and self._is_cache_valid():
-            return await self._load_from_cache()
+            if self._data:
+                return len(self._data)
+            # Just return count from file without loading into memory
+            try:
+                import os
+                size = os.path.getsize(self.cache_path)
+                if size > 0:
+                    logger.info("BANCO cache valid on disk, skipping download")
+                    return -1  # Valid cache exists
+            except OSError:
+                pass
 
         logger.info("Downloading BANCO database (38MB ZIP)...")
 

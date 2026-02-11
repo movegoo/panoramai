@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import {
   watchAPI,
+  brandAPI,
   DashboardData,
   DashboardCompetitor,
   RankingCategory,
   AdIntelligence,
+  SectorData,
+  CompetitorSuggestionData,
+  SetupResponseData,
 } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
 import {
@@ -40,6 +44,14 @@ import {
   Image,
   Layers,
   Monitor,
+  Plus,
+  Check,
+  Globe,
+  Rocket,
+  Building2,
+  ChevronRight,
+  Store,
+  Sparkles,
 } from "lucide-react";
 
 /* ─────────────────────── Helpers ─────────────────────── */
@@ -141,20 +153,345 @@ const PRIORITY_STYLE: Record<string, string> = {
   info: "bg-indigo-50 border-indigo-200 text-indigo-800",
 };
 
+/* ─────────────────────── Onboarding ─────────────────────── */
+
+function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [sectors, setSectors] = useState<SectorData[]>([]);
+  const [sector, setSector] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [website, setWebsite] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [setupResult, setSetupResult] = useState<SetupResponseData | null>(null);
+  const [selectedCompetitors, setSelectedCompetitors] = useState<Set<string>>(new Set());
+  const [addedCount, setAddedCount] = useState(0);
+
+  useEffect(() => {
+    brandAPI.getSectors().then(setSectors).catch(() => {});
+  }, []);
+
+  async function handleSetup() {
+    if (!companyName.trim() || !sector) return;
+    setSubmitting(true);
+    try {
+      const result = await brandAPI.setup({
+        company_name: companyName.trim(),
+        sector,
+        website: website.trim() || undefined,
+      });
+      setSetupResult(result);
+      setSelectedCompetitors(new Set(result.suggested_competitors.map((c) => c.name)));
+      setStep(2);
+    } catch (e: any) {
+      alert(e.message || "Erreur lors de la configuration");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleAddCompetitors() {
+    const names = Array.from(selectedCompetitors);
+    if (names.length === 0) {
+      setStep(3);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await brandAPI.addSuggestions(names);
+      setAddedCount(result.added.length);
+      setStep(3);
+    } catch (e: any) {
+      alert(e.message || "Erreur");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function toggleCompetitor(name: string) {
+    setSelectedCompetitors((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  const channelIcons = (c: CompetitorSuggestionData) => {
+    const channels = [];
+    if (c.instagram_username) channels.push({ icon: Instagram, color: "text-pink-500", label: "IG" });
+    if (c.tiktok_username) channels.push({ icon: Music, color: "text-cyan-600", label: "TT" });
+    if (c.youtube_channel_id) channels.push({ icon: Youtube, color: "text-red-500", label: "YT" });
+    if (c.playstore_app_id) channels.push({ icon: Smartphone, color: "text-emerald-600", label: "Play" });
+    if (c.appstore_app_id) channels.push({ icon: Star, color: "text-blue-500", label: "Apple" });
+    return channels;
+  };
+
+  // Step indicator
+  const StepIndicator = () => (
+    <div className="flex items-center justify-center gap-2 mb-8">
+      {[1, 2, 3].map((s) => (
+        <div key={s} className="flex items-center gap-2">
+          <div className={`flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold transition-all ${
+            s < step ? "bg-violet-600 text-white" :
+            s === step ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-200/50" :
+            "bg-muted text-muted-foreground"
+          }`}>
+            {s < step ? <Check className="h-4 w-4" /> : s}
+          </div>
+          {s < 3 && <div className={`w-12 h-0.5 rounded-full ${s < step ? "bg-violet-500" : "bg-muted"}`} />}
+        </div>
+      ))}
+    </div>
+  );
+
+  if (step === 1) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="w-full max-w-lg">
+          <StepIndicator />
+
+          {/* Hero */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-200/50">
+                <Sparkles className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight mb-2">
+              Bienvenue sur panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Configurez votre enseigne pour lancer la veille concurrentielle
+            </p>
+          </div>
+
+          {/* Form */}
+          <div className="rounded-2xl border bg-card p-6 space-y-5">
+            <div className="space-y-2">
+              <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-violet-600" />
+                Secteur d&apos;activite
+              </label>
+              <select
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                className="w-full h-10 rounded-lg border border-input bg-card px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/50 transition-colors"
+              >
+                <option value="">Choisir un secteur...</option>
+                {sectors.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.name} ({s.competitors_count} concurrents)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+                <Store className="h-4 w-4 text-violet-600" />
+                Nom de votre enseigne
+              </label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="ex: Auchan, Carrefour, Lidl..."
+                className="w-full h-10 rounded-lg border border-input bg-card px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
+                <Globe className="h-4 w-4 text-violet-600" />
+                Site web <span className="text-muted-foreground font-normal">(optionnel)</span>
+              </label>
+              <input
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://www.monenseigne.fr"
+                className="w-full h-10 rounded-lg border border-input bg-card px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/50 transition-colors placeholder:text-muted-foreground/60"
+              />
+            </div>
+
+            <button
+              onClick={handleSetup}
+              disabled={!companyName.trim() || !sector || submitting}
+              className="w-full h-11 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Configuration...
+                </>
+              ) : (
+                <>
+                  Continuer
+                  <ChevronRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 2 && setupResult) {
+    const suggestions = setupResult.suggested_competitors;
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="w-full max-w-2xl">
+          <StepIndicator />
+
+          <div className="text-center mb-6">
+            <h2 className="text-xl font-bold tracking-tight mb-2">
+              Selectionnez vos concurrents
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {suggestions.length} concurrents suggeres pour le secteur{" "}
+              <span className="font-semibold text-foreground">{setupResult.brand.sector_label}</span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            {suggestions.map((c) => {
+              const selected = selectedCompetitors.has(c.name);
+              const channels = channelIcons(c);
+              return (
+                <button
+                  key={c.name}
+                  onClick={() => toggleCompetitor(c.name)}
+                  className={`relative rounded-xl border p-4 text-left transition-all ${
+                    selected
+                      ? "border-violet-300 bg-violet-50/60 shadow-sm"
+                      : "border-border bg-card hover:border-violet-200 hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`flex items-center justify-center h-8 w-8 rounded-lg shrink-0 transition-all ${
+                      selected
+                        ? "bg-violet-600 text-white"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {selected ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm">{c.name}</div>
+                      {c.website && (
+                        <div className="text-[11px] text-muted-foreground truncate">{c.website}</div>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {channels.map((ch) => (
+                          <div key={ch.label} className={`${ch.color}`} title={ch.label}>
+                            <ch.icon className="h-3.5 w-3.5" />
+                          </div>
+                        ))}
+                        {channels.length === 0 && (
+                          <span className="text-[10px] text-muted-foreground">Aucun canal configure</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              {selectedCompetitors.size} selectionne{selectedCompetitors.size > 1 ? "s" : ""}
+            </span>
+            <button
+              onClick={handleAddCompetitors}
+              disabled={submitting}
+              className="h-11 px-6 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Ajout en cours...
+                </>
+              ) : (
+                <>
+                  <Rocket className="h-4 w-4" />
+                  Lancer la veille
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 3) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="w-full max-w-md text-center">
+          <StepIndicator />
+
+          <div className="flex items-center justify-center mb-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200/50">
+              <Check className="h-8 w-8 text-white" />
+            </div>
+          </div>
+
+          <h2 className="text-xl font-bold tracking-tight mb-2">
+            C&apos;est parti !
+          </h2>
+          <p className="text-muted-foreground text-sm mb-2">
+            Votre enseigne <span className="font-semibold text-foreground">{setupResult?.brand.company_name}</span> est configuree.
+          </p>
+          {addedCount > 0 && (
+            <p className="text-muted-foreground text-sm mb-6">
+              {addedCount} concurrent{addedCount > 1 ? "s" : ""} ajout&eacute;{addedCount > 1 ? "s" : ""} a votre veille.
+            </p>
+          )}
+
+          <button
+            onClick={onComplete}
+            className="h-11 px-8 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:from-violet-700 hover:to-indigo-700 transition-all inline-flex items-center gap-2"
+          >
+            Acceder au dashboard
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 /* ─────────────────────── Page ─────────────────────── */
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [activeRanking, setActiveRanking] = useState(0);
 
-  useEffect(() => {
+  function loadDashboard() {
+    setLoading(true);
+    setError(null);
+    setNeedsOnboarding(false);
     watchAPI
       .getDashboard()
-      .then(setData)
-      .catch((e: Error) => setError(e.message || "Erreur"))
+      .then((d) => {
+        if (!d.brand) {
+          setNeedsOnboarding(true);
+        } else {
+          setData(d);
+        }
+      })
+      .catch(() => setNeedsOnboarding(true))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadDashboard();
   }, []);
 
   if (loading)
@@ -167,12 +504,15 @@ export default function DashboardPage() {
       </div>
     );
 
-  if (error || !data)
+  if (needsOnboarding)
+    return <OnboardingScreen onComplete={loadDashboard} />;
+
+  if (!data)
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center space-y-2">
           <AlertTriangle className="h-8 w-8 text-red-400 mx-auto" />
-          <p className="text-red-500 font-medium">{error || "Erreur inconnue"}</p>
+          <p className="text-red-500 font-medium">Erreur inconnue</p>
         </div>
       </div>
     );

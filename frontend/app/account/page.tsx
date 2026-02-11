@@ -208,11 +208,14 @@ function SmartChannelInput({
 }) {
   const [raw, setRaw] = useState(value || "");
   const [focused, setFocused] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Sync from parent when value changes externally (e.g. profile load)
+  // Sync from parent only on external changes (e.g. profile load), not during editing
   useEffect(() => {
-    setRaw(value || "");
-  }, [value]);
+    if (!isEditing) {
+      setRaw(value || "");
+    }
+  }, [value, isEditing]);
 
   const parsed = channel.parse(raw);
   const isUrl = raw.includes("://") || raw.includes("www.");
@@ -220,15 +223,19 @@ function SmartChannelInput({
 
   function handleBlur() {
     setFocused(false);
+    setIsEditing(false);
     if (raw && parsed) {
       onChange(parsed);
+      // After blur, show the parsed ID in the input
+      setRaw(parsed);
     }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value;
+    setIsEditing(true);
     setRaw(v);
-    // Auto-parse on paste (when value changes significantly)
+    // Send parsed value to parent but keep raw URL visible in input
     const p = channel.parse(v);
     onChange(p);
   }

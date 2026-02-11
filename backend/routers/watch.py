@@ -610,7 +610,9 @@ def _get_platform_leaders(competitors: list) -> dict:
 
 def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) -> dict:
     """Build ad intelligence: format breakdown, platform mix, payer/advertiser analysis."""
-    all_ads = db.query(Ad).all()
+    # Only load ads for tracked competitors to limit memory usage
+    tracked_ids = [c["id"] for c in competitor_data]
+    all_ads = db.query(Ad).filter(Ad.competitor_id.in_(tracked_ids)).all() if tracked_ids else []
 
     # Per competitor ad data
     comp_ads = {}
