@@ -6,7 +6,7 @@ import {
   MapPin, Users, Home, TrendingUp, Settings, Search, Car, Train, Bike,
   Layers, Zap, Coffee, ShoppingBag, Building2, GraduationCap, ChevronDown,
   ChevronUp, RefreshCw, Briefcase, Euro, PieChart, UserCheck, Target,
-  Sparkles, ArrowRight, MousePointer, Navigation, Info, Store
+  Sparkles, ArrowRight, MousePointer, Navigation, Info, Store, Smartphone
 } from "lucide-react";
 
 // =============================================================================
@@ -23,11 +23,13 @@ interface MobiliteStats {
 
 interface SocioDemoStats {
   communes_couvertes: number;
+  genre: { hommes: number; femmes: number; pct_hommes: number; pct_femmes: number } | null;
   tranches_age: Record<string, number> | null;
   taux_chomage: number | null;
   pct_proprietaires: number | null;
   revenu_median: number | null;
   taux_pauvrete: number | null;
+  taux_mobinautes: number | null;
   csp: Record<string, number> | null;
 }
 
@@ -182,7 +184,7 @@ export default function FranceMap() {
   // Layers panel
   const [layersPanelOpen, setLayersPanelOpen] = useState(false);
   const [layers, setLayers] = useState<LayerConfig[]>([
-    { id: "competitor_stores", name: "Magasins concurrents", icon: <Store className="h-4 w-4" />, color: "#ef4444", enabled: false, description: "Base BANCO" },
+    { id: "competitor_stores", name: "Magasins concurrents", icon: <Store className="h-4 w-4" />, color: "#ef4444", enabled: false, description: "Base nationale des commerces" },
     { id: "irve", name: "Bornes électriques", icon: <Zap className="h-4 w-4" />, color: "#22c55e", enabled: false, description: "200k+ bornes IRVE" },
     { id: "poi_restaurant", name: "Restaurants", icon: <Coffee className="h-4 w-4" />, color: "#f59e0b", enabled: false, description: "Via OpenStreetMap" },
     { id: "poi_shop", name: "Commerces", icon: <ShoppingBag className="h-4 w-4" />, color: "#ec4899", enabled: false, description: "Via OpenStreetMap" },
@@ -1084,7 +1086,7 @@ export default function FranceMap() {
                 <div className="p-1.5 bg-red-500 rounded-lg">
                   <Store className="h-4 w-4 text-white" />
                 </div>
-                <span className="text-sm font-semibold text-red-800">Magasins concurrents (BANCO)</span>
+                <span className="text-sm font-semibold text-red-800">Magasins concurrents</span>
                 <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full ml-auto">
                   {competitorStoreGroups.reduce((sum, g) => sum + g.total, 0).toLocaleString()} points
                 </span>
@@ -1386,8 +1388,57 @@ export default function FranceMap() {
 
                 {activeTab === "demo" && zoneAnalysis.analysis.socio_demo && (
                   <>
+                    {/* Genre distribution */}
+                    {zoneAnalysis.analysis.socio_demo.genre && (
+                      <div className="bg-white rounded-xl p-4 border">
+                        <div className="text-sm font-semibold text-gray-700 mb-3">Répartition homme / femme</div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <div className="flex rounded-full overflow-hidden h-5">
+                              <div
+                                className="bg-gradient-to-r from-blue-400 to-blue-500 flex items-center justify-center"
+                                style={{ width: `${zoneAnalysis.analysis.socio_demo.genre.pct_hommes}%` }}
+                              >
+                                <span className="text-[10px] font-bold text-white">{zoneAnalysis.analysis.socio_demo.genre.pct_hommes}%</span>
+                              </div>
+                              <div
+                                className="bg-gradient-to-r from-pink-400 to-pink-500 flex items-center justify-center"
+                                style={{ width: `${zoneAnalysis.analysis.socio_demo.genre.pct_femmes}%` }}
+                              >
+                                <span className="text-[10px] font-bold text-white">{zoneAnalysis.analysis.socio_demo.genre.pct_femmes}%</span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between mt-2">
+                              <div className="flex items-center gap-1.5">
+                                <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                                <span className="text-xs text-gray-600">Hommes</span>
+                                <span className="text-xs font-bold text-gray-700">{formatNumber(zoneAnalysis.analysis.socio_demo.genre.hommes)}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <div className="h-2.5 w-2.5 rounded-full bg-pink-500" />
+                                <span className="text-xs text-gray-600">Femmes</span>
+                                <span className="text-xs font-bold text-gray-700">{formatNumber(zoneAnalysis.analysis.socio_demo.genre.femmes)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Key indicators */}
                     <div className="grid grid-cols-2 gap-3">
+                      {zoneAnalysis.analysis.socio_demo.taux_mobinautes !== null && (
+                        <div className="bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl p-4 border border-violet-100">
+                          <div className="flex items-center gap-2 text-violet-600 mb-2">
+                            <Smartphone className="h-4 w-4" />
+                            <span className="text-xs font-medium">Mobinautes</span>
+                          </div>
+                          <div className="text-2xl font-bold text-violet-700">
+                            {zoneAnalysis.analysis.socio_demo.taux_mobinautes.toFixed(1)}%
+                          </div>
+                          <div className="text-[10px] text-violet-500 mt-0.5">Taux de pénétration mobile</div>
+                        </div>
+                      )}
                       {zoneAnalysis.analysis.socio_demo.taux_chomage !== null && (
                         <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl p-4 border border-rose-100">
                           <div className="flex items-center gap-2 text-rose-600 mb-2">

@@ -183,12 +183,12 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* ── Hero header ────────────────────────────────── */}
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 p-8 text-white relative overflow-hidden">
+      <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 p-5 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-violet-400/[0.05]" />
         <div className="absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-indigo-400/[0.04]" />
 
         <div className="relative">
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <Shield className="h-6 w-6 text-violet-400" />
@@ -216,7 +216,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Platform leader cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {pl.instagram && (
               <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
                 <div className="flex items-center gap-2 mb-2">
@@ -278,7 +278,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Two-column layout: Rankings + Ad Intelligence ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* ── CLASSEMENTS ────────────────────────────────── */}
         <div className="space-y-4">
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                 Formats publicitaires du marche
               </span>
             </div>
-            <div className="p-4 grid grid-cols-3 gap-3">
+            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {adI.format_breakdown.map((fb) => (
                 <div key={fb.format} className="text-center rounded-xl bg-muted/30 p-3">
                   <FormatIcon format={fb.format} />
@@ -497,7 +497,7 @@ export default function DashboardPage() {
               Recommandations stratégiques
             </h2>
           </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {adI.recommendations.map((rec, i) => (
               <div
                 key={i}
@@ -626,7 +626,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Metrics grid */}
-                <div className="px-5 py-4 grid grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                   <div className={`rounded-xl px-3 py-2.5 ${ig ? "bg-pink-50/70" : "bg-muted/30"}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <Instagram className="h-3.5 w-3.5 text-pink-500" />
@@ -803,7 +803,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Payeurs & Annonceurs detail ────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payeurs (qui paye les pubs) */}
         <div className="space-y-3">
           <div className="flex items-center gap-2.5">

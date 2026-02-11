@@ -100,6 +100,58 @@ function AppStoreIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 36 36" className={className} fill="currentColor">
+      <path d="M7.5 16.5c0-3.38 1.19-6.2 2.85-7.78C11.5 7.6 13 7.05 14.4 7.05c1.85 0 3.35.95 4.85 3.15l.75 1.1.75-1.1c1.5-2.2 3-3.15 4.85-3.15 1.4 0 2.9.55 4.05 1.67C31.31 10.3 32.5 13.12 32.5 16.5c0 5.52-5.58 12.45-14.5 12.45S3.5 22.02 3.5 16.5h4c0 3.25 3.75 8.45 10.5 8.45s10.5-5.2 10.5-8.45c0-2.36-.78-4.28-1.82-5.28-.55-.53-1.08-.72-1.58-.72-.8 0-1.55.55-2.6 2.1l-2.2 3.25c-.85 1.25-1.6 1.7-2.8 1.7-1.2 0-1.95-.45-2.8-1.7l-2.2-3.25c-1.05-1.55-1.8-2.1-2.6-2.1-.5 0-1.03.19-1.58.72C9.78 12.22 9 14.14 9 16.5H7.5z"/>
+    </svg>
+  );
+}
+
+/* ─────────────── CPM Benchmarks & Budget Estimation ─────────────── */
+
+// CPM benchmarks by country (EUR) - Source: industry averages 2024-2025
+const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number }> = {
+  FR: { meta: 7.5, tiktok: 4.5 },
+  DE: { meta: 8.0, tiktok: 5.0 },
+  ES: { meta: 5.5, tiktok: 3.5 },
+  IT: { meta: 5.0, tiktok: 3.5 },
+  BE: { meta: 7.0, tiktok: 4.0 },
+  NL: { meta: 8.5, tiktok: 5.5 },
+  UK: { meta: 9.0, tiktok: 6.0 },
+  US: { meta: 12.0, tiktok: 8.0 },
+  DEFAULT: { meta: 6.0, tiktok: 4.0 },
+};
+
+function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | null {
+  // If we already have spend data, skip estimation
+  if (ad.estimated_spend_min && ad.estimated_spend_min > 0) return null;
+
+  const reach = ad.eu_total_reach;
+  if (!reach || reach < 100) return null;
+
+  // Determine platform CPM
+  const isTikTok = ad.platform === "tiktok";
+  const country = ad.targeted_countries?.[0] || "FR";
+  const benchmark = CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT;
+  const cpm = isTikTok ? benchmark.tiktok : benchmark.meta;
+
+  // Budget = (reach / 1000) * CPM (with range +-30%)
+  const estimated = (reach / 1000) * cpm;
+  return {
+    min: Math.round(estimated * 0.7),
+    max: Math.round(estimated * 1.3),
+  };
+}
+
+function getSourcePlatform(ad: AdWithCompetitor): { label: string; icon: React.ReactNode; color: string; bg: string } {
+  if (ad.platform === "tiktok") {
+    return { label: "TikTok Ads", icon: <TikTokIcon className="h-3.5 w-3.5" />, color: "text-slate-800", bg: "bg-slate-100 border-slate-200" };
+  }
+  // Default: Meta (Facebook Ad Library)
+  return { label: "Meta Ads", icon: <MetaIcon className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" };
+}
+
 /* ─────────────── Constants ─────────────── */
 
 const PLATFORM_CONFIGS: Record<string, { label: string; color: string; iconColor: string; bg: string }> = {
@@ -238,6 +290,16 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             </div>
             {/* Tags */}
             <div className="absolute top-3 left-3 flex items-center gap-1.5">
+              {/* Source platform (Meta / TikTok) */}
+              {(() => {
+                const src = getSourcePlatform(ad);
+                return (
+                  <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-md bg-white/90 ${src.color} shadow-sm`}>
+                    {src.icon}
+                    {src.label}
+                  </span>
+                );
+              })()}
               <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-md bg-white/20 text-white">
                 {FORMAT_LABELS[ad.display_format || ""]?.label || ad.display_format || ad.platform}
               </span>
@@ -270,7 +332,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
           </div>
         </a>
       ) : (
-        <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2">
+        <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2 relative">
           <Eye className="h-8 w-8 text-muted-foreground/20" />
           <div className="flex items-center gap-2">
             {advertiserLogo && (
@@ -280,6 +342,18 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
               {ad.competitor_name}
             </span>
+          </div>
+          {/* Source platform badge */}
+          <div className="absolute top-3 left-3">
+            {(() => {
+              const src = getSourcePlatform(ad);
+              return (
+                <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border ${src.bg} ${src.color}`}>
+                  {src.icon}
+                  {src.label}
+                </span>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -312,6 +386,16 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               {(() => { try { return new URL(ad.link_url!).hostname.replace("www.", ""); } catch { return ad.link_url; } })()}
             </a>
           )}
+          {/* Budget estimation from CPM benchmarks */}
+          {(() => {
+            const budget = estimateBudget(ad);
+            if (!budget) return null;
+            return (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100" title="Estimation basée sur le CPM benchmark du pays">
+                <TrendingUp className="h-2.5 w-2.5" />~{formatNumber(budget.min)}-{formatNumber(budget.max)}€
+              </span>
+            );
+          })()}
         </div>
 
         {/* Expand toggle */}
@@ -523,6 +607,28 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
                 )}
               </div>
             )}
+            {/* CPM-based budget estimation */}
+            {(() => {
+              const budget = estimateBudget(ad);
+              if (!budget) return null;
+              const country = ad.targeted_countries?.[0] || "FR";
+              const isTikTok = ad.platform === "tiktok";
+              const cpm = (CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT)[isTikTok ? "tiktok" : "meta"];
+              return (
+                <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border border-emerald-100">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Budget estimé (CPM)</div>
+                    <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">Benchmark {country}</span>
+                  </div>
+                  <div className="text-lg font-bold text-emerald-700 tabular-nums">
+                    {formatNumber(budget.min)} - {formatNumber(budget.max)} €
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    CPM {isTikTok ? "TikTok" : "Meta"} : ~{cpm}€ &middot; Reach : {formatNumber(ad.eu_total_reach || 0)}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -978,7 +1084,7 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
               </div>
               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 {c.fmts.map(f => (
-                  <span key={f} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{FORMAT_LABELS[f]?.label || f}</span>
+                  <span key={f} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{FORMAT_LABELS[f as string]?.label || f}</span>
                 ))}
               </div>
             </div>
@@ -999,7 +1105,7 @@ function MobsuccessRecommendations({ filteredAds }: { filteredAds: AdWithCompeti
     const brandFmts = new Set(filteredAds.filter(a => a.competitor_name === "Auchan").map(a => a.display_format).filter(Boolean));
     const allFmts = new Set(filteredAds.map(a => a.display_format).filter(Boolean));
     if (brandFmts.size < allFmts.size) {
-      const missing = Array.from(allFmts).filter(f => !brandFmts.has(f)).map(f => FORMAT_LABELS[f]?.label || f);
+      const missing = Array.from(allFmts).filter(f => !brandFmts.has(f)).map(f => FORMAT_LABELS[f as string]?.label || f);
       r.push({ bu: "STORY", grad: "from-pink-500 to-rose-500", title: "Diversifiez vos creatives", text: `Formats inexploites : ${missing.join(", ")}. STORY produit du contenu social, video et carrousel haute performance.`, icon: <Play className="h-4 w-4" /> });
     }
     const brandReach = filteredAds.filter(a => a.competitor_name === "Auchan").reduce((s, a) => s + (a.eu_total_reach || 0), 0);

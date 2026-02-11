@@ -461,7 +461,7 @@ async def get_heatmap_data(
 
 
 # =============================================================================
-# Endpoints - Magasins concurrents (BANCO)
+# Endpoints - Magasins concurrents
 # =============================================================================
 
 COMPETITOR_COLORS = {
@@ -553,20 +553,20 @@ async def get_competitor_stores_geo(competitor_id: int, db: Session = Depends(ge
 
 
 # =============================================================================
-# Endpoints - BANCO management
+# Endpoints - Base commerces management
 # =============================================================================
 
 @router.post("/banco/download")
 async def download_banco():
-    """Télécharge/rafraîchit la base BANCO."""
+    """Télécharge/rafraîchit la base nationale des commerces."""
     from services.banco import banco_service
     count = await banco_service.download(force=True)
-    return {"message": f"BANCO téléchargée: {count} commerces avec enseigne", "count": count}
+    return {"message": f"Base commerces téléchargée: {count} commerces avec enseigne", "count": count}
 
 
 @router.get("/banco/brands")
 async def list_banco_brands():
-    """Liste les enseignes disponibles dans BANCO."""
+    """Liste les enseignes disponibles dans la base commerces."""
     from services.banco import banco_service
     brands = await banco_service.get_all_brands()
     return {"total": len(brands), "brands": brands[:100]}
@@ -574,7 +574,7 @@ async def list_banco_brands():
 
 @router.post("/banco/enrich-all")
 async def enrich_all_competitors(db: Session = Depends(get_db)):
-    """Enrichit tous les concurrents existants avec les données BANCO."""
+    """Enrichit tous les concurrents existants avec la base commerces."""
     from services.banco import banco_service
 
     competitors = db.query(Competitor).filter(Competitor.is_active == True).all()

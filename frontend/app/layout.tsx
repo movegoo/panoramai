@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Panorama - Veille Concurrentielle",
+  title: "panoramAI - Veille Concurrentielle",
   description: "Cockpit de veille concurrentielle multi-canal",
 };
 

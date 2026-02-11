@@ -406,12 +406,12 @@ async def delete_competitor(competitor_id: int, db: Session = Depends(get_db)):
 
 
 # =============================================================================
-# Endpoints - Magasins BANCO
+# Endpoints - Magasins concurrents
 # =============================================================================
 
 @router.get("/{competitor_id}/stores")
 async def get_competitor_stores(competitor_id: int, db: Session = Depends(get_db)):
-    """Liste les magasins BANCO d'un concurrent."""
+    """Liste les magasins d'un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
@@ -445,7 +445,7 @@ async def get_competitor_stores(competitor_id: int, db: Session = Depends(get_db
 
 @router.post("/{competitor_id}/refresh-stores")
 async def refresh_competitor_stores(competitor_id: int, db: Session = Depends(get_db)):
-    """Relance la recherche BANCO pour un concurrent."""
+    """Relance la recherche de magasins pour un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")

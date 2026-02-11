@@ -88,7 +88,7 @@ export default function CompetitorsPage() {
       const data = await competitorsAPI.list();
       setCompetitors(data);
 
-      // Fetch store counts from BANCO
+      // Fetch store counts
       try {
         const res = await fetch("http://localhost:8000/api/geo/competitor-stores");
         if (res.ok) {

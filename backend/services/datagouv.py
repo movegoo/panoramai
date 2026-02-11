@@ -750,6 +750,8 @@ class DataGouvService:
 
         # Agrégation pondérée par population
         total_pop = 0
+        total_hommes = 0
+        total_femmes = 0
         age_totals = {"0-14": 0, "15-29": 0, "30-44": 0, "45-59": 0, "60-74": 0, "75+": 0}
         chomeurs_total = 0
         actifs_total = 0
@@ -772,6 +774,11 @@ class DataGouvService:
 
             communes_with_data += 1
             total_pop += pop
+
+            # Genre
+            if data.get("genre"):
+                total_hommes += data["genre"].get("hommes") or 0
+                total_femmes += data["genre"].get("femmes") or 0
 
             # Tranches d'âge (pondérées)
             if data.get("tranches_age"):
@@ -834,13 +841,42 @@ class DataGouvService:
             for csp_type, total in csp_totals.items():
                 csp_pct[csp_type] = round(total / csp_total * 100, 1)
 
+        # Genre agrégé
+        genre = None
+        genre_total = total_hommes + total_femmes
+        if genre_total > 0:
+            genre = {
+                "hommes": round(total_hommes),
+                "femmes": round(total_femmes),
+                "pct_hommes": round(total_hommes / genre_total * 100, 1),
+                "pct_femmes": round(total_femmes / genre_total * 100, 1),
+            }
+
+        # Estimation taux de mobinautes basée sur profil démographique de la zone
+        # Sources: ARCEP/Médiamétrie 2024: 87% des Français sont mobinautes
+        # Taux par tranche d'âge (estimations ARCEP/Médiamétrie):
+        # 15-29: 98%, 30-44: 96%, 45-59: 90%, 60-74: 78%, 75+: 45%, 0-14: 30%
+        taux_mobinautes = None
+        if age_pct:
+            TAUX_MOBILE_PAR_AGE = {
+                "0-14": 30.0, "15-29": 98.0, "30-44": 96.0,
+                "45-59": 90.0, "60-74": 78.0, "75+": 45.0,
+            }
+            weighted_mobile = sum(
+                age_pct.get(ag, 0) * TAUX_MOBILE_PAR_AGE.get(ag, 80) / 100
+                for ag in TAUX_MOBILE_PAR_AGE
+            )
+            taux_mobinautes = round(weighted_mobile, 1)
+
         return {
             "communes_couvertes": communes_with_data,
+            "genre": genre,
             "tranches_age": age_pct if age_pct else None,
             "taux_chomage": round(chomeurs_total / actifs_total * 100, 1) if actifs_total > 0 else None,
             "pct_proprietaires": round(proprietaires_total / menages_total * 100, 1) if menages_total > 0 else None,
             "revenu_median": revenu_median,
             "taux_pauvrete": taux_pauvrete,
+            "taux_mobinautes": taux_mobinautes,
             "csp": csp_pct if csp_pct else None,
         }
 
@@ -882,6 +918,10 @@ class DataGouvService:
                 # Population totale
                 pop_total = self._safe_float(row.get("P21_POP") or row.get("P20_POP") or row.get("P19_POP"))
 
+                # Population par genre
+                pop_hommes = self._safe_float(row.get("P21_POPH") or row.get("P20_POPH"))
+                pop_femmes = self._safe_float(row.get("P21_POPF") or row.get("P20_POPF"))
+
                 # Tranches d'âge (pourcentages)
                 pop_0_14 = self._safe_float(row.get("P21_POP0014") or row.get("P20_POP0014"))
                 pop_15_29 = self._safe_float(row.get("P21_POP1529") or row.get("P20_POP1529"))
@@ -915,6 +955,16 @@ class DataGouvService:
                 revenu_median = self._safe_float(row.get("MED21") or row.get("MED20") or row.get("MED19"))
                 taux_pauvrete = self._safe_float(row.get("TP60") or row.get("TP6021") or row.get("TP6020"))
 
+                # Genre
+                genre = None
+                if pop_total and pop_total > 0 and pop_hommes is not None and pop_femmes is not None:
+                    genre = {
+                        "hommes": pop_hommes,
+                        "femmes": pop_femmes,
+                        "pct_hommes": round(pop_hommes / pop_total * 100, 1),
+                        "pct_femmes": round(pop_femmes / pop_total * 100, 1),
+                    }
+
                 # Calculer pourcentages si on a les valeurs absolues
                 pct_age = {}
                 if pop_total and pop_total > 0:
@@ -937,6 +987,7 @@ class DataGouvService:
 
                 result[code] = {
                     "population": pop_total,
+                    "genre": genre,
                     "tranches_age": pct_age if pct_age else None,
                     "taux_chomage": taux_chomage,
                     "pct_proprietaires": pct_proprietaires,

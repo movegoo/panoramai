@@ -31,7 +31,7 @@ export function Breadcrumb() {
     <div className="h-12 shrink-0 border-b border-border bg-card/80 backdrop-blur-sm flex items-center justify-between px-6">
       {/* Breadcrumb trail */}
       <div className="flex items-center gap-1.5 text-[13px]">
-        <span className="text-muted-foreground font-medium">Panorama</span>
+        <span className="text-muted-foreground font-medium">panoram<span className="font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span></span>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
         {meta.parent && (
           <>
