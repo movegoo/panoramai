@@ -271,16 +271,19 @@ async def enrich_ads_transparency(
     db: Session = Depends(get_db),
 ):
     """
-    Enrich all ads that lack EU transparency data (age, gender, location, reach)
+    Enrich all Meta ads that lack EU transparency data (age, gender, location, reach)
     by fetching individual ad details from the Ad Library.
     """
-    # Find ads missing transparency data
+    # Only enrich Meta/Facebook ads (not TikTok/Google)
+    meta_platforms = ["facebook", "instagram", "messenger", "audience_network", "meta",
+                      "FACEBOOK", "INSTAGRAM", "MESSENGER", "AUDIENCE_NETWORK", "META"]
     ads_to_enrich = db.query(Ad).filter(
-        Ad.eu_total_reach.is_(None)
+        Ad.eu_total_reach.is_(None),
+        Ad.platform.in_(meta_platforms),
     ).all()
 
     if not ads_to_enrich:
-        return {"message": "All ads already enriched", "enriched": 0}
+        return {"message": "All Meta ads already enriched", "enriched": 0, "total_meta": 0}
 
     enriched_count = 0
     errors = 0
@@ -290,13 +293,16 @@ async def enrich_ads_transparency(
             detail = await scrapecreators.get_facebook_ad_detail(ad.ad_id)
 
             if not detail.get("success"):
+                # Mark as processed (reach=0) to avoid re-processing
+                ad.eu_total_reach = 0
                 errors += 1
                 continue
 
             ad.age_min = detail.get("age_min")
             ad.age_max = detail.get("age_max")
             ad.gender_audience = detail.get("gender_audience")
-            ad.eu_total_reach = detail.get("eu_total_reach")
+            # Default to 0 if null so we don't re-process
+            ad.eu_total_reach = detail.get("eu_total_reach") or 0
 
             loc = detail.get("location_audience", [])
             if loc:
@@ -313,6 +319,7 @@ async def enrich_ads_transparency(
 
         except Exception as e:
             logger.error(f"Error enriching ad {ad.ad_id}: {e}")
+            ad.eu_total_reach = 0  # Mark as processed
             errors += 1
 
     db.commit()
@@ -321,7 +328,8 @@ async def enrich_ads_transparency(
         "message": f"Enriched {enriched_count} ads with EU transparency data",
         "enriched": enriched_count,
         "errors": errors,
-        "remaining": len(ads_to_enrich) - enriched_count,
+        "total_meta_ads": len(ads_to_enrich),
+        "remaining": len(ads_to_enrich) - enriched_count - errors,
     }
 
 
