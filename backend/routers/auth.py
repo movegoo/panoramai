@@ -38,14 +38,23 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
 
-    user = User(
-        email=data.email.lower().strip(),
-        name=data.name or data.email.split("@")[0],
-        password_hash=hash_password(data.password),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        pw_hash = hash_password(data.password)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"hash error: {e}")
+
+    try:
+        user = User(
+            email=data.email.lower().strip(),
+            name=data.name or data.email.split("@")[0],
+            password_hash=pw_hash,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"db error: {e}")
 
     token = create_access_token(user.id)
     has_brand = db.query(Advertiser).filter(
@@ -54,7 +63,7 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
     return AuthResponse(
         token=token,
-        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand, "is_admin": user.is_admin},
+        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand, "is_admin": getattr(user, 'is_admin', False)},
     )
 
 
