@@ -257,6 +257,8 @@ export interface AdCompetitorSummary {
   active_ads: number;
   formats: Record<string, number>;
   platforms: string[];
+  estimated_spend_min?: number;
+  estimated_spend_max?: number;
 }
 
 export interface AdRecommendation {
@@ -272,6 +274,7 @@ export interface AdRecommendation {
 export interface AdIntelligence {
   total_ads: number;
   total_active: number;
+  total_estimated_spend?: { min: number; max: number };
   format_breakdown: AdFormatBreakdown[];
   platform_breakdown: AdPlatformBreakdown[];
   advertisers: AdAdvertiser[];

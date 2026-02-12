@@ -708,6 +708,10 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             for pp in pps:
                 comp_platforms.add(pp)
 
+        # Estimated spend
+        spend_min = sum(a.estimated_spend_min or 0 for a in ads)
+        spend_max = sum(a.estimated_spend_max or 0 for a in ads)
+
         competitor_ad_summary.append({
             "id": cid,
             "name": cd["name"],
@@ -716,6 +720,8 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             "active_ads": len(active),
             "formats": comp_formats,
             "platforms": sorted(comp_platforms),
+            "estimated_spend_min": spend_min,
+            "estimated_spend_max": spend_max,
         })
 
     competitor_ad_summary.sort(key=lambda x: x["total_ads"], reverse=True)
@@ -735,9 +741,13 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         competitor_ad_summary, format_counts, platform_counts, brand_name
     )
 
+    total_spend_min = sum(a.estimated_spend_min or 0 for a in all_ads)
+    total_spend_max = sum(a.estimated_spend_max or 0 for a in all_ads)
+
     return {
         "total_ads": len(all_ads),
         "total_active": len([a for a in all_ads if a.is_active]),
+        "total_estimated_spend": {"min": total_spend_min, "max": total_spend_max},
         "format_breakdown": [
             {"format": k, "label": FORMAT_LABELS.get(k, k), "count": v,
              "pct": round(v / len(all_ads) * 100, 1) if all_ads else 0}
