@@ -64,7 +64,7 @@ class Ad(Base):
     __tablename__ = "ads"
 
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, ForeignKey("competitors.id"))
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
     ad_id = Column(String(100), unique=True)
     platform = Column(String(50))  # facebook, instagram
     creative_url = Column(String(1000))
@@ -113,7 +113,7 @@ class InstagramData(Base):
     __tablename__ = "instagram_data"
 
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, ForeignKey("competitors.id"))
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
     followers = Column(Integer)
     following = Column(Integer)
     posts_count = Column(Integer)
@@ -121,7 +121,7 @@ class InstagramData(Base):
     avg_comments = Column(Float)
     engagement_rate = Column(Float)
     bio = Column(Text)
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     competitor = relationship("Competitor", back_populates="instagram_data")
 
@@ -130,7 +130,7 @@ class AppData(Base):
     __tablename__ = "app_data"
 
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, ForeignKey("competitors.id"))
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
     store = Column(String(20))  # playstore, appstore
     app_id = Column(String(255))
     app_name = Column(String(255))
@@ -142,7 +142,7 @@ class AppData(Base):
     last_updated = Column(DateTime)
     description = Column(Text)
     changelog = Column(Text)
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     competitor = relationship("Competitor", back_populates="app_data")
 
@@ -151,7 +151,7 @@ class TikTokData(Base):
     __tablename__ = "tiktok_data"
 
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, ForeignKey("competitors.id"))
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
     username = Column(String(100))
     followers = Column(BigInteger)
     following = Column(Integer)
@@ -159,7 +159,7 @@ class TikTokData(Base):
     videos_count = Column(Integer)
     bio = Column(Text)
     verified = Column(Boolean, default=False)
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     competitor = relationship("Competitor", back_populates="tiktok_data")
 
@@ -168,7 +168,7 @@ class YouTubeData(Base):
     __tablename__ = "youtube_data"
 
     id = Column(Integer, primary_key=True, index=True)
-    competitor_id = Column(Integer, ForeignKey("competitors.id"))
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
     channel_id = Column(String(100))
     channel_name = Column(String(255))
     subscribers = Column(BigInteger)
@@ -179,7 +179,7 @@ class YouTubeData(Base):
     avg_comments = Column(Integer)
     engagement_rate = Column(Float)
     description = Column(Text)
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     competitor = relationship("Competitor", back_populates="youtube_data")
 
@@ -353,7 +353,7 @@ class ZoneAnalysis(Base):
 
 
 def _run_migrations(engine):
-    """Add missing columns to existing tables."""
+    """Add missing columns and indexes to existing tables."""
     try:
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
@@ -369,6 +369,31 @@ def _run_migrations(engine):
                 if column not in existing:
                     with engine.begin() as conn:
                         conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
+
+        # Add missing indexes on FK and temporal columns
+        indexes_to_add = [
+            ("ads", "competitor_id"),
+            ("instagram_data", "competitor_id"),
+            ("instagram_data", "recorded_at"),
+            ("app_data", "competitor_id"),
+            ("app_data", "recorded_at"),
+            ("tiktok_data", "competitor_id"),
+            ("tiktok_data", "recorded_at"),
+            ("youtube_data", "competitor_id"),
+            ("youtube_data", "recorded_at"),
+        ]
+        existing_indexes = {}
+        for table in existing_tables:
+            existing_indexes[table] = {
+                col
+                for idx in inspector.get_indexes(table)
+                for col in idx.get("column_names", [])
+            }
+        for table, column in indexes_to_add:
+            if table in existing_tables and column not in existing_indexes.get(table, set()):
+                idx_name = f"ix_{table}_{column}"
+                with engine.begin() as conn:
+                    conn.execute(text(f'CREATE INDEX IF NOT EXISTS "{idx_name}" ON "{table}" ("{column}")'))
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Migration warning: {e}")

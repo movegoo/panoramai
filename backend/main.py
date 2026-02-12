@@ -108,7 +108,9 @@ async def _deferred_startup():
     except Exception as e:
         logger.error(f"Scheduler start failed (non-fatal): {e}")
 
-    asyncio.create_task(_enrich_missing_stores())
+    # BANCO enrichment disabled at startup (OOM on Railway 512MB)
+    # Use POST /api/competitors/{id}/refresh-stores instead
+    # asyncio.create_task(_enrich_missing_stores())
 
 
 @asynccontextmanager

@@ -4,8 +4,8 @@ Dashboard et alertes pour surveiller la concurrence.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import List, Optional
+from sqlalchemy import desc, func
+from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import uuid
 import json
@@ -22,6 +22,68 @@ from core.auth import get_optional_user
 from core.utils import get_logo_url
 
 router = APIRouter()
+
+
+def _batch_load_latest(db: Session, model, competitor_ids: list, extra_filter=None) -> Dict:
+    """Batch-load the latest record per competitor for a given model.
+
+    Returns dict {competitor_id: row}.
+    Uses a subquery to find max(recorded_at) per competitor, then fetches those rows.
+    """
+    if not competitor_ids:
+        return {}
+
+    # Subquery: max recorded_at per competitor
+    sub = db.query(
+        model.competitor_id,
+        func.max(model.recorded_at).label("max_at"),
+    ).filter(model.competitor_id.in_(competitor_ids))
+    if extra_filter is not None:
+        sub = sub.filter(extra_filter)
+    sub = sub.group_by(model.competitor_id).subquery()
+
+    rows = db.query(model).join(
+        sub,
+        (model.competitor_id == sub.c.competitor_id) & (model.recorded_at == sub.c.max_at),
+    )
+    if extra_filter is not None:
+        rows = rows.filter(extra_filter)
+    rows = rows.all()
+
+    result = {}
+    for r in rows:
+        result[r.competitor_id] = r
+    return result
+
+
+def _batch_load_week_ago(db: Session, model, competitor_ids: list, week_ago, extra_filter=None) -> Dict:
+    """Batch-load the latest record before week_ago per competitor."""
+    if not competitor_ids:
+        return {}
+
+    sub = db.query(
+        model.competitor_id,
+        func.max(model.recorded_at).label("max_at"),
+    ).filter(
+        model.competitor_id.in_(competitor_ids),
+        model.recorded_at <= week_ago,
+    )
+    if extra_filter is not None:
+        sub = sub.filter(extra_filter)
+    sub = sub.group_by(model.competitor_id).subquery()
+
+    rows = db.query(model).join(
+        sub,
+        (model.competitor_id == sub.c.competitor_id) & (model.recorded_at == sub.c.max_at),
+    )
+    if extra_filter is not None:
+        rows = rows.filter(extra_filter)
+    rows = rows.all()
+
+    result = {}
+    for r in rows:
+        result[r.competitor_id] = r
+    return result
 
 
 def format_number(value: Optional[float], suffix: str = "") -> str:
@@ -93,34 +155,24 @@ async def get_watch_overview(db: Session = Depends(get_db)):
     """
     brand = get_brand(db)
     competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    comp_ids = [c.id for c in competitors]
+
+    # Batch-load all latest data (6 queries instead of 5*N)
+    ps_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "playstore")
+    as_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "appstore")
+    ig_map = _batch_load_latest(db, InstagramData, comp_ids)
+    tt_map = _batch_load_latest(db, TikTokData, comp_ids)
+    yt_map = _batch_load_latest(db, YouTubeData, comp_ids)
 
     # Collecte des données pour tous les acteurs
     actors_data = []
 
     for comp in competitors:
-        # Dernières données apps
-        playstore = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "playstore"
-        ).order_by(desc(AppData.recorded_at)).first()
-
-        appstore = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "appstore"
-        ).order_by(desc(AppData.recorded_at)).first()
-
-        # Dernières données social
-        instagram = db.query(InstagramData).filter(
-            InstagramData.competitor_id == comp.id
-        ).order_by(desc(InstagramData.recorded_at)).first()
-
-        tiktok = db.query(TikTokData).filter(
-            TikTokData.competitor_id == comp.id
-        ).order_by(desc(TikTokData.recorded_at)).first()
-
-        youtube = db.query(YouTubeData).filter(
-            YouTubeData.competitor_id == comp.id
-        ).order_by(desc(YouTubeData.recorded_at)).first()
+        playstore = ps_map.get(comp.id)
+        appstore = as_map.get(comp.id)
+        instagram = ig_map.get(comp.id)
+        tiktok = tt_map.get(comp.id)
+        youtube = yt_map.get(comp.id)
 
         # Calculs agrégés
         avg_rating = None
@@ -300,20 +352,26 @@ async def get_dashboard_data(
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
     competitors = comp_query.all()
+    comp_ids = [c.id for c in competitors]
 
     week_ago = datetime.utcnow() - timedelta(days=7)
+
+    # Batch-load all data (12 queries instead of 10*N)
+    ig_latest_map = _batch_load_latest(db, InstagramData, comp_ids)
+    ig_old_map = _batch_load_week_ago(db, InstagramData, comp_ids, week_ago)
+    tt_latest_map = _batch_load_latest(db, TikTokData, comp_ids)
+    tt_old_map = _batch_load_week_ago(db, TikTokData, comp_ids, week_ago)
+    yt_latest_map = _batch_load_latest(db, YouTubeData, comp_ids)
+    yt_old_map = _batch_load_week_ago(db, YouTubeData, comp_ids, week_ago)
+    ps_latest_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "playstore")
+    as_latest_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "appstore")
+
     competitor_data = []
 
     for comp in competitors:
         # Instagram
-        ig_latest = db.query(InstagramData).filter(
-            InstagramData.competitor_id == comp.id
-        ).order_by(desc(InstagramData.recorded_at)).first()
-
-        ig_old = db.query(InstagramData).filter(
-            InstagramData.competitor_id == comp.id,
-            InstagramData.recorded_at <= week_ago,
-        ).order_by(desc(InstagramData.recorded_at)).first()
+        ig_latest = ig_latest_map.get(comp.id)
+        ig_old = ig_old_map.get(comp.id)
 
         ig_data = None
         if ig_latest and ig_latest.followers:
@@ -328,14 +386,8 @@ async def get_dashboard_data(
             }
 
         # TikTok
-        tt_latest = db.query(TikTokData).filter(
-            TikTokData.competitor_id == comp.id
-        ).order_by(desc(TikTokData.recorded_at)).first()
-
-        tt_old = db.query(TikTokData).filter(
-            TikTokData.competitor_id == comp.id,
-            TikTokData.recorded_at <= week_ago,
-        ).order_by(desc(TikTokData.recorded_at)).first()
+        tt_latest = tt_latest_map.get(comp.id)
+        tt_old = tt_old_map.get(comp.id)
 
         tt_data = None
         if tt_latest and tt_latest.followers:
@@ -350,14 +402,8 @@ async def get_dashboard_data(
             }
 
         # YouTube
-        yt_latest = db.query(YouTubeData).filter(
-            YouTubeData.competitor_id == comp.id
-        ).order_by(desc(YouTubeData.recorded_at)).first()
-
-        yt_old = db.query(YouTubeData).filter(
-            YouTubeData.competitor_id == comp.id,
-            YouTubeData.recorded_at <= week_ago,
-        ).order_by(desc(YouTubeData.recorded_at)).first()
+        yt_latest = yt_latest_map.get(comp.id)
+        yt_old = yt_old_map.get(comp.id)
 
         yt_data = None
         if yt_latest and yt_latest.subscribers:
@@ -372,11 +418,7 @@ async def get_dashboard_data(
             }
 
         # Play Store
-        ps_latest = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "playstore",
-        ).order_by(desc(AppData.recorded_at)).first()
-
+        ps_latest = ps_latest_map.get(comp.id)
         ps_data = None
         if ps_latest:
             ps_data = {
@@ -388,11 +430,7 @@ async def get_dashboard_data(
             }
 
         # App Store
-        as_latest = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "appstore",
-        ).order_by(desc(AppData.recorded_at)).first()
-
+        as_latest = as_latest_map.get(comp.id)
         as_data = None
         if as_latest:
             as_data = {
@@ -1050,6 +1088,10 @@ async def get_alerts(
     brand = get_brand(db)
     alerts = []
 
+    # Build competitor name lookup (single query)
+    all_comps = db.query(Competitor).filter(Competitor.is_active == True).all()
+    comp_names = {c.id: c.name for c in all_comps}
+
     # Génère des alertes basées sur les données récentes
     week_ago = datetime.utcnow() - timedelta(days=7)
 
@@ -1059,17 +1101,17 @@ async def get_alerts(
     ).order_by(desc(AppData.recorded_at)).limit(10).all()
 
     for app in recent_apps:
-        comp = db.query(Competitor).filter(Competitor.id == app.competitor_id).first()
-        if not comp:
+        name = comp_names.get(app.competitor_id)
+        if not name:
             continue
 
         alerts.append(Alert(
             id=str(uuid.uuid4())[:8],
             type=AlertType.APP_UPDATE,
             severity=AlertSeverity.INFO,
-            title=f"{comp.name} - Données app mises à jour",
+            title=f"{name} - Données app mises à jour",
             description=f"Note: {app.rating}/5, {app.reviews_count} avis ({app.store})",
-            competitor_name=comp.name,
+            competitor_name=name,
             channel=Channel.PLAYSTORE if app.store == "playstore" else Channel.APPSTORE,
             detected_at=app.recorded_at,
             is_read=False,
@@ -1081,17 +1123,17 @@ async def get_alerts(
     ).order_by(desc(InstagramData.recorded_at)).limit(5).all()
 
     for ig in recent_ig:
-        comp = db.query(Competitor).filter(Competitor.id == ig.competitor_id).first()
-        if not comp:
+        name = comp_names.get(ig.competitor_id)
+        if not name:
             continue
 
         alerts.append(Alert(
             id=str(uuid.uuid4())[:8],
             type=AlertType.FOLLOWER_SPIKE,
             severity=AlertSeverity.INFO,
-            title=f"{comp.name} - Données Instagram",
+            title=f"{name} - Données Instagram",
             description=f"{ig.followers:,} followers, engagement {ig.engagement_rate or 0:.1f}%",
-            competitor_name=comp.name,
+            competitor_name=name,
             channel=Channel.INSTAGRAM,
             detected_at=ig.recorded_at,
             is_read=False,
@@ -1122,16 +1164,18 @@ async def get_rankings(db: Session = Depends(get_db)):
     """
     brand = get_brand(db)
     competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    comp_ids = [c.id for c in competitors]
     rankings = []
+
+    # Batch-load all latest data (3 queries instead of 3*N)
+    ps_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "playstore")
+    ig_map = _batch_load_latest(db, InstagramData, comp_ids)
+    tt_map = _batch_load_latest(db, TikTokData, comp_ids)
 
     # Ranking Play Store (note)
     playstore_data = []
     for comp in competitors:
-        app = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "playstore"
-        ).order_by(desc(AppData.recorded_at)).first()
-
+        app = ps_map.get(comp.id)
         if app and app.rating:
             playstore_data.append({
                 "name": comp.name,
@@ -1164,10 +1208,7 @@ async def get_rankings(db: Session = Depends(get_db)):
     # Ranking Instagram (followers)
     instagram_data = []
     for comp in competitors:
-        ig = db.query(InstagramData).filter(
-            InstagramData.competitor_id == comp.id
-        ).order_by(desc(InstagramData.recorded_at)).first()
-
+        ig = ig_map.get(comp.id)
         if ig and ig.followers:
             instagram_data.append({
                 "name": comp.name,
@@ -1200,10 +1241,7 @@ async def get_rankings(db: Session = Depends(get_db)):
     # Ranking TikTok (followers)
     tiktok_data = []
     for comp in competitors:
-        tt = db.query(TikTokData).filter(
-            TikTokData.competitor_id == comp.id
-        ).order_by(desc(TikTokData.recorded_at)).first()
-
+        tt = tt_map.get(comp.id)
         if tt and tt.followers:
             tiktok_data.append({
                 "name": comp.name,

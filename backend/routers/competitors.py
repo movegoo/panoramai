@@ -4,8 +4,8 @@ CRUD operations for managing competitors.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import List, Optional
+from sqlalchemy import desc, func
+from typing import List, Optional, Dict
 
 from database import get_db, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
@@ -73,25 +73,28 @@ async def get_dashboard(db: Session = Depends(get_db)):
     # Recent activity (last app/instagram data)
     recent_activity = []
 
+    # Build competitor name lookup
+    comp_names = {c.id: c.name for c in competitors}
+
     recent_app_data = db.query(AppData).order_by(desc(AppData.recorded_at)).limit(5).all()
     for app in recent_app_data:
-        comp = db.query(Competitor).filter(Competitor.id == app.competitor_id).first()
-        if comp:
+        name = comp_names.get(app.competitor_id)
+        if name:
             recent_activity.append({
                 "type": "app",
-                "competitor": comp.name,
+                "competitor": name,
                 "description": f"App data updated - Rating: {app.rating}",
                 "date": app.recorded_at.isoformat() if app.recorded_at else None,
             })
 
     recent_insta = db.query(InstagramData).order_by(desc(InstagramData.recorded_at)).limit(5).all()
     for insta in recent_insta:
-        comp = db.query(Competitor).filter(Competitor.id == insta.competitor_id).first()
-        if comp:
+        name = comp_names.get(insta.competitor_id)
+        if name:
             followers = insta.followers or 0
             recent_activity.append({
                 "type": "instagram",
-                "competitor": comp.name,
+                "competitor": name,
                 "description": f"Instagram updated - {followers:,} followers",
                 "date": insta.recorded_at.isoformat() if insta.recorded_at else None,
             })
@@ -125,26 +128,21 @@ async def list_competitors(
     if user:
         query = query.filter(Competitor.user_id == user.id)
     competitors = query.all()
+    comp_ids = [c.id for c in competitors]
     cards = []
 
+    # Batch-load latest data for all competitors (4 queries instead of 4*N)
+    from routers.watch import _batch_load_latest
+    ps_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "playstore")
+    ig_map = _batch_load_latest(db, InstagramData, comp_ids)
+    tt_map = _batch_load_latest(db, TikTokData, comp_ids)
+    yt_map = _batch_load_latest(db, YouTubeData, comp_ids)
+
     for comp in competitors:
-        # Dernières données
-        playstore = db.query(AppData).filter(
-            AppData.competitor_id == comp.id,
-            AppData.store == "playstore"
-        ).order_by(desc(AppData.recorded_at)).first()
-
-        instagram = db.query(InstagramData).filter(
-            InstagramData.competitor_id == comp.id
-        ).order_by(desc(InstagramData.recorded_at)).first()
-
-        tiktok = db.query(TikTokData).filter(
-            TikTokData.competitor_id == comp.id
-        ).order_by(desc(TikTokData.recorded_at)).first()
-
-        youtube = db.query(YouTubeData).filter(
-            YouTubeData.competitor_id == comp.id
-        ).order_by(desc(YouTubeData.recorded_at)).first()
+        playstore = ps_map.get(comp.id)
+        instagram = ig_map.get(comp.id)
+        tiktok = tt_map.get(comp.id)
+        youtube = yt_map.get(comp.id)
 
         # Calcul du score
         social_total = 0
@@ -279,12 +277,17 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
             }
         )
 
-    # Calcul du score et du rang
+    # Calcul du score et du rang (batch-load for all competitors)
     all_competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    all_ids = [c.id for c in all_competitors]
+    from routers.watch import _batch_load_latest
+    all_ps = _batch_load_latest(db, AppData, all_ids, AppData.store == "playstore")
+    all_ig = _batch_load_latest(db, InstagramData, all_ids)
+
     scores = []
     for c in all_competitors:
-        ps = db.query(AppData).filter(AppData.competitor_id == c.id, AppData.store == "playstore").order_by(desc(AppData.recorded_at)).first()
-        ig = db.query(InstagramData).filter(InstagramData.competitor_id == c.id).order_by(desc(InstagramData.recorded_at)).first()
+        ps = all_ps.get(c.id)
+        ig = all_ig.get(c.id)
 
         social = (ig.followers if ig else 0) or 0
         s = calculate_score(
