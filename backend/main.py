@@ -244,6 +244,63 @@ async def debug_db():
     return results
 
 
+@app.get("/api/debug/auth-test")
+async def debug_auth_test():
+    """Test each step of registration to find the error."""
+    results = {}
+
+    # Step 1: Test bcrypt
+    try:
+        import bcrypt
+        results["bcrypt_version"] = getattr(bcrypt, '__version__', 'unknown')
+        pw_hash = bcrypt.hashpw(b"test123456", bcrypt.gensalt())
+        results["bcrypt_hash"] = "OK"
+        results["bcrypt_verify"] = bcrypt.checkpw(b"test123456", pw_hash)
+    except Exception as e:
+        results["bcrypt_error"] = f"{type(e).__name__}: {e}"
+
+    # Step 2: Test hash_password from core.auth
+    try:
+        from core.auth import hash_password
+        h = hash_password("test123456")
+        results["hash_password"] = "OK"
+        results["hash_result_type"] = type(h).__name__
+    except Exception as e:
+        results["hash_password_error"] = f"{type(e).__name__}: {e}"
+
+    # Step 3: Test User creation (without commit)
+    try:
+        db = SessionLocal()
+        user = User(
+            email="debugtest@test.com",
+            name="debugtest",
+            password_hash="fakehash",
+        )
+        results["user_create"] = "OK"
+        results["user_is_admin"] = repr(getattr(user, 'is_admin', 'MISSING'))
+        db.close()
+    except Exception as e:
+        results["user_create_error"] = f"{type(e).__name__}: {e}"
+
+    # Step 4: Test JWT
+    try:
+        from core.auth import create_access_token
+        token = create_access_token(999)
+        results["jwt"] = "OK"
+    except Exception as e:
+        results["jwt_error"] = f"{type(e).__name__}: {e}"
+
+    # Step 5: Test JSONResponse
+    try:
+        from fastapi.responses import JSONResponse
+        resp = JSONResponse(content={"test": True, "is_admin": False})
+        results["jsonresponse"] = "OK"
+    except Exception as e:
+        results["jsonresponse_error"] = f"{type(e).__name__}: {e}"
+
+    return results
+
+
 @app.post("/api/migrate")
 async def run_migration():
     """Run pending database migrations."""
