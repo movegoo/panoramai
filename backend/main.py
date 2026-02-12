@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import logging
 from datetime import datetime
 
-from database import init_db, Advertiser, Competitor
+from database import init_db, engine, Advertiser, Competitor
 from database import SessionLocal
 
 import os
@@ -215,6 +215,21 @@ async def health_check():
 async def get_scheduler_status():
     """Statut du scheduler de collecte automatique."""
     return scheduler.get_status()
+
+
+@app.post("/api/migrate")
+async def run_migration():
+    """Run pending database migrations."""
+    from sqlalchemy import text
+    results = []
+    with engine.begin() as conn:
+        try:
+            conn.execute(text('SELECT is_admin FROM users LIMIT 1'))
+            results.append("is_admin: already exists")
+        except Exception:
+            conn.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE'))
+            results.append("is_admin: added")
+    return {"migrations": results}
 
 
 @app.post("/api/scheduler/run-now")
