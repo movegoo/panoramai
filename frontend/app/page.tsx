@@ -699,6 +699,32 @@ export default function DashboardPage() {
 
   const { brand, competitors, insights, platform_leaders: pl, ad_intelligence: adI, rankings } = data;
   const allPlayersSorted = [...(brand ? [brand, ...competitors] : competitors)].sort((a, b) => b.score - a.score);
+  const allPlayers = brand ? [brand, ...competitors] : competitors;
+
+  // Build platform rankings (top 3 per platform)
+  const brandNameLower = data!.brand_name.toLowerCase();
+  function buildPlatformRanking(
+    getValue: (c: DashboardCompetitor) => number | undefined,
+  ) {
+    return allPlayers
+      .map(c => ({ name: c.name, logo_url: c.logo_url, value: getValue(c) || 0, isBrand: c.name.toLowerCase() === brandNameLower }))
+      .filter(c => c.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }
+  function buildAppRanking(key: "playstore" | "appstore") {
+    return allPlayers
+      .map(c => {
+        const store = c[key] as any;
+        return { name: c.name, logo_url: c.logo_url, value: store?.rating || 0, isBrand: c.name.toLowerCase() === brandNameLower };
+      })
+      .filter(c => c.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }
+  const igRanking = buildPlatformRanking(c => c.instagram?.followers);
+  const ttRanking = buildPlatformRanking(c => c.tiktok?.followers);
+  const ytRanking = buildPlatformRanking(c => c.youtube?.subscribers);
+  const psRanking = buildAppRanking("playstore");
+  const asRanking = buildAppRanking("appstore");
 
   return (
     <div className="space-y-8">
@@ -753,79 +779,87 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Platform leader cards */}
+          {/* Platform leader cards - comparative ranking */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {pl.instagram && (
-              <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Instagram className="h-4 w-4 text-pink-400" />
-                  <span className="text-[10px] text-pink-300 uppercase tracking-widest font-semibold">Instagram</span>
+            {[
+              { key: "instagram", ranking: igRanking, icon: <Instagram className="h-4 w-4" />, label: "Instagram", accent: "pink", unit: "followers", isRating: false },
+              { key: "tiktok", ranking: ttRanking, icon: <Music className="h-4 w-4" />, label: "TikTok", accent: "cyan", unit: "followers", isRating: false },
+              { key: "youtube", ranking: ytRanking, icon: <Youtube className="h-4 w-4" />, label: "YouTube", accent: "red", unit: "abonnés", isRating: false },
+              { key: "playstore", ranking: psRanking, icon: <Smartphone className="h-4 w-4" />, label: "Play Store", accent: "emerald", unit: "note", isRating: true },
+              { key: "appstore", ranking: asRanking, icon: <AppleIcon className="h-4 w-4" />, label: "App Store", accent: "blue", unit: "note", isRating: true },
+            ].filter(p => p.ranking.length > 0).map((platform) => {
+              const top3 = platform.ranking.slice(0, 3);
+              const brandEntry = platform.ranking.find(e => e.isBrand);
+              const brandRank = brandEntry ? platform.ranking.indexOf(brandEntry) + 1 : null;
+              const accentMap: Record<string, { text: string; badge: string; bar: string }> = {
+                pink: { text: "text-pink-400", badge: "bg-pink-500/20 text-pink-300", bar: "bg-pink-400" },
+                cyan: { text: "text-cyan-400", badge: "bg-cyan-500/20 text-cyan-300", bar: "bg-cyan-400" },
+                red: { text: "text-red-400", badge: "bg-red-500/20 text-red-300", bar: "bg-red-400" },
+                emerald: { text: "text-emerald-400", badge: "bg-emerald-500/20 text-emerald-300", bar: "bg-emerald-400" },
+                blue: { text: "text-blue-400", badge: "bg-blue-500/20 text-blue-300", bar: "bg-blue-400" },
+              };
+              const colors = accentMap[platform.accent];
+              const maxVal = top3[0]?.value || 1;
+
+              return (
+                <div key={platform.key} className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className={colors.text}>{platform.icon}</span>
+                      <span className={`text-[9px] ${colors.text} uppercase tracking-widest font-semibold`}>{platform.label}</span>
+                    </div>
+                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${colors.badge}`}>
+                      {platform.ranking.length} acteurs
+                    </span>
+                  </div>
+
+                  {/* Top 3 mini-ranking */}
+                  <div className="space-y-1.5">
+                    {top3.map((entry, idx) => {
+                      const pct = platform.isRating ? (entry.value / 5) * 100 : (entry.value / maxVal) * 100;
+                      return (
+                        <div key={entry.name} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${entry.isBrand ? "bg-violet-500/15 ring-1 ring-violet-400/30" : ""}`}>
+                          <span className={`text-[10px] font-bold w-4 text-center shrink-0 ${
+                            idx === 0 ? "text-amber-400" : idx === 1 ? "text-slate-400" : "text-orange-400/60"
+                          }`}>
+                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
+                          </span>
+                          <BrandLogo name={entry.name} logoUrl={entry.logo_url} size="xs" className="border-white/10" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[11px] font-medium truncate ${entry.isBrand ? "text-violet-300" : "text-white/80"}`}>
+                                {entry.name}
+                              </span>
+                              <span className="text-[11px] font-bold tabular-nums text-white shrink-0 ml-1">
+                                {platform.isRating ? entry.value.toFixed(1) : formatNumber(entry.value)}
+                              </span>
+                            </div>
+                            <div className="h-1 rounded-full bg-white/[0.08] mt-0.5 overflow-hidden">
+                              <div className={`h-full rounded-full ${colors.bar} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Brand position if not in top 3 */}
+                  {brandEntry && brandRank && brandRank > 3 && (
+                    <div className="mt-2 pt-1.5 border-t border-white/[0.06]">
+                      <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-violet-500/10">
+                        <span className="text-[10px] font-bold text-violet-400 w-4 text-center">#{brandRank}</span>
+                        <BrandLogo name={brandEntry.name} logoUrl={brandEntry.logo_url} size="xs" className="border-white/10" />
+                        <span className="text-[11px] text-violet-300 font-medium truncate flex-1">{brandEntry.name}</span>
+                        <span className="text-[11px] font-bold tabular-nums text-violet-300">
+                          {platform.isRating ? brandEntry.value.toFixed(1) : formatNumber(brandEntry.value)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xl font-bold tabular-nums">{formatNumber(pl.instagram.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                  <BrandLogo name={pl.instagram.leader} logoUrl={(pl.instagram as any).logo_url} size="xs" />
-                  {pl.instagram.leader}
-                </div>
-              </div>
-            )}
-            {pl.tiktok && (
-              <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Music className="h-4 w-4 text-cyan-400" />
-                  <span className="text-[10px] text-cyan-300 uppercase tracking-widest font-semibold">TikTok</span>
-                </div>
-                <div className="text-xl font-bold tabular-nums">{formatNumber(pl.tiktok.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                  <BrandLogo name={pl.tiktok.leader} logoUrl={(pl.tiktok as any).logo_url} size="xs" />
-                  {pl.tiktok.leader}
-                </div>
-              </div>
-            )}
-            {pl.youtube && (
-              <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Youtube className="h-4 w-4 text-red-400" />
-                  <span className="text-[10px] text-red-300 uppercase tracking-widest font-semibold">YouTube</span>
-                </div>
-                <div className="text-xl font-bold tabular-nums">{formatNumber(pl.youtube.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                  <BrandLogo name={pl.youtube.leader} logoUrl={(pl.youtube as any).logo_url} size="xs" />
-                  {pl.youtube.leader}
-                </div>
-              </div>
-            )}
-            {pl.playstore && (
-              <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
-                <div className="flex items-center gap-2 mb-2">
-                  <Smartphone className="h-4 w-4 text-emerald-400" />
-                  <span className="text-[10px] text-emerald-300 uppercase tracking-widest font-semibold">Play Store</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold tabular-nums">{pl.playstore.value.toFixed(1)}</span>
-                  <Stars rating={pl.playstore.value} />
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                  <BrandLogo name={pl.playstore.leader} logoUrl={(pl.playstore as any).logo_url} size="xs" />
-                  {pl.playstore.leader}
-                </div>
-              </div>
-            )}
-            {pl.appstore && (
-              <div className="rounded-xl bg-white/[0.06] backdrop-blur-sm px-4 py-3 border border-white/[0.08]">
-                <div className="flex items-center gap-2 mb-2">
-                  <AppleIcon className="h-4 w-4 text-blue-400" />
-                  <span className="text-[10px] text-blue-300 uppercase tracking-widest font-semibold">App Store</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold tabular-nums">{pl.appstore.value.toFixed(1)}</span>
-                  <Stars rating={pl.appstore.value} />
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                  <BrandLogo name={pl.appstore.leader} logoUrl={(pl.appstore as any).logo_url} size="xs" />
-                  {pl.appstore.leader}
-                </div>
-              </div>
-            )}
+              );
+            })}
           </div>
         </div>
       </div>
