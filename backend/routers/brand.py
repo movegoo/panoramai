@@ -81,6 +81,52 @@ def _suggestion_to_dict(comp: dict, sector: str, already_tracked: bool = False) 
     }
 
 
+def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = None):
+    """Create or update a Competitor mirror entry for the brand.
+
+    This ensures the brand's social/app data gets fetched and appears
+    in rankings alongside competitors.
+    """
+    comp = db.query(Competitor).filter(
+        Competitor.name == brand.company_name,
+        Competitor.is_active == True,
+        *([Competitor.user_id == user.id] if user else []),
+    ).first()
+
+    if not comp:
+        comp = Competitor(
+            user_id=user.id if user else None,
+            name=brand.company_name,
+            website=brand.website,
+            logo_url=brand.logo_url or get_logo_url(brand.website),
+            playstore_app_id=brand.playstore_app_id,
+            appstore_app_id=brand.appstore_app_id,
+            instagram_username=brand.instagram_username,
+            tiktok_username=brand.tiktok_username,
+            youtube_channel_id=brand.youtube_channel_id,
+        )
+        db.add(comp)
+        db.commit()
+        db.refresh(comp)
+
+        # Trigger auto-enrichment
+        import asyncio
+        from routers.competitors import _auto_enrich_competitor
+        asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
+    else:
+        # Sync fields from brand to competitor
+        comp.website = brand.website
+        comp.logo_url = brand.logo_url or get_logo_url(brand.website)
+        comp.playstore_app_id = brand.playstore_app_id
+        comp.appstore_app_id = brand.appstore_app_id
+        comp.instagram_username = brand.instagram_username
+        comp.tiktok_username = brand.tiktok_username
+        comp.youtube_channel_id = brand.youtube_channel_id
+        db.commit()
+
+    return comp
+
+
 # =============================================================================
 # Endpoints
 # =============================================================================
@@ -129,6 +175,9 @@ async def setup_brand(
     db.add(brand)
     db.commit()
     db.refresh(brand)
+
+    # Create a mirror Competitor for the brand so its data gets enriched
+    _sync_brand_competitor(db, brand, user)
 
     suggestions = []
     for comp in get_competitors_for_sector(data.sector):
@@ -201,6 +250,7 @@ async def update_brand_profile(
     brand.company_name = data.company_name
     brand.sector = data.sector
     brand.website = data.website
+    brand.logo_url = get_logo_url(data.website)
     brand.playstore_app_id = data.playstore_app_id
     brand.appstore_app_id = data.appstore_app_id
     brand.instagram_username = data.instagram_username
@@ -210,12 +260,29 @@ async def update_brand_profile(
     db.commit()
     db.refresh(brand)
 
+    # Sync to competitor mirror
+    _sync_brand_competitor(db, brand, user)
+
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
         *([Competitor.user_id == user.id] if user else []),
     ).count()
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
+
+
+@router.post("/sync")
+async def sync_brand_competitor(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Force sync brand to competitor entry + trigger enrichment."""
+    brand = get_current_brand(db, user)
+    comp = _sync_brand_competitor(db, brand, user)
+    return JSONResponse(content={
+        "message": f"Brand '{brand.company_name}' synced as competitor (id={comp.id})",
+        "competitor_id": comp.id,
+    })
 
 
 @router.get("/suggestions")
