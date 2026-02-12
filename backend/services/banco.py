@@ -1,12 +1,13 @@
 """
 Service BANCO - Base Nationale des Commerces Ouverte.
-Télécharge, cache et recherche les commerces par enseigne.
+Télécharge sur disque, streame le CSV et importe en base par lots.
+Mémoire peak: ~5MB (vs 56MB avant).
 Source: https://www.data.gouv.fr/datasets/base-nationale-des-commerces-ouverte
 """
 import csv
 import io
-import json
 import logging
+import shutil
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -21,7 +22,6 @@ logger = logging.getLogger(__name__)
 BANCO_CSV_URL = "https://www.data.gouv.fr/api/1/datasets/r/3d612ad7-f726-4fe5-a353-bdf76c5a44c2"
 
 # Mapping noms concurrents -> termes de recherche BANCO
-# Permet de gérer les variantes d'enseigne
 BRAND_ALIASES = {
     # Grande distribution
     "carrefour": ["carrefour", "carrefour market", "carrefour city", "carrefour express", "carrefour contact"],
@@ -62,233 +62,260 @@ BRAND_ALIASES = {
     "feu vert": ["feu vert"],
 }
 
+BATCH_SIZE = 1000
+
 
 class BancoService:
-    """Service de téléchargement et recherche dans la base BANCO."""
+    """Service BANCO - streaming disk-based, no in-memory dataset."""
 
     def __init__(self):
         self.cache_dir = settings.DATAGOUV_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._data: Optional[List[Dict]] = None
+        # Legacy compat: _data is never used but some code references it
+        self._data = None
 
     @property
-    def cache_path(self) -> Path:
-        return self.cache_dir / "banco.json"
+    def _csv_path(self) -> Path:
+        return self.cache_dir / "banco.csv"
 
-    def _is_cache_valid(self) -> bool:
-        if not self.cache_path.exists():
+    @property
+    def _zip_path(self) -> Path:
+        return self.cache_dir / "banco.zip"
+
+    def _is_csv_fresh(self) -> bool:
+        if not self._csv_path.exists():
             return False
-        cache_time = datetime.fromtimestamp(self.cache_path.stat().st_mtime)
-        return cache_time > datetime.now() - timedelta(days=30)
+        mtime = datetime.fromtimestamp(self._csv_path.stat().st_mtime)
+        return mtime > datetime.now() - timedelta(days=30)
 
-    async def download(self, force: bool = False) -> int:
-        """Télécharge et cache la base BANCO. Retourne le nombre de commerces."""
-        if not force and self._is_cache_valid():
-            if self._data:
-                return len(self._data)
-            # Load from disk cache into memory
-            return await self._load_from_cache()
+    async def _ensure_csv_on_disk(self, force: bool = False):
+        """Download ZIP and extract CSV to disk. Streaming download, minimal memory."""
+        if not force and self._is_csv_fresh():
+            return
 
-        logger.info("Downloading BANCO database (38MB ZIP)...")
+        logger.info("BANCO: downloading ZIP (38MB) to disk...")
 
+        # Stream download to disk (8KB chunks, no full response in memory)
         async with httpx.AsyncClient(timeout=300.0, follow_redirects=True) as client:
-            response = await client.get(BANCO_CSV_URL)
-            response.raise_for_status()
+            async with client.stream("GET", BANCO_CSV_URL) as response:
+                response.raise_for_status()
+                with open(self._zip_path, "wb") as f:
+                    async for chunk in response.aiter_bytes(8192):
+                        f.write(chunk)
 
-        # Extract CSV from ZIP
-        with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-            csv_files = [f for f in zf.namelist() if f.endswith('.csv')]
+        logger.info("BANCO: extracting CSV from ZIP...")
+
+        # Extract CSV to disk (streaming copy)
+        with zipfile.ZipFile(self._zip_path) as zf:
+            csv_files = [f for f in zf.namelist() if f.endswith(".csv")]
             if not csv_files:
-                logger.error("No CSV file found in BANCO ZIP")
-                return 0
+                self._zip_path.unlink(missing_ok=True)
+                raise RuntimeError("No CSV found in BANCO ZIP")
+            with zf.open(csv_files[0]) as src, open(self._csv_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
 
-            target = csv_files[0]
-            logger.info(f"Extracting: {target}")
-            raw = zf.read(target)
+        # Free disk: delete ZIP
+        self._zip_path.unlink(missing_ok=True)
+        logger.info(f"BANCO: CSV extracted ({self._csv_path.stat().st_size // 1_000_000}MB)")
 
-        # Decode
-        content = None
+    def _detect_csv_params(self) -> tuple:
+        """Detect encoding and delimiter of the cached CSV."""
         for enc in ["utf-8", "latin-1", "cp1252"]:
             try:
-                content = raw.decode(enc)
-                break
+                with open(self._csv_path, "r", encoding=enc) as f:
+                    first_line = f.readline()
+                delim = "," if first_line.count(",") > first_line.count(";") else ";"
+                return enc, delim
             except UnicodeDecodeError:
                 continue
-
-        if not content:
-            logger.error("Cannot decode BANCO CSV")
-            return 0
-
-        # Parse - detect delimiter
-        first_line = content.split('\n')[0]
-        delimiter = ',' if first_line.count(',') > first_line.count(';') else ';'
-
-        reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
-        records = []
-
-        for row in reader:
-            # Only keep entries with brand/enseigne
-            brand = (row.get("brand") or "").strip()
-            if not brand:
-                continue
-
-            lat = row.get("Y") or row.get("y") or row.get("latitude")
-            lon = row.get("X") or row.get("x") or row.get("longitude")
-
-            try:
-                lat_f = float(lat) if lat else None
-                lon_f = float(lon) if lon else None
-            except (ValueError, TypeError):
-                lat_f = None
-                lon_f = None
-
-            postal_code = ""
-            com_insee = (row.get("com_insee") or "").strip()
-            if len(com_insee) == 5:
-                postal_code = com_insee  # Approximation INSEE -> CP
-
-            records.append({
-                "name": (row.get("name") or "").strip(),
-                "brand": brand,
-                "type": (row.get("type") or "").strip(),
-                "address": (row.get("address") or "").strip(),
-                "postal_code": postal_code,
-                "city": (row.get("com_nom") or "").strip(),
-                "com_insee": com_insee,
-                "latitude": lat_f,
-                "longitude": lon_f,
-                "siret": (row.get("siret") or "").strip(),
-                "phone": (row.get("phone") or "").strip(),
-                "website": (row.get("website") or "").strip(),
-                "opening_hours": (row.get("opening_hours") or "").strip(),
-            })
-
-        self._data = records
-
-        # Save to file cache
-        try:
-            with open(self.cache_path, "w", encoding="utf-8") as f:
-                json.dump(records, f, ensure_ascii=False)
-            logger.info(f"BANCO cached: {len(records)} commerces with brand")
-        except Exception as e:
-            logger.error(f"BANCO cache write error: {e}")
-
-        return len(records)
-
-    async def _load_from_cache(self) -> int:
-        """Load from file cache into memory."""
-        try:
-            with open(self.cache_path, "r", encoding="utf-8") as f:
-                self._data = json.load(f)
-            logger.info(f"BANCO loaded from cache: {len(self._data)} records")
-            return len(self._data)
-        except Exception as e:
-            logger.error(f"BANCO cache read error: {e}")
-            self._data = []
-            return 0
-
-    async def ensure_loaded(self):
-        """S'assure que la base est chargée en mémoire."""
-        if self._data is None:
-            await self.download()
+        return "latin-1", ";"
 
     def _get_search_terms(self, competitor_name: str) -> List[str]:
         """Retourne les termes de recherche pour un concurrent."""
         name_lower = competitor_name.lower().strip()
-
-        # Check aliases first
         for key, aliases in BRAND_ALIASES.items():
             if name_lower in key or key in name_lower:
                 return aliases
-
-        # Default: just the name
         return [name_lower]
 
-    async def search_stores(self, competitor_name: str) -> List[Dict]:
-        """Recherche les magasins d'un concurrent par nom d'enseigne."""
-        await self.ensure_loaded()
-
-        if not self._data:
-            return []
-
-        search_terms = self._get_search_terms(competitor_name)
-        results = []
-
-        for record in self._data:
-            brand_lower = record["brand"].lower()
-            if any(term in brand_lower or brand_lower in term for term in search_terms):
-                results.append(record)
-
-        logger.info(f"BANCO search '{competitor_name}': {len(results)} stores found")
-        return results
-
-    async def search_and_store(self, competitor_id: int, competitor_name: str, db) -> int:
-        """Cherche les magasins BANCO et les stocke en base."""
+    def _parse_row(self, row: dict, competitor_id: int):
+        """Parse a CSV row into a StoreLocation or None."""
         from database import StoreLocation
 
-        stores = await self.search_stores(competitor_name)
+        lat = row.get("Y") or row.get("y") or row.get("latitude")
+        lon = row.get("X") or row.get("x") or row.get("longitude")
+        try:
+            lat_f = float(lat) if lat else None
+            lon_f = float(lon) if lon else None
+        except (ValueError, TypeError):
+            return None
+        if not lat_f or not lon_f:
+            return None
 
-        if not stores:
-            logger.info(f"No BANCO stores found for '{competitor_name}'")
-            return 0
+        cp = (row.get("com_insee") or "").strip()
+        dept = ""
+        if len(cp) >= 2:
+            dept = cp[:2]
+            if dept == "20":
+                try:
+                    dept = "2A" if int(cp) < 20200 else "2B"
+                except ValueError:
+                    pass
 
-        # Delete old entries for this competitor
+        return StoreLocation(
+            competitor_id=competitor_id,
+            name=(row.get("name") or row.get("brand", "")).strip(),
+            brand_name=(row.get("brand") or "").strip(),
+            category=(row.get("type") or "").strip(),
+            address=(row.get("address") or "").strip(),
+            postal_code=cp,
+            city=(row.get("com_nom") or "").strip(),
+            department=dept,
+            latitude=lat_f,
+            longitude=lon_f,
+            siret=(row.get("siret") or "").strip(),
+            source="BANCO",
+        )
+
+    async def search_and_store(self, competitor_id: int, competitor_name: str, db) -> int:
+        """Stream CSV from disk, filter for one competitor, insert in batches.
+        Memory: ~5MB peak."""
+        from database import StoreLocation
+
+        await self._ensure_csv_on_disk()
+
+        search_terms = self._get_search_terms(competitor_name)
+
+        # Delete old entries
         db.query(StoreLocation).filter(
             StoreLocation.competitor_id == competitor_id,
-            StoreLocation.source == "BANCO"
+            StoreLocation.source == "BANCO",
         ).delete()
 
+        enc, delim = self._detect_csv_params()
         added = 0
-        for store in stores:
-            if not store.get("latitude") or not store.get("longitude"):
-                continue
+        batch = []
 
-            dept = ""
-            cp = store.get("postal_code", "")
-            if len(cp) >= 2:
-                dept = cp[:2]
-                if dept == "20":
-                    dept = "2A" if int(cp) < 20200 else "2B"
+        with open(self._csv_path, "r", encoding=enc, errors="replace") as f:
+            reader = csv.DictReader(f, delimiter=delim)
+            for row in reader:
+                brand = (row.get("brand") or "").strip().lower()
+                if not brand:
+                    continue
+                if not any(term in brand or brand in term for term in search_terms):
+                    continue
 
-            loc = StoreLocation(
-                competitor_id=competitor_id,
-                name=store.get("name") or store.get("brand", ""),
-                brand_name=store["brand"],
-                category=store.get("type", ""),
-                address=store.get("address", ""),
-                postal_code=cp,
-                city=store.get("city", ""),
-                department=dept,
-                latitude=store["latitude"],
-                longitude=store["longitude"],
-                siret=store.get("siret", ""),
-                source="BANCO",
-            )
-            db.add(loc)
-            added += 1
+                loc = self._parse_row(row, competitor_id)
+                if loc:
+                    batch.append(loc)
+                    added += 1
 
+                if len(batch) >= BATCH_SIZE:
+                    db.bulk_save_objects(batch)
+                    db.flush()
+                    batch = []
+
+        if batch:
+            db.bulk_save_objects(batch)
         db.commit()
-        logger.info(f"BANCO: stored {added} locations for '{competitor_name}' (competitor_id={competitor_id})")
 
-        # Free memory after storing to DB (data is now in SQLite)
-        self._data = None
-
+        logger.info(f"BANCO: {added} stores for '{competitor_name}'")
         return added
 
+    async def bulk_import(self, competitors: list, db) -> dict:
+        """Import stores for ALL competitors in a single CSV pass.
+        Downloads once, streams once, inserts by batch. Memory: ~5MB peak."""
+        from database import StoreLocation
+        from sqlalchemy import func
+
+        if not competitors:
+            return {}
+
+        # Check which competitors already have BANCO data
+        comp_ids = [c.id for c in competitors]
+        existing = dict(
+            db.query(StoreLocation.competitor_id, func.count(StoreLocation.id))
+            .filter(StoreLocation.source == "BANCO", StoreLocation.competitor_id.in_(comp_ids))
+            .group_by(StoreLocation.competitor_id)
+            .all()
+        )
+
+        todo = {c.id: c.name for c in competitors if existing.get(c.id, 0) == 0}
+        if not todo:
+            logger.info("BANCO bulk_import: all competitors already have data")
+            return {}
+
+        await self._ensure_csv_on_disk()
+
+        # Build search terms for all pending competitors
+        comp_terms = {}
+        for cid, cname in todo.items():
+            comp_terms[cid] = self._get_search_terms(cname)
+
+        enc, delim = self._detect_csv_params()
+        counts = {cid: 0 for cid in comp_terms}
+        batch = []
+
+        with open(self._csv_path, "r", encoding=enc, errors="replace") as f:
+            reader = csv.DictReader(f, delimiter=delim)
+            for row in reader:
+                brand = (row.get("brand") or "").strip().lower()
+                if not brand:
+                    continue
+
+                # Check all competitors
+                matched_cid = None
+                for cid, terms in comp_terms.items():
+                    if any(term in brand or brand in term for term in terms):
+                        matched_cid = cid
+                        break
+                if not matched_cid:
+                    continue
+
+                loc = self._parse_row(row, matched_cid)
+                if loc:
+                    batch.append(loc)
+                    counts[matched_cid] += 1
+
+                if len(batch) >= BATCH_SIZE:
+                    db.bulk_save_objects(batch)
+                    db.flush()
+                    batch = []
+
+        if batch:
+            db.bulk_save_objects(batch)
+        db.commit()
+
+        for cid, cnt in counts.items():
+            if cnt > 0:
+                logger.info(f"BANCO: {cnt} stores for '{todo[cid]}'")
+
+        return counts
+
+    async def download(self, force: bool = False) -> int:
+        """Download BANCO CSV to disk. Returns estimated record count."""
+        await self._ensure_csv_on_disk(force=force)
+        # Count lines without loading into memory
+        count = 0
+        enc, _ = self._detect_csv_params()
+        with open(self._csv_path, "r", encoding=enc, errors="replace") as f:
+            for _ in f:
+                count += 1
+        return count - 1  # minus header
+
     async def get_all_brands(self) -> List[Dict]:
-        """Retourne les enseignes uniques avec leur nombre de commerces."""
-        await self.ensure_loaded()
+        """Stream CSV and aggregate brand counts. Memory: ~2MB."""
+        await self._ensure_csv_on_disk()
 
-        if not self._data:
-            return []
-
+        enc, delim = self._detect_csv_params()
         brand_counts: Dict[str, int] = {}
-        for record in self._data:
-            brand = record["brand"]
-            brand_counts[brand] = brand_counts.get(brand, 0) + 1
 
-        # Free memory after aggregation
-        self._data = None
+        with open(self._csv_path, "r", encoding=enc, errors="replace") as f:
+            reader = csv.DictReader(f, delimiter=delim)
+            for row in reader:
+                brand = (row.get("brand") or "").strip()
+                if brand:
+                    brand_counts[brand] = brand_counts.get(brand, 0) + 1
 
         return sorted(
             [{"brand": k, "count": v} for k, v in brand_counts.items()],

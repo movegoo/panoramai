@@ -623,18 +623,21 @@ async def list_banco_brands():
 
 @router.post("/banco/enrich-all")
 async def enrich_all_competitors(db: Session = Depends(get_db)):
-    """Enrichit tous les concurrents existants avec la base commerces."""
+    """Enrichit tous les concurrents existants avec la base commerces.
+    Utilise bulk_import: 1 seul téléchargement, 1 seul scan CSV."""
     from services.banco import banco_service
 
     competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
-    results = []
+    counts = await banco_service.bulk_import(competitors, db)
 
-    for comp in competitors:
-        count = await banco_service.search_and_store(comp.id, comp.name, db)
-        results.append({"competitor": comp.name, "stores_found": count})
+    results = [
+        {"competitor": c.name, "stores_found": counts.get(c.id, 0)}
+        for c in competitors
+    ]
 
     return {
         "message": f"{len(competitors)} concurrents enrichis",
+        "total_stores": sum(counts.values()),
         "results": results,
     }
 
