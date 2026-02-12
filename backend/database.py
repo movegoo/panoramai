@@ -350,8 +350,24 @@ class ZoneAnalysis(Base):
     calculated_at = Column(DateTime, default=datetime.utcnow)
 
 
+def _run_migrations(engine):
+    """Add missing columns to existing tables."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    migrations = [
+        ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+    ]
+    with engine.begin() as conn:
+        for table, column, col_type in migrations:
+            if table in inspector.get_table_names():
+                existing = [c["name"] for c in inspector.get_columns(table)]
+                if column not in existing:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _run_migrations(engine)
 
 
 def get_db():
