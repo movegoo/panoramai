@@ -352,17 +352,22 @@ class ZoneAnalysis(Base):
 
 def _run_migrations(engine):
     """Add missing columns to existing tables."""
-    from sqlalchemy import inspect, text
-    inspector = inspect(engine)
-    migrations = [
-        ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
-    ]
-    with engine.begin() as conn:
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        migrations = [
+            ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+        ]
+        existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
-            if table in inspector.get_table_names():
+            if table in existing_tables:
                 existing = [c["name"] for c in inspector.get_columns(table)]
                 if column not in existing:
-                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+                    with engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{column}" {col_type}'))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Migration warning: {e}")
 
 
 def init_db():
