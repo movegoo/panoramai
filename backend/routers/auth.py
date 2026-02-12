@@ -54,7 +54,7 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
     return AuthResponse(
         token=token,
-        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand},
+        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand, "is_admin": user.is_admin},
     )
 
 
@@ -75,8 +75,19 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     return AuthResponse(
         token=token,
-        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand},
+        user={"id": user.id, "email": user.email, "name": user.name, "has_brand": has_brand, "is_admin": user.is_admin},
     )
+
+
+@router.delete("/reset-user")
+async def reset_user(email: str, db: Session = Depends(get_db)):
+    """Delete a user by email so they can re-register. Temporary endpoint."""
+    user = db.query(User).filter(User.email == email.lower().strip()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    db.delete(user)
+    db.commit()
+    return {"message": f"User {email} deleted"}
 
 
 @router.get("/me")
@@ -92,4 +103,5 @@ async def get_me(user: User = Depends(get_current_user), db: Session = Depends(g
         "name": user.name,
         "has_brand": brand is not None,
         "brand_name": brand.company_name if brand else None,
+        "is_admin": user.is_admin,
     }

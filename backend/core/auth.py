@@ -61,6 +61,13 @@ def get_current_user(
     return user
 
 
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """FastAPI dependency: require admin privileges."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Accès réservé aux administrateurs")
+    return user
+
+
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),

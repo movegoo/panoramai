@@ -27,6 +27,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
 
     advertiser = relationship("Advertiser", back_populates="user", uselist=False)
     competitors = relationship("Competitor", back_populates="user")

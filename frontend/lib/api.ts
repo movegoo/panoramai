@@ -383,6 +383,7 @@ export interface AuthUser {
   name: string;
   has_brand: boolean;
   brand_name?: string;
+  is_admin?: boolean;
 }
 
 export interface AuthResponse {
@@ -674,4 +675,41 @@ export const brandAPI = {
       "/brand/suggestions/add",
       { method: "POST", body: JSON.stringify(names) }
     ),
+};
+
+// Admin API
+export interface AdminStats {
+  users: { total: number; active: number };
+  brands: number;
+  competitors: number;
+  data_volume: {
+    ads: number;
+    instagram_records: number;
+    tiktok_records: number;
+    youtube_records: number;
+    app_records: number;
+    store_locations: number;
+  };
+  scheduler: {
+    enabled: boolean;
+    running: boolean;
+    jobs: { id: string; name: string; next_run: string | null }[];
+  };
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string;
+  created_at: string | null;
+  is_active: boolean;
+  is_admin: boolean;
+  has_brand: boolean;
+  brand_name: string | null;
+  competitors_count: number;
+}
+
+export const adminAPI = {
+  getStats: () => fetchAPI<AdminStats>("/admin/stats"),
+  getUsers: () => fetchAPI<AdminUser[]>("/admin/users"),
 };

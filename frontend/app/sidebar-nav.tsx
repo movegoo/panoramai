@@ -27,6 +27,7 @@ import {
   Star,
   Activity,
   LogOut,
+  Shield,
 } from "lucide-react";
 
 const navigation = [
@@ -94,7 +95,12 @@ export function SidebarNav() {
 
       {/* Nav sections */}
       <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
-        {navigation.map((section) => {
+        {[
+          ...navigation,
+          ...(user?.is_admin
+            ? [{ name: "Admin", items: [{ name: "Backoffice", href: "/admin", icon: Shield }] }]
+            : []),
+        ].map((section) => {
           const isCollapsed = collapsed[section.name];
           const hasActive = section.items.some((item) => isActive(item.href));
 
