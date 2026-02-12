@@ -2054,7 +2054,7 @@ export default function AdsPage() {
               ))}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-4 flex flex-col">
             {/* Key diffusion metrics */}
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-xl border bg-card p-3">
@@ -2065,10 +2065,18 @@ export default function AdsPage() {
                 <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Plateformes</div>
                 <div className="text-xl font-bold mt-1 tabular-nums">{stats.byPlatform.size}<span className="text-sm font-normal text-muted-foreground ml-1">actives</span></div>
               </div>
+              <div className="rounded-xl border bg-card p-3">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Concurrents</div>
+                <div className="text-xl font-bold mt-1 tabular-nums">{stats.byCompetitor.size}</div>
+              </div>
+              <div className="rounded-xl border bg-card p-3">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Formats</div>
+                <div className="text-xl font-bold mt-1 tabular-nums">{stats.byFormat.size}<span className="text-sm font-normal text-muted-foreground ml-1">types</span></div>
+              </div>
             </div>
 
             {/* Platform total distribution with icons */}
-            <div className="rounded-xl border bg-card p-4 space-y-2">
+            <div className="rounded-xl border bg-card p-4 space-y-2.5 flex-1">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Distribution globale</div>
               {Array.from(stats.byPlatform.entries())
                 .sort((a, b) => b[1] - a[1])
@@ -2085,8 +2093,31 @@ export default function AdsPage() {
                         </span>
                         <span className="text-xs tabular-nums text-muted-foreground">{count} pubs ({pctTotal}%)</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
                         <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Format breakdown */}
+            <div className="rounded-xl border bg-card p-4 space-y-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Formats cr&eacute;atifs</div>
+              {Array.from(stats.byFormat.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([format, count]) => {
+                  const maxFormat = Math.max(...Array.from(stats.byFormat.values() as Iterable<number>), 1);
+                  const pct = Math.round(((count as number) / maxFormat) * 100);
+                  const pctTotal = filteredAds.length > 0 ? Math.round(((count as number) / filteredAds.length) * 100) : 0;
+                  return (
+                    <div key={format} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium capitalize">{(format as string).toLowerCase().replace(/_/g, " ")}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{count as number} ({pctTotal}%)</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-violet-600" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
