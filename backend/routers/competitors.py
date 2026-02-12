@@ -693,4 +693,22 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
         except Exception as e:
             logger.warning(f"YouTube failed for '{comp.name}': {e}")
 
+    # Google Ads (via domain)
+    if comp.website:
+        try:
+            from routers.google_ads import _fetch_and_store_google_ads, _extract_domain
+            from database import SessionLocal
+            domain = _extract_domain(comp.website)
+            if domain:
+                db = SessionLocal()
+                try:
+                    new, updated, fetched = await _fetch_and_store_google_ads(
+                        competitor_id=competitor_id, domain=domain, country="FR", db=db
+                    )
+                    logger.info(f"Google Ads: {new} new, {updated} updated for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"Google Ads failed for '{comp.name}': {e}")
+
     logger.info(f"Auto-enrichment complete for '{comp.name}'")

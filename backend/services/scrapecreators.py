@@ -351,6 +351,36 @@ class ScrapeCreatorsAPI:
         }
 
     # =========================================================================
+    # Google Ads Transparency
+    # =========================================================================
+
+    async def search_google_ads(self, domain: str, country: str = "FR", cursor: str = None) -> Dict:
+        """
+        Search Google Ads Transparency Center for a company's ads.
+        Uses /v1/google/company/ads?domain=<domain>
+        Returns: advertiser info, ad format, dates, creative URL, transparency link.
+        """
+        params = {"domain": domain}
+        if country:
+            params["country"] = country
+        if cursor:
+            params["cursor"] = cursor
+
+        data = await self._get("/v1/google/company/ads", params)
+
+        if not data.get("success"):
+            return data
+
+        ads = data.get("ads", [])
+        return {
+            "success": True,
+            "ads": ads,
+            "count": len(ads),
+            "cursor": data.get("cursor"),
+            "credits_remaining": data.get("credits_remaining"),
+        }
+
+    # =========================================================================
     # TikTok Ads (via keyword search with is_ads detection)
     # =========================================================================
 

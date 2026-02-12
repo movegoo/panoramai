@@ -102,6 +102,10 @@ class DataCollectionScheduler:
         if competitor.youtube_channel_id:
             await self._fetch_youtube(db, competitor, name)
 
+        # Google Ads (via domain)
+        if competitor.website:
+            await self._fetch_google_ads(db, competitor, name)
+
     async def _fetch_ads(self, db: Session, competitor: Competitor, name: str):
         """Fetch Facebook/Instagram ads from Ad Library."""
         try:
@@ -157,6 +161,20 @@ class DataCollectionScheduler:
                 logger.info(f"Ads: {new_count} new ads stored for {name}")
         except Exception as e:
             logger.error(f"Ads fetch failed for {name}: {e}")
+
+    async def _fetch_google_ads(self, db: Session, competitor: Competitor, name: str):
+        """Fetch Google Ads from Transparency Center."""
+        try:
+            from routers.google_ads import _fetch_and_store_google_ads, _extract_domain
+            domain = _extract_domain(competitor.website)
+            if domain:
+                new, updated, fetched = await _fetch_and_store_google_ads(
+                    competitor_id=competitor.id, domain=domain, country="FR", db=db
+                )
+                if new > 0:
+                    logger.info(f"Google Ads: {new} new, {updated} updated for {name}")
+        except Exception as e:
+            logger.error(f"Google Ads fetch failed for {name}: {e}")
 
     async def _fetch_playstore(self, db: Session, competitor: Competitor, name: str):
         """Fetch Play Store data."""
