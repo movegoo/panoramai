@@ -344,6 +344,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             <img
               src={ad.creative_url}
               alt=""
+              loading="lazy"
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
@@ -361,17 +362,17 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               {(() => {
                 const src = getSourcePlatform(ad);
                 return (
-                  <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full backdrop-blur-md bg-white/90 ${src.color} shadow-sm`}>
+                  <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full sm:backdrop-blur-md bg-white/95 sm:bg-white/90 ${src.color} shadow-sm`}>
                     {src.icon}
                     {src.label}
                   </span>
                 );
               })()}
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-md bg-white/20 text-white">
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full sm:backdrop-blur-md bg-black/30 sm:bg-white/20 text-white">
                 {FORMAT_LABELS[ad.display_format || ""]?.label || ad.display_format || ad.platform}
               </span>
               {ad.contains_ai_content && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full backdrop-blur-md bg-violet-500/30 text-white flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-full sm:backdrop-blur-md bg-violet-600/50 sm:bg-violet-500/30 text-white flex items-center gap-1">
                   <Sparkles className="h-2.5 w-2.5" />IA
                 </span>
               )}
@@ -382,7 +383,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={advertiserLogo} alt="" className="h-7 w-7 rounded-full object-cover border-2 border-white/60 shadow-sm" />
               )}
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full backdrop-blur-md bg-black/40 text-white">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full sm:backdrop-blur-md bg-black/60 sm:bg-black/40 text-white">
                 {ad.competitor_name}
               </span>
             </div>
@@ -390,7 +391,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             {ad.publisher_platforms && ad.publisher_platforms.length > 0 && (
               <div className="absolute bottom-3 right-3 flex items-center gap-1">
                 {ad.publisher_platforms.map(p => (
-                  <span key={p} className="h-6 w-6 rounded-full backdrop-blur-md bg-white/30 flex items-center justify-center text-white">
+                  <span key={p} className="h-6 w-6 rounded-full sm:backdrop-blur-md bg-white/50 sm:bg-white/30 flex items-center justify-center text-white">
                     <PlatformIcon name={p} className="h-3 w-3" />
                   </span>
                 ))}
@@ -1257,6 +1258,7 @@ export default function AdsPage() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [expandedAds, setExpandedAds] = useState<Set<string>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(12);
 
   // Filters
   const [filterCompetitors, setFilterCompetitors] = useState<Set<string>>(new Set());
@@ -1460,6 +1462,12 @@ export default function AdsPage() {
     });
   }, [allAds, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
 
+  // Reset pagination when filters change
+  useEffect(() => { setVisibleCount(12); }, [filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+
+  const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
+  const hasMoreAds = visibleCount < filteredAds.length;
+
   // Filtered stats
   const activeFilters = filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0) + (searchQuery ? 1 : 0)
@@ -1623,7 +1631,7 @@ export default function AdsPage() {
             <div className="col-span-3 sm:col-span-2 flex items-center gap-2 sm:gap-3">
               {Array.from(stats.byPlatform.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, count]) => (
                 <div key={p} className="text-center flex flex-col items-center gap-1">
-                  <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-white/[0.08] backdrop-blur-sm flex items-center justify-center border border-white/[0.06]">
+                  <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-white/[0.08] sm:backdrop-blur-sm flex items-center justify-center border border-white/[0.06]">
                     <PlatformIcon name={p} className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/80" />
                   </div>
                   <div className="text-xs sm:text-sm font-semibold tabular-nums">{count}</div>
@@ -2191,7 +2199,7 @@ export default function AdsPage() {
             )}
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredAds.map((ad) => (
+            {visibleAds.map((ad) => (
               <AdCard
                 key={ad.ad_id}
                 ad={ad}
@@ -2201,6 +2209,14 @@ export default function AdsPage() {
               />
             ))}
           </div>
+          {hasMoreAds && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + 12)} className="gap-2">
+                <ChevronDown className="h-3.5 w-3.5" />
+                Voir plus ({filteredAds.length - visibleCount} restantes)
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>
