@@ -220,7 +220,7 @@ async def get_scheduler_status():
 @app.get("/api/debug/db")
 async def debug_db():
     """Debug database connectivity."""
-    results = {"deploy_version": "v3-jsonresponse"}
+    results = {"deploy_version": "v4-traceback"}
     try:
         from sqlalchemy import text
         with engine.connect() as conn:

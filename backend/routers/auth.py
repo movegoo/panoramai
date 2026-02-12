@@ -2,6 +2,7 @@
 Authentication router.
 Register, login, and user profile endpoints.
 """
+import traceback
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -24,59 +25,77 @@ class LoginRequest(BaseModel):
     password: str
 
 
-def _user_response(user: User, token: str, db: Session) -> JSONResponse:
-    """Build auth response as plain JSON to avoid Pydantic v2 serialization issues."""
+def _build_user_dict(user: User, db: Session) -> dict:
+    """Build user response dict."""
     has_brand = db.query(Advertiser).filter(
         Advertiser.user_id == user.id, Advertiser.is_active == True
     ).first() is not None
 
-    return JSONResponse(content={
-        "token": token,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "has_brand": has_brand,
-            "is_admin": bool(getattr(user, 'is_admin', False)),
-        },
-    })
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "has_brand": has_brand,
+        "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
+    }
 
 
 @router.post("/register")
 async def register(data: RegisterRequest, db: Session = Depends(get_db)):
     """Create a new user account."""
-    if len(data.password) < 6:
-        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
+    try:
+        if len(data.password) < 6:
+            raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
 
-    existing = db.query(User).filter(User.email == data.email.lower().strip()).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+        existing = db.query(User).filter(User.email == data.email.lower().strip()).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
 
-    user = User(
-        email=data.email.lower().strip(),
-        name=data.name or data.email.split("@")[0],
-        password_hash=hash_password(data.password),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+        user = User(
+            email=data.email.lower().strip(),
+            name=data.name or data.email.split("@")[0],
+            password_hash=hash_password(data.password),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
-    token = create_access_token(user.id)
-    return _user_response(user, token, db)
+        token = create_access_token(user.id)
+        user_dict = _build_user_dict(user, db)
+
+        return JSONResponse(content={"token": token, "user": user_dict})
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(status_code=500, content={
+            "detail": f"{type(e).__name__}: {str(e)}",
+            "traceback": traceback.format_exc(),
+        })
 
 
 @router.post("/login")
 async def login(data: LoginRequest, db: Session = Depends(get_db)):
     """Login with email and password."""
-    user = db.query(User).filter(
-        User.email == data.email.lower().strip(), User.is_active == True
-    ).first()
+    try:
+        user = db.query(User).filter(
+            User.email == data.email.lower().strip(), User.is_active == True
+        ).first()
 
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+        if not user or not verify_password(data.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
 
-    token = create_access_token(user.id)
-    return _user_response(user, token, db)
+        token = create_access_token(user.id)
+        user_dict = _build_user_dict(user, db)
+
+        return JSONResponse(content={"token": token, "user": user_dict})
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=500, content={
+            "detail": f"{type(e).__name__}: {str(e)}",
+            "traceback": traceback.format_exc(),
+        })
 
 
 @router.delete("/reset-user")
@@ -103,5 +122,5 @@ async def get_me(user: User = Depends(get_current_user), db: Session = Depends(g
         "name": user.name,
         "has_brand": brand is not None,
         "brand_name": brand.company_name if brand else None,
-        "is_admin": bool(getattr(user, 'is_admin', False)),
+        "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
     }
