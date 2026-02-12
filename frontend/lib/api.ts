@@ -579,6 +579,9 @@ export const playstoreAPI = {
 
   getReviews: (competitorId: number) =>
     fetchAPI<any>(`/playstore/reviews/${competitorId}`),
+
+  getTrends: (competitorId: number) =>
+    fetchAPI<any>(`/playstore/trends/${competitorId}`),
 };
 
 // App Store API
@@ -599,6 +602,9 @@ export const appstoreAPI = {
 
   getReviews: (competitorId: number) =>
     fetchAPI<any>(`/appstore/reviews/${competitorId}`),
+
+  getTrends: (competitorId: number) =>
+    fetchAPI<any>(`/appstore/trends/${competitorId}`),
 
   search: (query: string) =>
     fetchAPI<any[]>(`/appstore/search?query=${encodeURIComponent(query)}`),

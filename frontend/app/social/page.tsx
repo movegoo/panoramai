@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   competitorsAPI,
   instagramAPI,
   tiktokAPI,
   youtubeAPI,
+  brandAPI,
   CompetitorListItem,
 } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
@@ -20,9 +21,14 @@ import {
   Users,
   BarChart3,
   Zap,
+  Trophy,
+  Target,
+  Heart,
+  Crown,
 } from "lucide-react";
 
 type Platform = "instagram" | "tiktok" | "youtube";
+type RankingView = "audience" | "engagement" | "growth" | "efficiency";
 
 const PLATFORM_CONFIG = {
   instagram: {
@@ -60,6 +66,13 @@ const PLATFORM_CONFIG = {
   },
 };
 
+const RANKING_VIEWS: { key: RankingView; label: string; icon: React.ReactNode }[] = [
+  { key: "audience", label: "Audience", icon: <Users className="h-3 w-3" /> },
+  { key: "engagement", label: "Engagement", icon: <Target className="h-3 w-3" /> },
+  { key: "growth", label: "Croissance 7j", icon: <TrendingUp className="h-3 w-3" /> },
+  { key: "efficiency", label: "Efficacite", icon: <Zap className="h-3 w-3" /> },
+];
+
 function GrowthBadge({ value }: { value?: number }) {
   if (value === undefined || value === null) return <span className="text-xs text-muted-foreground">&mdash;</span>;
   const isPositive = value > 0;
@@ -67,48 +80,43 @@ function GrowthBadge({ value }: { value?: number }) {
   return (
     <span
       className={`inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums ${
-        isPositive
-          ? "text-emerald-600"
-          : isNegative
-          ? "text-red-500"
-          : "text-muted-foreground"
+        isPositive ? "text-emerald-600" : isNegative ? "text-red-500" : "text-muted-foreground"
       }`}
     >
-      {isPositive ? (
-        <TrendingUp className="h-3 w-3" />
-      ) : isNegative ? (
-        <TrendingDown className="h-3 w-3" />
-      ) : (
-        <Minus className="h-3 w-3" />
-      )}
-      {isPositive ? "+" : ""}
-      {value.toFixed(1)}%
+      {isPositive ? <TrendingUp className="h-3 w-3" /> : isNegative ? <TrendingDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+      {isPositive ? "+" : ""}{value.toFixed(1)}%
     </span>
   );
 }
 
+const MEDAL = ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-700", "bg-orange-300 text-orange-800"];
+
 export default function SocialPage() {
   const [platform, setPlatform] = useState<Platform>("instagram");
+  const [rankingView, setRankingView] = useState<RankingView>("audience");
   const [competitors, setCompetitors] = useState<CompetitorListItem[]>([]);
   const [igComparison, setIgComparison] = useState<any[]>([]);
   const [ttComparison, setTtComparison] = useState<any[]>([]);
   const [ytComparison, setYtComparison] = useState<any[]>([]);
+  const [brandName, setBrandName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     async function loadAll() {
       try {
-        const [comp, ig, tt, yt] = await Promise.allSettled([
+        const [comp, ig, tt, yt, brand] = await Promise.allSettled([
           competitorsAPI.list(),
           instagramAPI.getComparison(),
           tiktokAPI.getComparison(),
           youtubeAPI.getComparison(),
+          brandAPI.getProfile(),
         ]);
         if (comp.status === "fulfilled") setCompetitors(comp.value);
         if (ig.status === "fulfilled") setIgComparison(ig.value);
         if (tt.status === "fulfilled") setTtComparison(tt.value);
         if (yt.status === "fulfilled") setYtComparison(yt.value);
+        if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
       } catch (err) {
         console.error("Failed to load:", err);
       } finally {
@@ -122,15 +130,11 @@ export default function SocialPage() {
     setFetching(true);
     try {
       const relevantCompetitors = competitors.filter((c) => {
-        if (platform === "instagram")
-          return c.active_channels.includes("instagram");
-        if (platform === "tiktok")
-          return c.active_channels.includes("tiktok");
-        if (platform === "youtube")
-          return c.active_channels.includes("youtube");
+        if (platform === "instagram") return c.active_channels.includes("instagram");
+        if (platform === "tiktok") return c.active_channels.includes("tiktok");
+        if (platform === "youtube") return c.active_channels.includes("youtube");
         return false;
       });
-
       for (const c of relevantCompetitors) {
         try {
           if (platform === "instagram") await instagramAPI.fetch(c.id);
@@ -138,7 +142,6 @@ export default function SocialPage() {
           if (platform === "youtube") await youtubeAPI.fetch(c.id);
         } catch {}
       }
-
       const [ig, tt, yt] = await Promise.allSettled([
         instagramAPI.getComparison(),
         tiktokAPI.getComparison(),
@@ -154,31 +157,80 @@ export default function SocialPage() {
     }
   }
 
-  const currentData =
-    platform === "instagram"
-      ? igComparison
-      : platform === "tiktok"
-      ? ttComparison
-      : ytComparison;
+  const isBrand = (name: string) => brandName && name.toLowerCase() === brandName.toLowerCase();
 
+  // Cross-platform overview
+  const crossPlatformData = useMemo(() => {
+    const competitorMap = new Map<number, { id: number; name: string; ig: any; tt: any; yt: any }>();
+    igComparison.forEach(c => {
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      competitorMap.get(c.competitor_id)!.ig = c;
+    });
+    ttComparison.forEach(c => {
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      competitorMap.get(c.competitor_id)!.tt = c;
+    });
+    ytComparison.forEach(c => {
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      competitorMap.get(c.competitor_id)!.yt = c;
+    });
+    return Array.from(competitorMap.values())
+      .map(c => ({
+        ...c,
+        totalReach: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0),
+        avgGrowth: (() => {
+          const growths: number[] = [];
+          if (c.ig?.follower_growth_7d != null) growths.push(c.ig.follower_growth_7d);
+          if (c.tt?.follower_growth_7d != null) growths.push(c.tt.follower_growth_7d);
+          if (c.yt?.subscriber_growth_7d != null) growths.push(c.yt.subscriber_growth_7d);
+          return growths.length > 0 ? growths.reduce((a, b) => a + b, 0) / growths.length : 0;
+        })(),
+        platformCount: (c.ig ? 1 : 0) + (c.tt ? 1 : 0) + (c.yt ? 1 : 0),
+      }))
+      .sort((a, b) => b.totalReach - a.totalReach);
+  }, [igComparison, ttComparison, ytComparison]);
+
+  // Current platform data
+  const currentData = platform === "instagram" ? igComparison : platform === "tiktok" ? ttComparison : ytComparison;
   const config = PLATFORM_CONFIG[platform];
 
-  // Sort by primary metric (followers/subscribers)
-  const sorted = [...currentData].sort((a, b) => {
-    const aVal =
-      platform === "youtube" ? a.subscribers || 0 : a.followers || 0;
-    const bVal =
-      platform === "youtube" ? b.subscribers || 0 : b.followers || 0;
-    return bVal - aVal;
-  });
+  // Get ranking metric
+  function getRankingValue(c: any): number {
+    if (rankingView === "audience") return platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
+    if (rankingView === "engagement") {
+      if (platform === "instagram") return c.engagement_rate || 0;
+      if (platform === "tiktok") return c.videos_count > 0 ? (c.likes || 0) / c.videos_count : 0;
+      return c.engagement_rate || 0;
+    }
+    if (rankingView === "growth") return c.follower_growth_7d ?? c.subscriber_growth_7d ?? 0;
+    if (rankingView === "efficiency") {
+      if (platform === "instagram") return c.avg_likes || 0;
+      if (platform === "tiktok") return c.videos_count > 0 ? (c.likes || 0) / c.videos_count : 0;
+      return c.avg_views || 0;
+    }
+    return 0;
+  }
 
-  const leader = sorted[0];
-  const challengers = sorted.slice(1);
-  const maxFollowers = leader
-    ? platform === "youtube"
-      ? leader.subscribers || 1
-      : leader.followers || 1
-    : 1;
+  function getRankingLabel(): string {
+    if (rankingView === "audience") return platform === "youtube" ? "abonnes" : "followers";
+    if (rankingView === "engagement") return platform === "tiktok" ? "likes/video" : "engagement";
+    if (rankingView === "growth") return "croissance 7j";
+    if (rankingView === "efficiency") {
+      if (platform === "instagram") return "likes moy/post";
+      if (platform === "tiktok") return "likes/video";
+      return "vues moy";
+    }
+    return "";
+  }
+
+  function formatRankingValue(val: number): string {
+    if (rankingView === "engagement") return platform === "tiktok" ? formatNumber(Math.round(val)) : `${val.toFixed(2)}%`;
+    if (rankingView === "growth") return `${val > 0 ? "+" : ""}${val.toFixed(1)}%`;
+    return formatNumber(Math.round(val));
+  }
+
+  const sorted = [...currentData].sort((a, b) => getRankingValue(b) - getRankingValue(a));
+  const maxRankingVal = sorted.length > 0 ? getRankingValue(sorted[0]) || 1 : 1;
 
   if (loading) {
     return (
@@ -192,7 +244,7 @@ export default function SocialPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -201,59 +253,95 @@ export default function SocialPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">R&eacute;seaux sociaux</h1>
-            <p className="text-[13px] text-muted-foreground">
-              Comparaison multi-plateformes
-            </p>
+            <p className="text-[13px] text-muted-foreground">Comparaison multi-plateformes</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefreshAll}
-          disabled={fetching}
-          className="gap-2"
-        >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`}
-          />
+        <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
+          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
           Rafra&icirc;chir
         </Button>
       </div>
 
-      {/* Platform selector - gradient-accented pills */}
+      {/* ── Cross-Platform Overview ── */}
+      {crossPlatformData.length > 0 && (
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
+          <div className="flex items-center gap-2.5">
+            <Crown className="h-4.5 w-4.5 text-amber-400" />
+            <h2 className="text-sm font-semibold">Vue d&apos;ensemble multi-plateformes</h2>
+          </div>
+          <div className="overflow-x-auto -mx-5 sm:-mx-6 px-5 sm:px-6">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-widest text-white/40">
+                  <th className="text-left pb-3 font-semibold">#</th>
+                  <th className="text-left pb-3 font-semibold">Concurrent</th>
+                  <th className="text-right pb-3 font-semibold">Instagram</th>
+                  <th className="text-right pb-3 font-semibold">TikTok</th>
+                  <th className="text-right pb-3 font-semibold">YouTube</th>
+                  <th className="text-right pb-3 font-semibold">Audience totale</th>
+                  <th className="text-right pb-3 font-semibold">Tendance 7j</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crossPlatformData.map((c, i) => (
+                  <tr key={c.id} className={`border-t border-white/10 ${isBrand(c.name) ? "bg-violet-500/15" : ""}`}>
+                    <td className="py-2.5 pr-2">
+                      {i < 3 ? (
+                        <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${MEDAL[i]}`}>{i + 1}</span>
+                      ) : (
+                        <span className="text-xs text-white/40 tabular-nums pl-1">{i + 1}</span>
+                      )}
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{c.name}</span>
+                        {isBrand(c.name) && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-500/30 text-violet-300">Vous</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-right text-sm tabular-nums">
+                      {c.ig ? <span className="text-pink-300">{formatNumber(c.ig.followers)}</span> : <span className="text-white/20">&mdash;</span>}
+                    </td>
+                    <td className="py-2.5 text-right text-sm tabular-nums">
+                      {c.tt ? <span className="text-cyan-300">{formatNumber(c.tt.followers)}</span> : <span className="text-white/20">&mdash;</span>}
+                    </td>
+                    <td className="py-2.5 text-right text-sm tabular-nums">
+                      {c.yt ? <span className="text-red-300">{formatNumber(c.yt.subscribers)}</span> : <span className="text-white/20">&mdash;</span>}
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <span className="text-sm font-bold tabular-nums">{formatNumber(c.totalReach)}</span>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <GrowthBadge value={c.avgGrowth} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Platform selector */}
       <div className="flex items-center gap-1 p-1 rounded-full bg-card border border-border w-fit">
         {(["instagram", "tiktok", "youtube"] as Platform[]).map((p) => {
           const pConfig = PLATFORM_CONFIG[p];
-          const pData =
-            p === "instagram"
-              ? igComparison
-              : p === "tiktok"
-              ? ttComparison
-              : ytComparison;
+          const pData = p === "instagram" ? igComparison : p === "tiktok" ? ttComparison : ytComparison;
           const isActive = platform === p;
           return (
             <button
               key={p}
-              onClick={() => setPlatform(p)}
+              onClick={() => { setPlatform(p); setRankingView("audience"); }}
               className={`relative px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                isActive
-                  ? "text-white shadow-lg"
-                  : "text-muted-foreground hover:text-foreground"
+                isActive ? "text-white shadow-lg" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {isActive && (
-                <div
-                  className={`absolute inset-0 rounded-full bg-gradient-to-r ${pConfig.gradient}`}
-                />
-              )}
+              {isActive && <div className={`absolute inset-0 rounded-full bg-gradient-to-r ${pConfig.gradient}`} />}
               <span className="relative flex items-center gap-2">
                 {pConfig.label}
                 {pData.length > 0 && (
-                  <span
-                    className={`text-[10px] tabular-nums ${
-                      isActive ? "text-white/70" : "text-muted-foreground"
-                    }`}
-                  >
+                  <span className={`text-[10px] tabular-nums ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
                     {pData.length}
                   </span>
                 )}
@@ -271,440 +359,260 @@ export default function SocialPage() {
               <Activity className="h-7 w-7 text-violet-400" />
             </div>
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-1">
-            Aucune donn&eacute;e {config.label}
-          </h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Configurez des concurrents avec un compte {config.label}.
-          </p>
+          <h3 className="text-lg font-semibold text-foreground mb-1">Aucune donn&eacute;e {config.label}</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">Configurez des concurrents avec un compte {config.label}.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Leader spotlight */}
-          {leader && (
-            <div
-              className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${config.darkBg} text-white p-8`}
-            >
-              <div className="absolute top-4 right-4 text-[11px] font-semibold uppercase tracking-widest text-white/40">
-                #1 {config.label}
-              </div>
-              <div className="flex items-start justify-between">
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-widest text-white/50 mb-1">
-                      Leader
-                    </div>
-                    <h3 className="text-2xl font-bold">
-                      {platform === "youtube"
-                        ? leader.channel_name || leader.competitor_name
-                        : leader.competitor_name}
-                    </h3>
-                    {(leader.username || leader.channel_id) && (
-                      <a
-                        href={config.link(
-                          leader.username || leader.channel_id
-                        )}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-sm text-white/60 hover:text-white/80 mt-1 transition-colors"
-                      >
-                        {config.linkLabel(
-                          leader.username || leader.channel_id
-                        )}
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                  <div className="flex items-end gap-8">
-                    <div>
-                      <div className="text-4xl font-bold tabular-nums">
-                        {formatNumber(
-                          platform === "youtube"
-                            ? leader.subscribers
-                            : leader.followers
-                        )}
-                      </div>
-                      <div className="text-xs text-white/50 mt-0.5">
-                        {platform === "youtube"
-                          ? "abonnes"
-                          : "followers"}
-                      </div>
-                    </div>
-                    {platform === "instagram" && (
-                      <>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {leader.engagement_rate?.toFixed(2) || "0"}%
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            engagement
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {formatNumber(leader.posts_count || 0)}
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            posts
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {platform === "tiktok" && (
-                      <>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {formatNumber(leader.likes || 0)}
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            likes
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {formatNumber(leader.videos_count || 0)}
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            videos
-                          </div>
-                        </div>
-                      </>
-                    )}
-                    {platform === "youtube" && (
-                      <>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {formatNumber(leader.total_views || 0)}
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            vues totales
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold tabular-nums">
-                            {formatNumber(leader.videos_count || 0)}
-                          </div>
-                          <div className="text-xs text-white/50 mt-0.5">
-                            videos
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  {leader.follower_growth_7d !== undefined && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-white/50">7 jours:</span>
-                      <GrowthBadge value={leader.follower_growth_7d} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Relative comparison bars */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
-                <Users className="h-4 w-4 text-violet-600" />
-              </div>
-              <h3 className="text-[13px] font-semibold text-foreground">
-                Audience compar&eacute;e
-              </h3>
-            </div>
-            <div className="space-y-3">
-              {sorted.map((c, i) => {
-                const val =
-                  platform === "youtube"
-                    ? c.subscribers || 0
-                    : c.followers || 0;
-                const pct = (val / maxFollowers) * 100;
-                return (
-                  <div key={c.competitor_id} className="group">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${
-                            i === 0
-                              ? `bg-gradient-to-r ${config.gradient} text-white`
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {i + 1}
-                        </span>
-                        <span className="text-sm font-medium">
-                          {platform === "youtube"
-                            ? c.channel_name || c.competitor_name
-                            : c.competitor_name}
-                        </span>
+          {/* ── Ranking View Selector ── */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mr-1">Classer par</span>
+            {RANKING_VIEWS.map(rv => (
+              <button
+                key={rv.key}
+                onClick={() => setRankingView(rv.key)}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+                  rankingView === rv.key
+                    ? `bg-gradient-to-r ${config.gradient} text-white border-transparent shadow-sm`
+                    : "bg-card text-muted-foreground hover:text-foreground border-border hover:border-foreground/20"
+                }`}
+              >
+                {rv.icon}{rv.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Ranked Cards Grid ── */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sorted.map((c, i) => {
+              const primaryVal = getRankingValue(c);
+              const pct = maxRankingVal > 0 ? (primaryVal / maxRankingVal) * 100 : 0;
+              const followers = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
+              const name = platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name;
+              const growth = c.follower_growth_7d ?? c.subscriber_growth_7d;
+              const brand = isBrand(c.competitor_name);
+
+              return (
+                <div
+                  key={c.competitor_id}
+                  className={`rounded-xl border p-4 transition-all hover:shadow-md ${
+                    brand ? "ring-2 ring-violet-500/40 bg-violet-50/30 dark:bg-violet-950/20" :
+                    i === 0 ? `${config.lightBg} ${config.border}` : "bg-card"
+                  }`}
+                >
+                  {/* Header: rank + name */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold shrink-0 ${
+                        i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold truncate">{name}</span>
+                          {brand && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">Vous</span>}
+                        </div>
                         {(c.username || c.channel_id) && (
-                          <a
-                            href={config.link(c.username || c.channel_id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`text-[11px] ${config.accent} hover:underline flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity`}
-                          >
+                          <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer"
+                            className={`text-[11px] ${config.accent} hover:underline flex items-center gap-0.5`}>
+                            {config.linkLabel(c.username || c.channel_id)}
                             <ExternalLink className="h-2.5 w-2.5" />
                           </a>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        {(c.follower_growth_7d !== undefined ||
-                          c.subscriber_growth_7d !== undefined) && (
-                          <GrowthBadge
-                            value={
-                              c.follower_growth_7d ??
-                              c.subscriber_growth_7d
-                            }
-                          />
-                        )}
-                        <span className="text-sm font-bold tabular-nums w-20 text-right">
-                          {formatNumber(val)}
-                        </span>
-                      </div>
                     </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-700 ease-out ${
-                          i === 0
-                            ? `bg-gradient-to-r ${config.gradient}`
-                            : "bg-slate-300 dark:bg-slate-600"
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+                    <GrowthBadge value={growth} />
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Primary metric */}
+                  <div className="mb-2">
+                    <div className="text-2xl font-bold tabular-nums">{formatRankingValue(primaryVal)}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{getRankingLabel()}</div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
+                    <div className={`h-full rounded-full transition-all duration-700 ${i === 0 ? `bg-gradient-to-r ${config.gradient}` : "bg-slate-300 dark:bg-slate-600"}`}
+                      style={{ width: `${pct}%` }} />
+                  </div>
+
+                  {/* Secondary metrics */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {rankingView !== "audience" && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <Users className="h-2.5 w-2.5" />{formatNumber(followers)}
+                      </span>
+                    )}
+                    {platform === "instagram" && (
+                      <>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-2.5 w-2.5" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          </span>
+                        )}
+                        {rankingView !== "efficiency" && c.avg_likes != null && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            <Heart className="h-2.5 w-2.5" />{formatNumber(c.avg_likes)} moy
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.posts_count || 0)} posts
+                        </span>
+                      </>
+                    )}
+                    {platform === "tiktok" && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          <Heart className="h-2.5 w-2.5" />{formatNumber(c.likes || 0)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.videos_count || 0)} videos
+                        </span>
+                        {c.videos_count > 0 && rankingView !== "efficiency" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            <Zap className="h-2.5 w-2.5" />{formatNumber(Math.round(c.likes / c.videos_count))}/vid
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {platform === "youtube" && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.total_views || 0)} vues
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.videos_count || 0)} videos
+                        </span>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-2.5 w-2.5" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Detailed metrics table */}
+          {/* ── Detailed Table ── */}
           <div className="rounded-2xl border bg-card overflow-hidden">
             <div className="px-5 py-3 border-b bg-muted/20 flex items-center gap-2.5">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
                 <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
               </div>
-              <span className="text-[12px] font-semibold text-foreground">
-                D&eacute;tails par concurrent
-              </span>
+              <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
             </div>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-muted/30">
-                  <th className="text-left text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                    Concurrent
-                  </th>
-                  <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                    {platform === "youtube" ? "Abonnes" : "Followers"}
-                  </th>
-                  {platform === "instagram" && (
-                    <>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Engagement
-                      </th>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Posts
-                      </th>
-                    </>
-                  )}
-                  {platform === "tiktok" && (
-                    <>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Likes
-                      </th>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Videos
-                      </th>
-                    </>
-                  )}
-                  {platform === "youtube" && (
-                    <>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Vues totales
-                      </th>
-                      <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                        Videos
-                      </th>
-                    </>
-                  )}
-                  <th className="text-right text-[11px] uppercase tracking-widest text-muted-foreground font-semibold px-5 py-3">
-                    Croissance 7j
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((c, i) => {
-                  const val =
-                    platform === "youtube"
-                      ? c.subscribers || 0
-                      : c.followers || 0;
-                  return (
-                    <tr
-                      key={c.competitor_id}
-                      className={`border-t transition-colors hover:bg-muted/30 ${
-                        i === 0 ? `${config.lightBg}` : ""
-                      }`}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${
-                              i === 0
-                                ? `bg-gradient-to-r ${config.gradient} text-white`
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {i + 1}
-                          </span>
-                          <div>
-                            <span className="text-sm font-medium">
-                              {platform === "youtube"
-                                ? c.channel_name || c.competitor_name
-                                : c.competitor_name}
-                            </span>
-                            {(c.username || c.channel_id) && (
-                              <a
-                                href={config.link(
-                                  c.username || c.channel_id
-                                )}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`block text-[11px] ${config.accent} hover:underline`}
-                              >
-                                {config.linkLabel(
-                                  c.username || c.channel_id
-                                )}
-                              </a>
-                            )}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[650px]">
+                <thead>
+                  <tr className="bg-muted/30">
+                    <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
+                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : "Followers"}</th>
+                    {platform === "instagram" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes moy</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Posts</th>
+                      </>
+                    )}
+                    {platform === "tiktok" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Videos</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes/vid</th>
+                      </>
+                    )}
+                    {platform === "youtube" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues totales</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues moy</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
+                      </>
+                    )}
+                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">7j</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((c, i) => {
+                    const val = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
+                    const brand = isBrand(c.competitor_name);
+                    return (
+                      <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium">{platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name}</span>
+                                {brand && <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-violet-100 text-violet-700">Vous</span>}
+                              </div>
+                              {(c.username || c.channel_id) && (
+                                <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer" className={`text-[11px] ${config.accent} hover:underline`}>
+                                  {config.linkLabel(c.username || c.channel_id)}
+                                </a>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <span className="text-sm font-bold tabular-nums">
-                          {formatNumber(val)}
-                        </span>
-                      </td>
-                      {platform === "instagram" && (
-                        <>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {c.engagement_rate?.toFixed(2) || "0"}%
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {formatNumber(c.posts_count || 0)}
-                            </span>
-                          </td>
-                        </>
-                      )}
-                      {platform === "tiktok" && (
-                        <>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {formatNumber(c.likes || 0)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {formatNumber(c.videos_count || 0)}
-                            </span>
-                          </td>
-                        </>
-                      )}
-                      {platform === "youtube" && (
-                        <>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {formatNumber(c.total_views || 0)}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-right">
-                            <span className="text-sm tabular-nums">
-                              {formatNumber(c.videos_count || 0)}
-                            </span>
-                          </td>
-                        </>
-                      )}
-                      <td className="px-5 py-3.5 text-right">
-                        <GrowthBadge
-                          value={
-                            c.follower_growth_7d ??
-                            c.subscriber_growth_7d
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm font-bold tabular-nums">{formatNumber(val)}</td>
+                        {platform === "instagram" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_likes != null ? formatNumber(c.avg_likes) : "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.posts_count || 0)}</td>
+                          </>
+                        )}
+                        {platform === "tiktok" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.likes || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.videos_count || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.videos_count > 0 ? formatNumber(Math.round(c.likes / c.videos_count)) : "\u2014"}</td>
+                          </>
+                        )}
+                        {platform === "youtube" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.total_views || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_views ? formatNumber(c.avg_views) : "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
+                          </>
+                        )}
+                        <td className="px-4 py-3 text-right">
+                          <GrowthBadge value={c.follower_growth_7d ?? c.subscriber_growth_7d} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          {/* Platform-specific bonus insights */}
-          {platform === "tiktok" && sorted.some((c) => c.likes > 0 && c.videos_count > 0) && (
-            <div className="rounded-2xl border bg-card p-6 space-y-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-100">
-                  <Zap className="h-4 w-4 text-cyan-600" />
-                </div>
-                <h3 className="text-[13px] font-semibold text-foreground">
-                  Performance par vid&eacute;o
-                </h3>
+          {/* ── Brand Position Insight ── */}
+          {brandName && sorted.length > 1 && (() => {
+            const brandIdx = sorted.findIndex(c => isBrand(c.competitor_name));
+            if (brandIdx < 0) return null;
+            const leaderVal = getRankingValue(sorted[0]);
+            const brandVal = getRankingValue(sorted[brandIdx]);
+            const gap = leaderVal > 0 ? Math.round(((leaderVal - brandVal) / leaderVal) * 100) : 0;
+            if (brandIdx === 0) return (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
+                <Trophy className="h-5 w-5 text-emerald-600 shrink-0" />
+                <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                  <span className="font-semibold">{brandName}</span> est leader {config.label} en {getRankingLabel()}.
+                </p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {sorted
-                  .filter((c) => c.likes > 0 && c.videos_count > 0)
-                  .map((c) => (
-                    <div
-                      key={c.competitor_id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
-                    >
-                      <span className="text-sm">{c.competitor_name}</span>
-                      <span className="text-sm font-bold tabular-nums">
-                        {formatNumber(
-                          Math.round(c.likes / c.videos_count)
-                        )}{" "}
-                        <span className="font-normal text-muted-foreground">
-                          likes/vid
-                        </span>
-                      </span>
-                    </div>
-                  ))}
+            );
+            return (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-3">
+                <Trophy className="h-5 w-5 text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {sorted.length} en {getRankingLabel()}, {gap}% derriere le leader.
+                </p>
               </div>
-            </div>
-          )}
-
-          {platform === "youtube" && sorted.some((c) => c.total_views > 0 && c.subscribers > 0) && (
-            <div className="rounded-2xl border bg-card p-6 space-y-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100">
-                  <BarChart3 className="h-4 w-4 text-red-600" />
-                </div>
-                <h3 className="text-[13px] font-semibold text-foreground">
-                  Ratio vues / abonn&eacute;
-                </h3>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {sorted
-                  .filter((c) => c.total_views > 0 && c.subscribers > 0)
-                  .map((c) => (
-                    <div
-                      key={c.competitor_id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
-                    >
-                      <span className="text-sm">
-                        {c.channel_name || c.competitor_name}
-                      </span>
-                      <span className="text-sm font-bold tabular-nums">
-                        {(c.total_views / c.subscribers).toFixed(0)}x
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
     </div>

@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Breadcrumb />
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1">
           <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             {children}
           </div>

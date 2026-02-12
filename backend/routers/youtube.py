@@ -146,6 +146,8 @@ async def compare_youtube_channels(db: Session = Depends(get_db)):
                 "total_views": latest.total_views,
                 "videos_count": latest.videos_count,
                 "avg_views": latest.avg_views,
+                "avg_likes": latest.avg_likes,
+                "avg_comments": latest.avg_comments,
                 "engagement_rate": latest.engagement_rate,
                 "subscriber_growth_7d": round(subscriber_growth, 2),
                 "recorded_at": latest.recorded_at.isoformat(),

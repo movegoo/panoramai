@@ -132,6 +132,8 @@ async def compare_instagram_accounts(db: Session = Depends(get_db)):
                 "followers": latest.followers,
                 "engagement_rate": latest.engagement_rate,
                 "posts_count": latest.posts_count,
+                "avg_likes": latest.avg_likes,
+                "avg_comments": latest.avg_comments,
                 "follower_growth_7d": round(follower_growth, 2),
                 "last_updated": latest.recorded_at.isoformat()
             })
