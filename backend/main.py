@@ -92,14 +92,10 @@ def _refresh_logo_urls():
         db.close()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifecycle management."""
-    try:
-        init_db()
-        logger.info("Database initialized")
-    except Exception as e:
-        logger.error(f"Database init failed (non-fatal): {e}")
+async def _deferred_startup():
+    """Run slow startup tasks in background so healthcheck passes fast."""
+    import asyncio
+    await asyncio.sleep(2)  # Let the server start first
 
     try:
         _refresh_logo_urls()
@@ -112,9 +108,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Scheduler start failed (non-fatal): {e}")
 
-    # BANCO store enrichment (one-by-one to limit memory)
-    import asyncio
     asyncio.create_task(_enrich_missing_stores())
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle management."""
+    import asyncio
+
+    try:
+        init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Database init failed (non-fatal): {e}")
+
+    # Defer slow tasks so the server starts responding immediately
+    asyncio.create_task(_deferred_startup())
 
     yield
 
