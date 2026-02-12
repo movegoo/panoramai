@@ -121,17 +121,17 @@ function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
 
 /* ─────────────── CPM Benchmarks & Budget Estimation ─────────────── */
 
-// CPM benchmarks by country (EUR) - Source: industry averages 2024-2025
+// CPM benchmarks by country (EUR) - Source: industry averages 2025-2026
 const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number }> = {
-  FR: { meta: 7.5, tiktok: 4.5 },
-  DE: { meta: 8.0, tiktok: 5.0 },
-  ES: { meta: 5.5, tiktok: 3.5 },
-  IT: { meta: 5.0, tiktok: 3.5 },
-  BE: { meta: 7.0, tiktok: 4.0 },
-  NL: { meta: 8.5, tiktok: 5.5 },
-  UK: { meta: 9.0, tiktok: 6.0 },
-  US: { meta: 12.0, tiktok: 8.0 },
-  DEFAULT: { meta: 6.0, tiktok: 4.0 },
+  FR: { meta: 3.0, tiktok: 2.0 },
+  DE: { meta: 3.0, tiktok: 2.5 },
+  ES: { meta: 2.5, tiktok: 1.5 },
+  IT: { meta: 2.5, tiktok: 1.5 },
+  BE: { meta: 3.0, tiktok: 2.0 },
+  NL: { meta: 3.0, tiktok: 2.5 },
+  UK: { meta: 3.0, tiktok: 2.5 },
+  US: { meta: 3.0, tiktok: 2.5 },
+  DEFAULT: { meta: 3.0, tiktok: 2.0 },
 };
 
 function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | null {
@@ -215,7 +215,7 @@ function InfoTooltip({ text, className = "" }: { text: string; className?: strin
 /* ─────────────── Methodology texts ─────────────── */
 
 const METHODOLOGY = {
-  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks : FR 7.5\u20AC Meta / 4.5\u20AC TikTok. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
+  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks : FR 3\u20AC Meta / 2\u20AC TikTok. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
   reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
   duration: "Dur\u00E9e moyenne = (date de fin ou aujourd\u2019hui - date de d\u00E9but) pour chaque pub. Indique la long\u00E9vit\u00E9 moyenne des campagnes.",
   demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
