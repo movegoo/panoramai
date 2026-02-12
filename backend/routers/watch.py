@@ -466,7 +466,7 @@ async def get_dashboard_data(
         competitor_data.append({
             "id": comp.id,
             "name": comp.name,
-            "logo_url": comp.logo_url or get_logo_url(comp.website),
+            "logo_url": get_logo_url(comp.website),
             "score": score,
             "rank": 0,
             "instagram": ig_data,
@@ -507,7 +507,7 @@ async def get_dashboard_data(
         brand_data = {
             "id": brand.id,
             "name": brand.company_name,
-            "logo_url": brand.logo_url or get_logo_url(brand.website),
+            "logo_url": get_logo_url(brand.website),
             "score": 0,
             "rank": len(competitor_data) + 1,
             "rank_among_all": len(competitor_data) + 1,

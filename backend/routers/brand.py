@@ -58,7 +58,7 @@ def _brand_to_dict(brand: Advertiser, competitors_count: int) -> dict:
         "sector": brand.sector,
         "sector_label": get_sector_label(brand.sector),
         "website": brand.website,
-        "logo_url": brand.logo_url or get_logo_url(brand.website),
+        "logo_url": get_logo_url(brand.website),
         "playstore_app_id": brand.playstore_app_id,
         "appstore_app_id": brand.appstore_app_id,
         "instagram_username": brand.instagram_username,
@@ -103,7 +103,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
             user_id=user.id if user else None,
             name=brand.company_name,
             website=brand.website,
-            logo_url=brand.logo_url or get_logo_url(brand.website),
+            logo_url=get_logo_url(brand.website),
             playstore_app_id=brand.playstore_app_id,
             appstore_app_id=brand.appstore_app_id,
             instagram_username=brand.instagram_username,
@@ -121,7 +121,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
     else:
         # Sync fields from brand to competitor
         comp.website = brand.website
-        comp.logo_url = brand.logo_url or get_logo_url(brand.website)
+        comp.logo_url = get_logo_url(brand.website)
         comp.playstore_app_id = brand.playstore_app_id
         comp.appstore_app_id = brand.appstore_app_id
         comp.instagram_username = brand.instagram_username

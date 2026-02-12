@@ -163,7 +163,7 @@ async def list_competitors(
             "id": comp.id,
             "name": comp.name,
             "website": comp.website,
-            "logo_url": comp.logo_url or get_logo_url(comp.website),
+            "logo_url": get_logo_url(comp.website),
             "facebook_page_id": comp.facebook_page_id,
             "instagram_username": comp.instagram_username,
             "tiktok_username": comp.tiktok_username,

@@ -51,6 +51,21 @@ function TikTokIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+/* ─────────────── Competitor Logo with fallback ─────────────── */
+function CompetitorLogo({ name, logoUrl }: { name: string; logoUrl?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) {
+    return (
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 text-sm font-bold text-violet-700 shrink-0">
+        {name.charAt(0).toUpperCase()}
+      </div>
+    );
+  }
+  return (
+    <img src={logoUrl} alt={name} className="h-10 w-10 rounded-xl object-contain bg-white border border-border/50 shrink-0" onError={() => setFailed(true)} />
+  );
+}
+
 /* ─────────────── Channel config ─────────────── */
 const CHANNELS = [
   { key: "facebook_page_id", label: "Facebook", icon: Globe, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200", placeholder: "Page ID Facebook" },
@@ -362,13 +377,7 @@ export default function CompetitorsPage() {
                 <div className="p-4 pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 min-w-0">
-                      {comp.logo_url ? (
-                        <img src={comp.logo_url} alt={comp.name} className="h-10 w-10 rounded-xl object-contain bg-white border border-border/50 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 text-sm font-bold text-violet-700 shrink-0">
-                          {comp.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <CompetitorLogo name={comp.name} logoUrl={comp.logo_url} />
                       <div className="min-w-0">
                         <h3 className="font-semibold text-[15px] text-foreground truncate">{comp.name}</h3>
                         {comp.website ? (
