@@ -11,7 +11,8 @@ import json
 import asyncio
 import logging
 
-from database import get_db, Competitor, Ad
+from database import get_db, Competitor, Ad, User
+from core.auth import get_optional_user, claim_orphans
 from services.scrapecreators import scrapecreators
 
 logger = logging.getLogger(__name__)
@@ -27,19 +28,26 @@ router = APIRouter()
 async def get_all_ads(
     active_only: bool = False,
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
-    """Retourne TOUTES les publicités de tous les concurrents."""
-    query = db.query(Ad)
+    """Retourne TOUTES les publicités des concurrents actifs."""
+    if user:
+        claim_orphans(db, user)
+    # Only show ads for active competitors (filtered by user if logged in)
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    active_comps = {c.id: c.name for c in comp_query.all()}
+
+    query = db.query(Ad).filter(Ad.competitor_id.in_(active_comps.keys()))
     if active_only:
         query = query.filter(Ad.is_active == True)
     ads = query.order_by(desc(Ad.start_date)).all()
 
-    # Add competitor name to each ad
-    competitors = {c.id: c.name for c in db.query(Competitor).all()}
     result = []
     for ad in ads:
         d = _serialize_ad(ad)
-        d["competitor_name"] = competitors.get(ad.competitor_id, "Inconnu")
+        d["competitor_name"] = active_comps.get(ad.competitor_id, "Inconnu")
         result.append(d)
     return result
 
