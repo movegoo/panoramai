@@ -1271,6 +1271,7 @@ export default function AdsPage() {
   const [filterGender, setFilterGender] = useState<"none" | "all" | "male" | "female">("none");
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
+  const [showAllPayers, setShowAllPayers] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
   const [advertiserSearch, setAdvertiserSearch] = useState("");
   const [brandName, setBrandName] = useState<string>("");
@@ -1923,90 +1924,105 @@ export default function AdsPage() {
       <CompetitorComparison filteredAds={filteredAds} stats={stats} />
 
       {/* ── Payeurs & Diffusion ────── */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Payeurs with logos */}
-        {stats.byAdvertiser.size > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
-                <Building2 className="h-4 w-4 text-emerald-600" />
+      {stats.byAdvertiser.size > 0 && (() => {
+        const sortedAdvertisers = Array.from(stats.byAdvertiser.entries()).sort((a, b) => b[1].total - a[1].total);
+        const PAYER_LIMIT = 5;
+        const hasMore = sortedAdvertisers.length > PAYER_LIMIT;
+        const visibleAdvertisers = showAllPayers ? sortedAdvertisers : sortedAdvertisers.slice(0, PAYER_LIMIT);
+        return (
+          <div className="rounded-2xl border bg-card/50 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100">
+                  <Building2 className="h-4.5 w-4.5 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Payeurs (annonceurs)</h3>
+                  <p className="text-[11px] text-muted-foreground">{sortedAdvertisers.length} payeur{sortedAdvertisers.length > 1 ? "s" : ""} identifié{sortedAdvertisers.length > 1 ? "s" : ""}</p>
+                </div>
               </div>
-              <h3 className="text-[13px] font-semibold text-foreground">
-                Payeurs (annonceurs)
-              </h3>
+              {hasMore && (
+                <button
+                  onClick={() => setShowAllPayers(v => !v)}
+                  className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
+                  {showAllPayers ? "Réduire" : `Voir tout (${sortedAdvertisers.length})`}
+                </button>
+              )}
             </div>
-            <div className="space-y-2">
-              {Array.from(stats.byAdvertiser.entries())
-                .sort((a, b) => b[1].total - a[1].total)
-                .map(([name, data]) => {
-                  const maxTotal = Math.max(...Array.from(stats.byAdvertiser.values()).map(v => v.total), 1);
-                  const pct = (data.total / maxTotal) * 100;
-                  return (
-                    <button
-                      key={name}
-                      onClick={() => toggleFilter(filterAdvertisers, name, setFilterAdvertisers)}
-                      className={`w-full text-left rounded-xl border p-3.5 transition-all hover:shadow-md ${
-                        filterAdvertisers.has(name) ? "border-emerald-300 bg-emerald-50/50 shadow-sm" : "bg-card hover:bg-accent/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {data.logo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={data.logo} alt="" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
-                          ) : (
-                            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center shrink-0">
-                              <Building2 className="h-4 w-4 text-emerald-600" />
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <span className="text-sm font-semibold truncate block">{name}</span>
-                            <span className="shrink-0 inline-flex items-center text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                              Payeur
-                            </span>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleAdvertisers.map(([name, data]) => {
+                const maxTotal = Math.max(...Array.from(stats.byAdvertiser.values()).map(v => v.total), 1);
+                const pct = (data.total / maxTotal) * 100;
+                return (
+                  <button
+                    key={name}
+                    onClick={() => toggleFilter(filterAdvertisers, name, setFilterAdvertisers)}
+                    className={`w-full text-left rounded-xl border p-3.5 transition-all hover:shadow-md ${
+                      filterAdvertisers.has(name) ? "border-emerald-300 bg-emerald-50/50 shadow-sm" : "bg-card hover:bg-accent/30"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {data.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={data.logo} alt="" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center shrink-0">
+                            <Building2 className="h-4 w-4 text-emerald-600" />
                           </div>
+                        )}
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold truncate block">{name}</span>
+                          <span className="shrink-0 inline-flex items-center text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            Payeur
+                          </span>
                         </div>
-                        <span className="text-lg font-bold tabular-nums shrink-0 ml-2">{data.total}</span>
                       </div>
-                      <div className="h-1 rounded-full bg-muted overflow-hidden mb-1.5">
-                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
-                        <span className="text-emerald-600 font-medium">{data.active} actives</span>
-                        {data.spendMax > 0 && (
-                          <span className="text-emerald-600 font-medium tabular-nums">
-                            {formatNumber(data.spendMin)}&ndash;{formatNumber(data.spendMax)}&euro;
-                          </span>
-                        )}
-                        {data.likes != null && data.likes > 0 && (
-                          <span className="flex items-center gap-1">
-                            <ThumbsUp className="h-3 w-3" />{formatNumber(data.likes)}
-                          </span>
-                        )}
-                        {data.categories && data.categories.length > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" />{data.categories.join(", ")}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                      <span className="text-lg font-bold tabular-nums shrink-0 ml-2">{data.total}</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-muted overflow-hidden mb-1.5">
+                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600" style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
+                      <span className="text-emerald-600 font-medium">{data.active} actives</span>
+                      {data.spendMax > 0 && (
+                        <span className="text-emerald-600 font-medium tabular-nums">
+                          {formatNumber(data.spendMin)}&ndash;{formatNumber(data.spendMax)}&euro;
+                        </span>
+                      )}
+                      {data.likes != null && data.likes > 0 && (
+                        <span className="flex items-center gap-1">
+                          <ThumbsUp className="h-3 w-3" />{formatNumber(data.likes)}
+                        </span>
+                      )}
+                      {data.categories && data.categories.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Tag className="h-3 w-3" />{data.categories.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
+        );
+      })()}
 
-        {/* Diffusion / Audience */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100">
-              <Globe className="h-4 w-4 text-blue-600" />
-            </div>
-            <h3 className="text-[13px] font-semibold text-foreground">
-              Diffusion & Audience
-            </h3>
+      {/* ── Diffusion & Audience ────── */}
+      <div className="rounded-2xl border bg-card/50 p-5 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100">
+            <Globe className="h-4.5 w-4.5 text-blue-600" />
           </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Diffusion & Audience</h3>
+            <p className="text-[11px] text-muted-foreground">Répartition par plateforme et concurrent</p>
+          </div>
+        </div>
 
+        <div className="grid gap-4 lg:grid-cols-2">
           {/* Platform reach per competitor with platform icons */}
           <div className="rounded-xl border bg-card p-4 space-y-3">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plateformes par concurrent</div>
@@ -2038,42 +2054,44 @@ export default function AdsPage() {
               ))}
           </div>
 
-          {/* Key diffusion metrics */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border bg-card p-3">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Duree moyenne</div>
-              <div className="text-xl font-bold mt-1 tabular-nums">{stats.avgDuration}<span className="text-sm font-normal text-muted-foreground ml-1">jours</span></div>
+          <div className="space-y-4">
+            {/* Key diffusion metrics */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border bg-card p-3">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Duree moyenne</div>
+                <div className="text-xl font-bold mt-1 tabular-nums">{stats.avgDuration}<span className="text-sm font-normal text-muted-foreground ml-1">jours</span></div>
+              </div>
+              <div className="rounded-xl border bg-card p-3">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Plateformes</div>
+                <div className="text-xl font-bold mt-1 tabular-nums">{stats.byPlatform.size}<span className="text-sm font-normal text-muted-foreground ml-1">actives</span></div>
+              </div>
             </div>
-            <div className="rounded-xl border bg-card p-3">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Plateformes</div>
-              <div className="text-xl font-bold mt-1 tabular-nums">{stats.byPlatform.size}<span className="text-sm font-normal text-muted-foreground ml-1">actives</span></div>
-            </div>
-          </div>
 
-          {/* Platform total distribution with icons */}
-          <div className="rounded-xl border bg-card p-4 space-y-2">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Distribution globale</div>
-            {Array.from(stats.byPlatform.entries())
-              .sort((a, b) => b[1] - a[1])
-              .map(([platform, count]) => {
-                const maxPlatform = Math.max(...Array.from(stats.byPlatform.values()), 1);
-                const pct = Math.round((count / maxPlatform) * 100);
-                const pctTotal = filteredAds.length > 0 ? Math.round((count / filteredAds.length) * 100) : 0;
-                return (
-                  <div key={platform} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 text-xs font-medium">
-                        <PlatformIcon name={platform} className={`h-3.5 w-3.5 ${PLATFORM_CONFIGS[platform]?.iconColor || "text-gray-500"}`} />
-                        {PLATFORM_CONFIGS[platform]?.label || platform.toLowerCase().replace("_", " ")}
-                      </span>
-                      <span className="text-xs tabular-nums text-muted-foreground">{count} pubs ({pctTotal}%)</span>
+            {/* Platform total distribution with icons */}
+            <div className="rounded-xl border bg-card p-4 space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Distribution globale</div>
+              {Array.from(stats.byPlatform.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([platform, count]) => {
+                  const maxPlatform = Math.max(...Array.from(stats.byPlatform.values()), 1);
+                  const pct = Math.round((count / maxPlatform) * 100);
+                  const pctTotal = filteredAds.length > 0 ? Math.round((count / filteredAds.length) * 100) : 0;
+                  return (
+                    <div key={platform} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-xs font-medium">
+                          <PlatformIcon name={platform} className={`h-3.5 w-3.5 ${PLATFORM_CONFIGS[platform]?.iconColor || "text-gray-500"}`} />
+                          {PLATFORM_CONFIGS[platform]?.label || platform.toLowerCase().replace("_", " ")}
+                        </span>
+                        <span className="text-xs tabular-nums text-muted-foreground">{count} pubs ({pctTotal}%)</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: `${pct}%` }} />
+                      </div>
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-600" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+            </div>
           </div>
         </div>
       </div>
