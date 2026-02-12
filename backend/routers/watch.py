@@ -77,7 +77,7 @@ def calculate_global_score(
 # Overview
 # =============================================================================
 
-@router.get("/overview", response_model=WatchOverview)
+@router.get("/overview")
 async def get_watch_overview(db: Session = Depends(get_db)):
     """
     Vue d'ensemble de la veille concurrentielle.
@@ -990,7 +990,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
 # Alerts
 # =============================================================================
 
-@router.get("/alerts", response_model=AlertsList)
+@router.get("/alerts")
 async def get_alerts(
     limit: int = 20,
     unread_only: bool = False,
@@ -1071,7 +1071,7 @@ async def get_alerts(
 # Rankings
 # =============================================================================
 
-@router.get("/rankings", response_model=Rankings)
+@router.get("/rankings")
 async def get_rankings(db: Session = Depends(get_db)):
     """
     Classements par canal.

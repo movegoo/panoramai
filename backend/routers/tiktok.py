@@ -40,7 +40,7 @@ def calculate_engagement_rate(data: TikTokData) -> float:
 # Endpoints
 # =============================================================================
 
-@router.get("/data/{competitor_id}", response_model=List[TikTokDataResponse])
+@router.get("/data/{competitor_id}")
 async def get_tiktok_history(
     competitor_id: int,
     limit: int = 30,
@@ -56,7 +56,7 @@ async def get_tiktok_history(
     )
 
 
-@router.get("/latest/{competitor_id}", response_model=TikTokDataResponse)
+@router.get("/latest/{competitor_id}")
 async def get_latest_tiktok_data(
     competitor_id: int,
     db: Session = Depends(get_db)
@@ -187,7 +187,7 @@ async def compare_tiktok_accounts(db: Session = Depends(get_db)):
     return comparison
 
 
-@router.get("/trends/{competitor_id}", response_model=TrendResponse)
+@router.get("/trends/{competitor_id}")
 async def get_tiktok_trends(
     competitor_id: int,
     db: Session = Depends(get_db)

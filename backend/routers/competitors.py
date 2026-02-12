@@ -107,7 +107,7 @@ async def get_dashboard(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/", response_model=List[CompetitorCard])
+@router.get("/")
 async def list_competitors(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
@@ -186,7 +186,7 @@ async def list_competitors(
     return [CompetitorCard(**card) for card in cards]
 
 
-@router.get("/{competitor_id}", response_model=CompetitorDetail)
+@router.get("/{competitor_id}")
 async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
     """Profil détaillé d'un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
@@ -310,7 +310,7 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/", response_model=CompetitorCard)
+@router.post("/")
 async def create_competitor(
     data: CompetitorCreate,
     db: Session = Depends(get_db),

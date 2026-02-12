@@ -91,7 +91,7 @@ class MapDataResponse(BaseModel):
 # Endpoints - Magasins
 # =============================================================================
 
-@router.get("/stores", response_model=List[StoreResponse])
+@router.get("/stores")
 async def list_stores(
     department: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -112,7 +112,7 @@ async def list_stores(
     return query.all()
 
 
-@router.post("/stores", response_model=StoreResponse)
+@router.post("/stores")
 async def create_store(data: StoreCreate, db: Session = Depends(get_db)):
     """Ajoute un magasin."""
     brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
@@ -263,7 +263,7 @@ async def delete_store(store_id: int, db: Session = Depends(get_db)):
 # Endpoints - Analyse de zone
 # =============================================================================
 
-@router.post("/zone/analyze", response_model=ZoneAnalysisResponse)
+@router.post("/zone/analyze")
 async def analyze_zone(
     data: ZoneAnalysisRequest,
     db: Session = Depends(get_db)

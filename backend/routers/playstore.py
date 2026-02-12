@@ -70,7 +70,7 @@ async def async_fetch_playstore(app_id: str) -> dict:
 # Endpoints
 # =============================================================================
 
-@router.get("/data/{competitor_id}", response_model=List[AppDataResponse])
+@router.get("/data/{competitor_id}")
 async def get_playstore_history(
     competitor_id: int,
     limit: int = 30,
@@ -86,7 +86,7 @@ async def get_playstore_history(
     )
 
 
-@router.get("/latest/{competitor_id}", response_model=AppDataResponse)
+@router.get("/latest/{competitor_id}")
 async def get_latest_playstore_data(
     competitor_id: int,
     db: Session = Depends(get_db)
@@ -213,7 +213,7 @@ async def get_recent_reviews(
     }
 
 
-@router.get("/trends/{competitor_id}", response_model=TrendResponse)
+@router.get("/trends/{competitor_id}")
 async def get_playstore_trends(
     competitor_id: int,
     db: Session = Depends(get_db)

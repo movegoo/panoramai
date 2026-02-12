@@ -20,7 +20,7 @@ router = APIRouter()
 # Endpoints
 # =============================================================================
 
-@router.get("/data/{competitor_id}", response_model=List[YouTubeDataResponse])
+@router.get("/data/{competitor_id}")
 async def get_youtube_history(
     competitor_id: int,
     limit: int = 30,
@@ -36,7 +36,7 @@ async def get_youtube_history(
     )
 
 
-@router.get("/latest/{competitor_id}", response_model=YouTubeDataResponse)
+@router.get("/latest/{competitor_id}")
 async def get_latest_youtube_data(
     competitor_id: int,
     db: Session = Depends(get_db)
@@ -155,7 +155,7 @@ async def compare_youtube_channels(db: Session = Depends(get_db)):
     return comparison
 
 
-@router.get("/trends/{competitor_id}", response_model=TrendResponse)
+@router.get("/trends/{competitor_id}")
 async def get_youtube_trends(
     competitor_id: int,
     db: Session = Depends(get_db)

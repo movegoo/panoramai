@@ -11,7 +11,7 @@ from services.scrapecreators import scrapecreators
 router = APIRouter()
 
 
-@router.get("/data/{competitor_id}", response_model=List[InstagramDataResponse])
+@router.get("/data/{competitor_id}")
 async def get_instagram_history(
     competitor_id: int,
     limit: int = 30,
@@ -23,7 +23,7 @@ async def get_instagram_history(
     ).order_by(desc(InstagramData.recorded_at)).limit(limit).all()
 
 
-@router.get("/latest/{competitor_id}", response_model=InstagramDataResponse)
+@router.get("/latest/{competitor_id}")
 async def get_latest_instagram_data(
     competitor_id: int,
     db: Session = Depends(get_db)

@@ -275,7 +275,7 @@ async def get_available_sectors():
     }
 
 
-@router.post("/onboard", response_model=AdvertiserResponse)
+@router.post("/onboard")
 async def onboard_advertiser(
     data: AdvertiserOnboarding,
     db: Session = Depends(get_db)
@@ -450,13 +450,13 @@ async def add_selected_competitors(
     }
 
 
-@router.get("/", response_model=List[AdvertiserResponse])
+@router.get("/")
 async def list_advertisers(db: Session = Depends(get_db)):
     """List all advertisers."""
     return db.query(Advertiser).filter(Advertiser.is_active == True).all()
 
 
-@router.get("/{advertiser_id}", response_model=AdvertiserResponse)
+@router.get("/{advertiser_id}")
 async def get_advertiser(advertiser_id: int, db: Session = Depends(get_db)):
     """Get advertiser by ID."""
     advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
@@ -465,7 +465,7 @@ async def get_advertiser(advertiser_id: int, db: Session = Depends(get_db)):
     return advertiser
 
 
-@router.put("/{advertiser_id}", response_model=AdvertiserResponse)
+@router.put("/{advertiser_id}")
 async def update_advertiser(
     advertiser_id: int,
     update: AdvertiserUpdate,
