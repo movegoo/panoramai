@@ -190,7 +190,7 @@ async def get_consumption_categories():
 async def refresh_market_data():
     """Refresh all cached market data from data.gouv.fr."""
     try:
-        await datagouv_service.refresh_all_datasets()
+        await datagouv_service.refresh_all()
         return {
             "message": "Market data refresh completed",
             "datasets_refreshed": [d["key"] for d in datagouv_service.get_available_datasets()]

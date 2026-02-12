@@ -71,18 +71,42 @@ async def _enrich_missing_stores():
         logger.error(f"BANCO startup enrichment error: {e}")
 
 
+def _refresh_logo_urls():
+    """Re-generate logo URLs for all competitors/advertisers (replace dead Clearbit)."""
+    from core.utils import get_logo_url
+    db = SessionLocal()
+    try:
+        for comp in db.query(Competitor).all():
+            new_url = get_logo_url(comp.website)
+            if new_url and comp.logo_url != new_url:
+                comp.logo_url = new_url
+        for adv in db.query(Advertiser).all():
+            new_url = get_logo_url(adv.website)
+            if new_url and adv.logo_url != new_url:
+                adv.logo_url = new_url
+        db.commit()
+        logger.info("Logo URLs refreshed")
+    except Exception as e:
+        logger.error(f"Logo refresh error: {e}")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle management."""
     init_db()
     logger.info("Database initialized")
 
+    # Refresh logo URLs (replace dead Clearbit with Google Favicons)
+    _refresh_logo_urls()
+
     await scheduler.start()
     logger.info("Scheduler started")
 
-    # BANCO enrichment disabled - exceeds Render free tier 512MB memory limit
-    # import asyncio
-    # asyncio.create_task(_enrich_missing_stores())
+    # BANCO store enrichment (one-by-one to limit memory)
+    import asyncio
+    asyncio.create_task(_enrich_missing_stores())
 
     yield
 

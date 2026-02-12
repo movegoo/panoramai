@@ -269,6 +269,10 @@ class BancoService:
 
         db.commit()
         logger.info(f"BANCO: stored {added} locations for '{competitor_name}' (competitor_id={competitor_id})")
+
+        # Free memory after storing to DB (data is now in SQLite)
+        self._data = None
+
         return added
 
     async def get_all_brands(self) -> List[Dict]:
@@ -282,6 +286,9 @@ class BancoService:
         for record in self._data:
             brand = record["brand"]
             brand_counts[brand] = brand_counts.get(brand, 0) + 1
+
+        # Free memory after aggregation
+        self._data = None
 
         return sorted(
             [{"brand": k, "count": v} for k, v in brand_counts.items()],

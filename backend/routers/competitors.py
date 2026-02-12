@@ -11,6 +11,7 @@ from database import get_db, Competitor, AppData, InstagramData, TikTokData, You
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
 from core.trends import calculate_trend, TrendDirection
 from core.auth import get_optional_user
+from core.utils import get_logo_url
 
 router = APIRouter()
 
@@ -164,7 +165,7 @@ async def list_competitors(
             "id": comp.id,
             "name": comp.name,
             "website": comp.website,
-            "logo_url": comp.logo_url,
+            "logo_url": comp.logo_url or get_logo_url(comp.website),
             "facebook_page_id": comp.facebook_page_id,
             "instagram_username": comp.instagram_username,
             "tiktok_username": comp.tiktok_username,

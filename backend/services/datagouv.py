@@ -152,6 +152,14 @@ EQUIPEMENTS_COMMERCE = {
 }
 
 
+import os
+
+# Max rows to load into memory per dataset (prevents OOM on 512MB Render)
+MAX_DATASET_ROWS = int(os.getenv("MAX_DATASET_ROWS", "50000"))
+# Datasets too large for low-memory environments (skip unless explicitly requested)
+HEAVY_DATASETS = {"insee_socio_demo", "irve_bornes"}
+
+
 class DataGouvService:
     """Service de téléchargement et cache des données data.gouv.fr."""
 
@@ -177,6 +185,11 @@ class DataGouvService:
     def _read_cache(self, key: str) -> Optional[List[Dict]]:
         path = self._cache_path(key)
         if path.exists():
+            # Skip files > 100MB to avoid OOM
+            size_mb = path.stat().st_size / (1024 * 1024)
+            if size_mb > 100:
+                logger.warning(f"Cache file '{key}' too large ({size_mb:.0f}MB), skipping to avoid OOM")
+                return None
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     return json.load(f)
@@ -239,6 +252,11 @@ class DataGouvService:
             logger.warning(f"Unknown dataset: {dataset_key}")
             return []
 
+        # Skip heavy datasets on low-memory environments
+        if dataset_key in HEAVY_DATASETS:
+            logger.warning(f"Skipping heavy dataset '{dataset_key}' to avoid OOM (set MAX_DATASET_ROWS higher to override)")
+            return []
+
         # Check cache
         if not force_refresh and self._is_cache_valid(dataset_key):
             cached = self._read_cache(dataset_key)
@@ -264,6 +282,11 @@ class DataGouvService:
                 delimiter=config.get("delimiter", ";"),
                 encoding=config.get("encoding", "utf-8"),
             )
+
+        # Truncate to prevent OOM
+        if len(data) > MAX_DATASET_ROWS:
+            logger.warning(f"Dataset '{dataset_key}' truncated from {len(data)} to {MAX_DATASET_ROWS} rows")
+            data = data[:MAX_DATASET_ROWS]
 
         if data:
             self._write_cache(dataset_key, data)
@@ -1375,9 +1398,12 @@ class DataGouvService:
         return status
 
     async def refresh_all(self):
-        """Rafraîchit tous les datasets."""
+        """Rafraîchit tous les datasets (skips heavy ones)."""
         logger.info("Refreshing all data.gouv.fr datasets...")
         for key in DATASETS:
+            if key in HEAVY_DATASETS:
+                logger.info(f"Skipping heavy dataset: {key}")
+                continue
             await self.fetch_dataset(key, force_refresh=True)
         logger.info("All datasets refreshed")
 

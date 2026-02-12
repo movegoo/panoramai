@@ -91,7 +91,7 @@ class MapDataResponse(BaseModel):
 # Endpoints - Magasins
 # =============================================================================
 
-@router.get("/stores")
+@router.get("/stores", response_model=List[StoreResponse])
 async def list_stores(
     department: Optional[str] = None,
     db: Session = Depends(get_db)
@@ -99,7 +99,7 @@ async def list_stores(
     """Liste les magasins de l'enseigne."""
     brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
     if not brand:
-        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+        return []
 
     query = db.query(Store).filter(
         Store.advertiser_id == brand.id,
@@ -109,7 +109,7 @@ async def list_stores(
     if department:
         query = query.filter(Store.department == department)
 
-    return query.all()
+    return [StoreResponse.model_validate(s) for s in query.all()]
 
 
 @router.post("/stores")

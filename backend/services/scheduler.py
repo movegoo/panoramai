@@ -291,7 +291,7 @@ class DataCollectionScheduler:
         logger.info(f"Starting weekly market data refresh at {datetime.utcnow()}")
         try:
             from services.datagouv import datagouv_service
-            await datagouv_service.refresh_all_datasets()
+            await datagouv_service.refresh_all()
             logger.info("Weekly market data refresh completed")
         except Exception as e:
             logger.error(f"Weekly market refresh failed: {e}")

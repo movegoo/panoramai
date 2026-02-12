@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   competitorsAPI,
   facebookAPI,
+  tiktokAPI,
   brandAPI,
   Ad,
 } from "@/lib/api";
@@ -1015,7 +1016,7 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
         const durs = ads.filter(a => a.start_date).map(a => Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date!).getTime()) / 86400000)).filter(x => x > 0);
         const avgDur = durs.length > 0 ? Math.round(durs.reduce((s, x) => s + x, 0) / durs.length) : 0;
         const logo = ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
-        return { name, total: d.total, active: d.active, reach, fmts, plats, avgDur, logo };
+        return { name, total: d.total, active: d.active, reach, fmts, plats, avgDur, logo, spendMin: d.spendMin || 0, spendMax: d.spendMax || 0 };
       })
       .sort((a, b) => b.reach - a.reach);
   }, [filteredAds, stats]);
@@ -1054,10 +1055,14 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
                 )}
                 <span className="text-sm font-semibold truncate">{c.name}</span>
               </div>
-              <div className="flex-1 grid grid-cols-4 gap-4">
+              <div className="flex-1 grid grid-cols-5 gap-4">
                 <div className="text-center">
                   <div className="text-lg font-bold tabular-nums">{c.total}</div>
                   <div className="text-[9px] text-muted-foreground uppercase tracking-widest">pubs</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold tabular-nums text-emerald-600">{c.spendMax > 0 ? `${formatNumber(c.spendMin)}-${formatNumber(c.spendMax)}€` : "—"}</div>
+                  <div className="text-[9px] text-muted-foreground uppercase tracking-widest">budget</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold tabular-nums text-blue-600">{formatNumber(c.reach)}</div>
@@ -1180,12 +1185,15 @@ export default function AdsPage() {
 
   async function loadAll() {
     try {
-      const [adsRes, compRes, brandRes] = await Promise.allSettled([
+      const [fbAdsRes, ttAdsRes, compRes, brandRes] = await Promise.allSettled([
         facebookAPI.getAllAds(),
+        tiktokAPI.getAllAds(),
         competitorsAPI.list(),
         brandAPI.getProfile(),
       ]);
-      const ads = adsRes.status === "fulfilled" ? adsRes.value : [];
+      const fbAds = fbAdsRes.status === "fulfilled" ? fbAdsRes.value : [];
+      const ttAds = ttAdsRes.status === "fulfilled" ? ttAdsRes.value : [];
+      const ads = [...fbAds, ...ttAds];
       const comps = compRes.status === "fulfilled" ? compRes.value : [];
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
@@ -1197,10 +1205,17 @@ export default function AdsPage() {
         try {
           for (const c of comps) {
             try { await facebookAPI.fetchAds(c.id); } catch {}
+            try { await tiktokAPI.fetchAds(c.id); } catch {}
           }
           try { await facebookAPI.enrichTransparency(); } catch {}
-          const freshAds = await facebookAPI.getAllAds();
-          setAllAds(freshAds);
+          const [freshFb, freshTt] = await Promise.allSettled([
+            facebookAPI.getAllAds(),
+            tiktokAPI.getAllAds(),
+          ]);
+          setAllAds([
+            ...(freshFb.status === "fulfilled" ? freshFb.value : []),
+            ...(freshTt.status === "fulfilled" ? freshTt.value : []),
+          ]);
         } finally {
           setFetching(false);
         }
@@ -1217,11 +1232,18 @@ export default function AdsPage() {
     try {
       for (const c of competitors) {
         try { await facebookAPI.fetchAds(c.id); } catch {}
+        try { await tiktokAPI.fetchAds(c.id); } catch {}
       }
       // Enrich with EU transparency data
       try { await facebookAPI.enrichTransparency(); } catch {}
-      const ads = await facebookAPI.getAllAds();
-      setAllAds(ads);
+      const [fbAds, ttAds] = await Promise.allSettled([
+        facebookAPI.getAllAds(),
+        tiktokAPI.getAllAds(),
+      ]);
+      setAllAds([
+        ...(fbAds.status === "fulfilled" ? fbAds.value : []),
+        ...(ttAds.status === "fulfilled" ? ttAds.value : []),
+      ]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1341,24 +1363,38 @@ export default function AdsPage() {
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
-    const byCompetitor = new Map<string, { total: number; active: number }>();
-    const byAdvertiser = new Map<string, { total: number; active: number; likes?: number; categories?: string[]; logo?: string }>();
+    const byCompetitor = new Map<string, { total: number; active: number; spendMin: number; spendMax: number }>();
+    const byAdvertiser = new Map<string, { total: number; active: number; likes?: number; categories?: string[]; logo?: string; spendMin: number; spendMax: number }>();
     const byFormat = new Map<string, number>();
     const byPlatform = new Map<string, number>();
     const competitorPlatforms = new Map<string, Map<string, number>>();
     let totalDurationDays = 0;
     let durationCount = 0;
+    let totalSpendMin = 0;
+    let totalSpendMax = 0;
 
     filteredAds.forEach(a => {
+      // Per-ad spend (actual or CPM-estimated)
+      let adSpendMin = a.estimated_spend_min || 0;
+      let adSpendMax = a.estimated_spend_max || 0;
+      if (adSpendMin === 0 && adSpendMax === 0) {
+        const budget = estimateBudget(a);
+        if (budget) { adSpendMin = budget.min; adSpendMax = budget.max; }
+      }
+      totalSpendMin += adSpendMin;
+      totalSpendMax += adSpendMax;
+
       // By competitor
-      const cc = byCompetitor.get(a.competitor_name) || { total: 0, active: 0 };
+      const cc = byCompetitor.get(a.competitor_name) || { total: 0, active: 0, spendMin: 0, spendMax: 0 };
       cc.total++;
       if (a.is_active) cc.active++;
+      cc.spendMin += adSpendMin;
+      cc.spendMax += adSpendMax;
       byCompetitor.set(a.competitor_name, cc);
 
       // By advertiser (page_name = payeur)
       const pn = a.page_name || "Inconnu";
-      const aa = byAdvertiser.get(pn) || { total: 0, active: 0, likes: 0, categories: [], logo: undefined };
+      const aa = byAdvertiser.get(pn) || { total: 0, active: 0, likes: 0, categories: [], logo: undefined, spendMin: 0, spendMax: 0 };
       aa.total++;
       if (a.is_active) aa.active++;
       if (a.page_like_count && a.page_like_count > (aa.likes || 0)) aa.likes = a.page_like_count;
@@ -1366,6 +1402,8 @@ export default function AdsPage() {
       if (a.page_categories) {
         a.page_categories.forEach(c => { if (!aa.categories!.includes(c)) aa.categories!.push(c); });
       }
+      aa.spendMin += adSpendMin;
+      aa.spendMax += adSpendMax;
       byAdvertiser.set(pn, aa);
 
       // By format
@@ -1391,7 +1429,7 @@ export default function AdsPage() {
 
     const avgDuration = durationCount > 0 ? Math.round(totalDurationDays / durationCount) : 0;
 
-    return { active, byCompetitor, byAdvertiser, byFormat, byPlatform, competitorPlatforms, avgDuration };
+    return { active, byCompetitor, byAdvertiser, byFormat, byPlatform, competitorPlatforms, avgDuration, totalSpendMin, totalSpendMax };
   }, [filteredAds]);
 
   function toggleExpand(adId: string) {
@@ -1424,7 +1462,7 @@ export default function AdsPage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
             <p className="text-[13px] text-muted-foreground">
-              Meta Ad Library &mdash; Analyse et surveillance des campagnes
+              Meta &amp; TikTok Ads &mdash; Analyse et surveillance des campagnes
             </p>
           </div>
         </div>
@@ -1465,6 +1503,17 @@ export default function AdsPage() {
             <div className="text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-lg font-normal text-violet-300/50">j</span></div>
             <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur&eacute;e moy.</div>
           </div>
+          {stats.totalSpendMax > 0 && (
+            <>
+              <div className="h-10 w-px bg-white/10" />
+              <div>
+                <div className="text-2xl font-bold tabular-nums text-emerald-400">
+                  {formatNumber(stats.totalSpendMin)}&ndash;{formatNumber(stats.totalSpendMax)}<span className="text-lg font-normal text-emerald-300/50">&euro;</span>
+                </div>
+                <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total</div>
+              </div>
+            </>
+          )}
           {/* Platform breakdown with icons */}
           {stats.byPlatform.size > 0 && (
             <>
@@ -1827,6 +1876,11 @@ export default function AdsPage() {
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-muted-foreground flex-wrap">
                         <span className="text-emerald-600 font-medium">{data.active} actives</span>
+                        {data.spendMax > 0 && (
+                          <span className="text-emerald-600 font-medium tabular-nums">
+                            {formatNumber(data.spendMin)}&ndash;{formatNumber(data.spendMax)}&euro;
+                          </span>
+                        )}
                         {data.likes != null && data.likes > 0 && (
                           <span className="flex items-center gap-1">
                             <ThumbsUp className="h-3 w-3" />{formatNumber(data.likes)}
