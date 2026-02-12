@@ -149,7 +149,7 @@ function AppleIcon({ className }: { className?: string }) {
 
 function ScoreInfoPanel({ onClose }: { onClose: () => void }) {
   return (
-    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-sm">
+    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-md">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-1.5">
           <Info className="h-4 w-4 text-violet-500" />
@@ -160,39 +160,114 @@ function ScoreInfoPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Le score global (0-100) est un indicateur composite qui mesure la presence digitale d&apos;une enseigne sur 3 axes :
+        Le score global (0&ndash;100) est un indice composite mesurant la maturite digitale d&apos;une enseigne. Il combine 3 dimensions complementaires :
       </p>
       <div className="space-y-2">
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-50">
+        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-amber-50">
           <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-100 shrink-0">
             <Star className="h-4 w-4 text-amber-600" />
           </div>
-          <div>
-            <div className="font-semibold text-xs">Note apps &mdash; 40%</div>
-            <div className="text-[11px] text-muted-foreground">Moyenne Play Store + App Store, normalisee sur 5</div>
+          <div className="flex-1">
+            <div className="font-semibold text-xs flex items-center justify-between">
+              <span>Note apps</span>
+              <span className="text-amber-600 tabular-nums">40 pts</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">Moyenne des notes Play Store et App Store. Formule : (note / 5) &times; 40. Si une seule store est renseignee, elle est utilisee seule.</div>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-pink-50">
+        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-pink-50">
           <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-pink-100 shrink-0">
             <Users className="h-4 w-4 text-pink-600" />
           </div>
-          <div>
-            <div className="font-semibold text-xs">Followers sociaux &mdash; 40%</div>
-            <div className="text-[11px] text-muted-foreground">Instagram + TikTok + YouTube, plafonne a 1M</div>
+          <div className="flex-1">
+            <div className="font-semibold text-xs flex items-center justify-between">
+              <span>Audience sociale</span>
+              <span className="text-pink-600 tabular-nums">40 pts</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">Somme des followers Instagram + TikTok + abonnes YouTube. Formule : min(total / 1M, 1) &times; 40. Plafonne a 1M pour eviter la surponderation des geants.</div>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-50">
+        <div className="flex items-center gap-3 p-2.5 rounded-lg bg-emerald-50">
           <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 shrink-0">
             <Download className="h-4 w-4 text-emerald-600" />
           </div>
-          <div>
-            <div className="font-semibold text-xs">Telechargements &mdash; 20%</div>
-            <div className="text-[11px] text-muted-foreground">Downloads Play Store, plafonne a 10M</div>
+          <div className="flex-1">
+            <div className="font-semibold text-xs flex items-center justify-between">
+              <span>Telechargements</span>
+              <span className="text-emerald-600 tabular-nums">20 pts</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">Downloads Play Store (valeur numerique). Formule : min(downloads / 10M, 1) &times; 20. Indicateur d&apos;adoption mobile de l&apos;enseigne.</div>
           </div>
         </div>
       </div>
-      <div className="text-[11px] text-muted-foreground border-t pt-2">
-        Un score de 100 signifie : note 5/5 + 1M+ followers + 10M+ telechargements.
+      <div className="text-[11px] space-y-1.5 border-t pt-2">
+        <div className="flex items-start gap-1.5">
+          <Trophy className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+          <span className="text-muted-foreground"><strong className="text-foreground">100/100</strong> = note 5/5 + 1M+ followers + 10M+ downloads</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <Target className="h-3.5 w-3.5 text-violet-500 mt-0.5 shrink-0" />
+          <span className="text-muted-foreground">Le score est relatif au secteur : comparez-vous a vos concurrents directs, pas en absolu</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <Activity className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+          <span className="text-muted-foreground">Donnees mises a jour automatiquement chaque jour par notre collecteur</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BudgetInfoPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-md">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-1.5">
+          <Info className="h-4 w-4 text-emerald-500" />
+          Estimation des budgets publicitaires
+        </h3>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Les budgets affiches sont des <strong className="text-foreground">estimations fournies par Meta</strong> via la Bibliotheque publicitaire (Ad Library). Ce ne sont pas des chiffres exacts.
+      </p>
+      <div className="space-y-2">
+        <div className="p-2.5 rounded-lg bg-blue-50 space-y-1">
+          <div className="font-semibold text-xs text-blue-700 flex items-center gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Source des donnees
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Meta fournit une fourchette <strong className="text-foreground">min&ndash;max</strong> pour chaque publicite dans l&apos;Ad Library. Cette fourchette represente la depense estimee en euros sur la duree de diffusion de la pub.
+          </div>
+        </div>
+        <div className="p-2.5 rounded-lg bg-violet-50 space-y-1">
+          <div className="font-semibold text-xs text-violet-700 flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5" />
+            Methode de calcul
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Le budget total affiche est la <strong className="text-foreground">somme des fourchettes</strong> de toutes les pubs detectees pour un annonceur. Ex : 3 pubs avec des fourchettes de 100&ndash;200&euro;, 500&ndash;1000&euro; et 200&ndash;400&euro; = total de 800&ndash;1600&euro;.
+          </div>
+        </div>
+        <div className="p-2.5 rounded-lg bg-amber-50 space-y-1">
+          <div className="font-semibold text-xs text-amber-700 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Limites
+          </div>
+          <ul className="text-[11px] text-muted-foreground space-y-0.5 ml-5 list-disc">
+            <li>Les fourchettes Meta sont volontairement larges (ex : 0&ndash;100&euro;)</li>
+            <li>Seules les pubs detectees sont comptees &mdash; certaines peuvent echapper a la collecte</li>
+            <li>Le budget reel peut etre superieur si l&apos;annonceur utilise plusieurs pages</li>
+            <li>Les pubs TikTok n&apos;ont pas de donnees budget (non fourni par TikTok)</li>
+          </ul>
+        </div>
+      </div>
+      <div className="text-[11px] text-muted-foreground border-t pt-2 flex items-start gap-1.5">
+        <Shield className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
+        <span>Toutes les donnees proviennent de la <strong className="text-foreground">Bibliotheque publicitaire de Meta</strong> (transparence UE). Aucune donnee privee n&apos;est utilisee.</span>
       </div>
     </div>
   );
@@ -562,6 +637,7 @@ export default function DashboardPage() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [activeRanking, setActiveRanking] = useState(0);
   const [showScoreInfo, setShowScoreInfo] = useState(false);
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false);
 
   function loadDashboard() {
     setLoading(true);
@@ -867,8 +943,18 @@ export default function DashboardPage() {
                   {formatNumber(adI.total_estimated_spend.min)}&ndash;{formatNumber(adI.total_estimated_spend.max)}&euro;
                 </span>
               )}
+              <button
+                onClick={() => setShowBudgetInfo(!showBudgetInfo)}
+                className="text-muted-foreground hover:text-violet-500 transition-colors"
+                title="Comment le budget est estime"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
             </span>
           </div>
+          {showBudgetInfo && (
+            <BudgetInfoPanel onClose={() => setShowBudgetInfo(false)} />
+          )}
 
           {/* Ad volume comparison */}
           <div className="rounded-2xl border bg-card overflow-hidden">
