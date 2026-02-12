@@ -1476,6 +1476,8 @@ export default function AdsPage() {
     let durationCount = 0;
     let totalSpendMin = 0;
     let totalSpendMax = 0;
+    let totalImpressions = 0;
+    let totalReach = 0;
 
     filteredAds.forEach(a => {
       // Per-ad spend (actual or CPM-estimated)
@@ -1522,6 +1524,10 @@ export default function AdsPage() {
       const cpMap = competitorPlatforms.get(a.competitor_name)!;
       (a.publisher_platforms || []).forEach(p => cpMap.set(p, (cpMap.get(p) || 0) + 1));
 
+      // Impressions & reach
+      if (a.impressions_min && a.impressions_min > 0) totalImpressions += a.impressions_min;
+      if (a.eu_total_reach && a.eu_total_reach > 0) totalReach += a.eu_total_reach;
+
       // Duration stats
       if (a.start_date) {
         const start = new Date(a.start_date);
@@ -1533,7 +1539,7 @@ export default function AdsPage() {
 
     const avgDuration = durationCount > 0 ? Math.round(totalDurationDays / durationCount) : 0;
 
-    return { active, byCompetitor, byAdvertiser, byFormat, byPlatform, competitorPlatforms, avgDuration, totalSpendMin, totalSpendMax };
+    return { active, byCompetitor, byAdvertiser, byFormat, byPlatform, competitorPlatforms, avgDuration, totalSpendMin, totalSpendMax, totalImpressions, totalReach };
   }, [filteredAds]);
 
   function toggleExpand(adId: string) {
@@ -2065,14 +2071,30 @@ export default function AdsPage() {
                 <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Plateformes</div>
                 <div className="text-xl font-bold mt-1 tabular-nums">{stats.byPlatform.size}<span className="text-sm font-normal text-muted-foreground ml-1">actives</span></div>
               </div>
-              <div className="rounded-xl border bg-card p-3">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Concurrents</div>
-                <div className="text-xl font-bold mt-1 tabular-nums">{stats.byCompetitor.size}</div>
-              </div>
-              <div className="rounded-xl border bg-card p-3">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Formats</div>
-                <div className="text-xl font-bold mt-1 tabular-nums">{stats.byFormat.size}<span className="text-sm font-normal text-muted-foreground ml-1">types</span></div>
-              </div>
+              {stats.totalReach > 0 && (
+                <div className="rounded-xl border bg-card p-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Personnes touch&eacute;es</div>
+                  <div className="text-xl font-bold mt-1 tabular-nums text-blue-600">{formatNumber(stats.totalReach)}</div>
+                </div>
+              )}
+              {stats.totalImpressions > 0 && (
+                <div className="rounded-xl border bg-card p-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Impressions</div>
+                  <div className="text-xl font-bold mt-1 tabular-nums text-violet-600">{formatNumber(stats.totalImpressions)}</div>
+                </div>
+              )}
+              {stats.totalReach === 0 && (
+                <div className="rounded-xl border bg-card p-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Concurrents</div>
+                  <div className="text-xl font-bold mt-1 tabular-nums">{stats.byCompetitor.size}</div>
+                </div>
+              )}
+              {stats.totalImpressions === 0 && (
+                <div className="rounded-xl border bg-card p-3">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Formats</div>
+                  <div className="text-xl font-bold mt-1 tabular-nums">{stats.byFormat.size}<span className="text-sm font-normal text-muted-foreground ml-1">types</span></div>
+                </div>
+              )}
             </div>
 
             {/* Platform total distribution with icons */}
