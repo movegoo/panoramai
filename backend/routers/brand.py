@@ -262,7 +262,13 @@ async def add_suggested_competitors(
             youtube_channel_id=comp_data.get("youtube_channel_id"),
         )
         db.add(new_competitor)
+        db.flush()  # Get ID before background task
         added.append(comp_data["name"])
+
+        # Auto-fetch all data in background
+        import asyncio
+        from routers.competitors import _auto_enrich_competitor
+        asyncio.create_task(_auto_enrich_competitor(new_competitor.id, new_competitor))
 
     db.commit()
 

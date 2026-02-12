@@ -328,16 +328,9 @@ async def create_competitor(data: CompetitorCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(comp)
 
-    # Auto-enrichissement BANCO (recherche magasins)
-    try:
-        from services.banco import banco_service
-        stores_count = await banco_service.search_and_store(comp.id, comp.name, db)
-        if stores_count > 0:
-            import logging
-            logging.getLogger(__name__).info(f"BANCO: {stores_count} magasins trouvés pour '{comp.name}'")
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"BANCO enrichment failed for '{comp.name}': {e}")
+    # Auto-fetch all data in background
+    import asyncio
+    asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
 
     return CompetitorCard(
         id=comp.id,
@@ -458,3 +451,225 @@ async def refresh_competitor_stores(competitor_id: int, db: Session = Depends(ge
         "competitor_id": competitor_id,
         "stores_count": count,
     }
+
+
+# =============================================================================
+# Background auto-enrichment
+# =============================================================================
+
+async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
+    """Background task: fetch all data for a newly created competitor."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Auto-enrichment started for '{comp.name}' (id={competitor_id})")
+
+    # BANCO stores
+    try:
+        from services.banco import banco_service
+        db = next(get_db())
+        try:
+            count = await banco_service.search_and_store(competitor_id, comp.name, db)
+            logger.info(f"BANCO: {count} stores for '{comp.name}'")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"BANCO failed for '{comp.name}': {e}")
+
+    # Facebook/Instagram Ads
+    try:
+        from services.scrapecreators import scrapecreators
+        from routers.facebook import _name_matches, _parse_date
+        from database import Ad, SessionLocal
+        import json
+
+        result = await scrapecreators.search_facebook_ads(
+            company_name=comp.name, country="FR", limit=50
+        )
+        if result.get("success"):
+            db = SessionLocal()
+            try:
+                new_count = 0
+                for ad in result.get("ads", []):
+                    ad_id = str(ad.get("ad_archive_id", ""))
+                    if not ad_id:
+                        continue
+                    snapshot = ad.get("snapshot", {})
+                    page_name = snapshot.get("page_name", "") or ad.get("page_name", "")
+                    if not _name_matches(comp.name, page_name):
+                        continue
+                    if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                        continue
+
+                    cards = snapshot.get("cards", [])
+                    fc = cards[0] if cards else {}
+                    start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+                    end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+                    pubs = ad.get("publisher_platform", [])
+                    if not isinstance(pubs, list):
+                        pubs = [pubs] if pubs else []
+
+                    new_ad = Ad(
+                        competitor_id=competitor_id,
+                        ad_id=ad_id,
+                        platform="instagram" if any("INSTAGRAM" in str(p).upper() for p in pubs) else "facebook",
+                        creative_url=fc.get("original_image_url") or fc.get("resized_image_url") or "",
+                        ad_text=fc.get("body") or snapshot.get("body", {}).get("text", "") or "",
+                        cta=fc.get("cta_text") or "",
+                        start_date=start_date,
+                        end_date=end_date,
+                        is_active=ad.get("is_active", not bool(end_date)),
+                        page_name=page_name or None,
+                        ad_library_url=ad.get("url", "") or None,
+                    )
+                    db.add(new_ad)
+                    new_count += 1
+                if new_count:
+                    db.commit()
+                logger.info(f"Ads: {new_count} new for '{comp.name}'")
+            finally:
+                db.close()
+    except Exception as e:
+        logger.warning(f"Ads fetch failed for '{comp.name}': {e}")
+
+    # Instagram
+    if comp.instagram_username:
+        try:
+            from services.scrapecreators import scrapecreators
+            from database import SessionLocal
+            result = await scrapecreators.fetch_instagram_profile(comp.instagram_username)
+            if result.get("success"):
+                db = SessionLocal()
+                try:
+                    db.add(InstagramData(
+                        competitor_id=competitor_id,
+                        followers=result.get("followers", 0),
+                        following=result.get("following", 0),
+                        posts_count=result.get("posts_count", 0),
+                        avg_likes=result.get("avg_likes", 0),
+                        avg_comments=result.get("avg_comments", 0),
+                        engagement_rate=result.get("engagement_rate", 0),
+                        bio=result.get("bio"),
+                    ))
+                    db.commit()
+                    logger.info(f"Instagram fetched for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"Instagram failed for '{comp.name}': {e}")
+
+    # TikTok
+    if comp.tiktok_username:
+        try:
+            from services.tiktok_scraper import tiktok_scraper
+            from database import SessionLocal
+            result = await tiktok_scraper.fetch_profile(comp.tiktok_username)
+            if result.get("success"):
+                db = SessionLocal()
+                try:
+                    db.add(TikTokData(
+                        competitor_id=competitor_id,
+                        username=comp.tiktok_username,
+                        followers=result.get("followers", 0),
+                        following=result.get("following", 0),
+                        likes=result.get("likes", 0),
+                        videos_count=result.get("videos_count", 0),
+                        bio=result.get("bio"),
+                        verified=result.get("verified", False),
+                    ))
+                    db.commit()
+                    logger.info(f"TikTok fetched for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"TikTok failed for '{comp.name}': {e}")
+
+    # Play Store
+    if comp.playstore_app_id:
+        try:
+            from routers.playstore import fetch_playstore_app
+            from core.trends import parse_download_count
+            from database import SessionLocal
+            result = fetch_playstore_app(comp.playstore_app_id)
+            if result.get("success"):
+                db = SessionLocal()
+                try:
+                    db.add(AppData(
+                        competitor_id=competitor_id,
+                        store="playstore",
+                        app_id=comp.playstore_app_id,
+                        app_name=result["app_name"],
+                        rating=result["rating"],
+                        reviews_count=result["reviews_count"],
+                        downloads=result["downloads"],
+                        downloads_numeric=parse_download_count(result["downloads"]),
+                        version=result["version"],
+                        last_updated=result["last_updated"],
+                        description=result["description"],
+                        changelog=result["changelog"],
+                    ))
+                    db.commit()
+                    logger.info(f"Play Store fetched for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"Play Store failed for '{comp.name}': {e}")
+
+    # App Store
+    if comp.appstore_app_id:
+        try:
+            from routers.appstore import fetch_appstore_app
+            from database import SessionLocal
+            result = await fetch_appstore_app(comp.appstore_app_id)
+            if result.get("success"):
+                db = SessionLocal()
+                try:
+                    db.add(AppData(
+                        competitor_id=competitor_id,
+                        store="appstore",
+                        app_id=comp.appstore_app_id,
+                        app_name=result["app_name"],
+                        rating=result["rating"],
+                        reviews_count=result["reviews_count"],
+                        version=result["version"],
+                        last_updated=result["last_updated"],
+                        description=result["description"],
+                        changelog=result["changelog"],
+                    ))
+                    db.commit()
+                    logger.info(f"App Store fetched for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"App Store failed for '{comp.name}': {e}")
+
+    # YouTube
+    if comp.youtube_channel_id:
+        try:
+            from services.youtube_api import youtube_api
+            from database import SessionLocal
+            result = await youtube_api.get_channel_analytics(comp.youtube_channel_id)
+            if result.get("success"):
+                analytics = result.get("analytics", {})
+                db = SessionLocal()
+                try:
+                    db.add(YouTubeData(
+                        competitor_id=competitor_id,
+                        channel_id=comp.youtube_channel_id,
+                        channel_name=result.get("channel_name"),
+                        subscribers=result.get("subscribers", 0),
+                        total_views=result.get("total_views", 0),
+                        videos_count=result.get("videos_count", 0),
+                        avg_views=analytics.get("avg_views", 0),
+                        avg_likes=analytics.get("avg_likes", 0),
+                        avg_comments=analytics.get("avg_comments", 0),
+                        engagement_rate=analytics.get("engagement_rate", 0),
+                        description=result.get("description"),
+                    ))
+                    db.commit()
+                    logger.info(f"YouTube fetched for '{comp.name}'")
+                finally:
+                    db.close()
+        except Exception as e:
+            logger.warning(f"YouTube failed for '{comp.name}': {e}")
+
+    logger.info(f"Auto-enrichment complete for '{comp.name}'")

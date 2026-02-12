@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { brandAPI } from "@/lib/api";
 import {
   LayoutDashboard,
   Users,
@@ -54,6 +55,11 @@ const navigation = [
 export function SidebarNav() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [brandName, setBrandName] = useState<string | null>(null);
+
+  useEffect(() => {
+    brandAPI.getProfile().then((p) => setBrandName(p.company_name)).catch(() => {});
+  }, []);
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
@@ -140,23 +146,23 @@ export function SidebarNav() {
         })}
       </nav>
 
-      {/* Footer user */}
-      <div className="px-3 py-3 border-t border-border">
+      {/* Footer brand */}
+      <Link href="/account" className="block px-3 py-3 border-t border-border hover:bg-muted/50 transition-colors">
         <div className="flex items-center gap-2.5 px-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white text-[11px] font-bold shadow-sm">
-            C
+            {brandName ? brandName.charAt(0).toUpperCase() : "?"}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-semibold text-foreground truncate leading-none">
-              Chloé
+              {brandName || "Mon enseigne"}
             </p>
             <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
-              Mobsuccess
+              Paramètres
             </p>
           </div>
-          <ChevronDown className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+          <Settings className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }
