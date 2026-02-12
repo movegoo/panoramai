@@ -33,6 +33,10 @@ class Settings:
     DATAGOUV_CACHE_DIR: Path = Path(os.getenv("DATAGOUV_CACHE_DIR", "./cache/datagouv"))
     DATAGOUV_CACHE_DAYS: int = int(os.getenv("DATAGOUV_CACHE_DAYS", "7"))
 
+    # Auth
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    JWT_EXPIRATION_DAYS: int = int(os.getenv("JWT_EXPIRATION_DAYS", "7"))
+
     # Rate limiting
     MIN_FETCH_INTERVAL_HOURS: int = 1
 

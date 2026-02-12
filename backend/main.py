@@ -18,7 +18,7 @@ load_dotenv(dotenv_path="../.env")
 load_dotenv(dotenv_path=".env")
 
 # Routers
-from routers import brand, watch, competitors, geo, layers
+from routers import auth, brand, watch, competitors, geo, layers
 from routers import facebook, playstore, appstore, instagram, tiktok, youtube
 from services.scheduler import scheduler
 
@@ -135,6 +135,9 @@ app.add_middleware(
 # =============================================================================
 # Routers
 # =============================================================================
+
+# Auth
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentification"])
 
 # Core (nouvelle architecture)
 app.include_router(brand.router, prefix="/api/brand", tags=["Mon Enseigne"])

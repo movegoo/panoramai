@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { brandAPI } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import {
   LayoutDashboard,
   Users,
@@ -25,6 +26,7 @@ import {
   Music,
   Star,
   Activity,
+  LogOut,
 } from "lucide-react";
 
 const navigation = [
@@ -54,6 +56,7 @@ const navigation = [
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [brandName, setBrandName] = useState<string | null>(null);
 
@@ -146,23 +149,32 @@ export function SidebarNav() {
         })}
       </nav>
 
-      {/* Footer brand */}
-      <Link href="/account" className="block px-3 py-3 border-t border-border hover:bg-muted/50 transition-colors">
-        <div className="flex items-center gap-2.5 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white text-[11px] font-bold shadow-sm">
-            {brandName ? brandName.charAt(0).toUpperCase() : "?"}
+      {/* Footer user */}
+      <div className="border-t border-border">
+        <Link href="/account" className="block px-3 pt-3 pb-2 hover:bg-muted/50 transition-colors">
+          <div className="flex items-center gap-2.5 px-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white text-[11px] font-bold shadow-sm">
+              {(user?.name || user?.email || "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-foreground truncate leading-none">
+                {brandName || "Mon enseigne"}
+              </p>
+              <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
+                {user?.email || "Parametres"}
+              </p>
+            </div>
+            <Settings className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-foreground truncate leading-none">
-              {brandName || "Mon enseigne"}
-            </p>
-            <p className="text-[10px] text-muted-foreground truncate leading-none mt-0.5">
-              Paramètres
-            </p>
-          </div>
-          <Settings className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-        </div>
-      </Link>
+        </Link>
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 w-full px-5 py-2 text-[11px] text-muted-foreground hover:text-red-600 hover:bg-red-50/50 transition-colors"
+        >
+          <LogOut className="h-3 w-3" />
+          Deconnexion
+        </button>
+      </div>
     </aside>
   );
 }

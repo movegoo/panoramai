@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
 
-from database import get_db, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation
+from database import get_db, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
 from core.trends import calculate_trend, TrendDirection
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -107,13 +108,19 @@ async def get_dashboard(db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[CompetitorCard])
-async def list_competitors(db: Session = Depends(get_db)):
+async def list_competitors(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Liste tous les concurrents avec leurs métriques clés.
 
     Retourne des cartes synthétiques avec score et ranking.
     """
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    competitors = query.all()
     cards = []
 
     for comp in competitors:
@@ -304,18 +311,24 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=CompetitorCard)
-async def create_competitor(data: CompetitorCreate, db: Session = Depends(get_db)):
+async def create_competitor(
+    data: CompetitorCreate,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Ajoute un nouveau concurrent."""
     # Vérifie si le concurrent existe déjà
-    existing = db.query(Competitor).filter(
+    exist_query = db.query(Competitor).filter(
         Competitor.name == data.name,
-        Competitor.is_active == True
-    ).first()
-
-    if existing:
+        Competitor.is_active == True,
+    )
+    if user:
+        exist_query = exist_query.filter(Competitor.user_id == user.id)
+    if exist_query.first():
         raise HTTPException(status_code=400, detail=f"Le concurrent '{data.name}' existe déjà")
 
     comp = Competitor(
+        user_id=user.id if user else None,
         name=data.name,
         website=data.website,
         playstore_app_id=data.playstore_app_id,

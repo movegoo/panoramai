@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 import json
 
-from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad
+from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, User
 from models.schemas import (
     WatchOverview, MarketPosition, KeyMetric, Trend, TrendDirection,
     Alert, AlertsList, AlertType, AlertSeverity, Channel,
@@ -18,6 +18,7 @@ from models.schemas import (
 )
 from core.trends import calculate_trend
 from core.sectors import get_sector_label
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -33,9 +34,12 @@ def format_number(value: Optional[float], suffix: str = "") -> str:
     return f"{value:.0f}{suffix}"
 
 
-def get_brand(db: Session) -> Advertiser:
-    """Récupère l'enseigne courante."""
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+def get_brand(db: Session, user: User | None = None) -> Advertiser:
+    """Récupère l'enseigne courante, filtrée par user si authentifié."""
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    brand = query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
     return brand
@@ -279,13 +283,19 @@ async def get_watch_overview(db: Session = Depends(get_db)):
 # =============================================================================
 
 @router.get("/dashboard")
-async def get_dashboard_data(db: Session = Depends(get_db)):
+async def get_dashboard_data(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Endpoint agrégé pour le dashboard frontend.
     Retourne toutes les données competitors + insights en un seul appel.
     """
-    brand = get_brand(db)
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    brand = get_brand(db, user)
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = comp_query.all()
 
     week_ago = datetime.utcnow() - timedelta(days=7)
     competitor_data = []

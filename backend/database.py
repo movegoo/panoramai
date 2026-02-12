@@ -17,10 +17,26 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class User(Base):
+    """User account."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    name = Column(String(100))
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    advertiser = relationship("Advertiser", back_populates="user", uselist=False)
+    competitors = relationship("Competitor", back_populates="user")
+
+
 class Competitor(Base):
     __tablename__ = "competitors"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     website = Column(String(500))
     facebook_page_id = Column(String(100))
@@ -32,6 +48,8 @@ class Competitor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+
+    user = relationship("User", back_populates="competitors")
 
     ads = relationship("Ad", back_populates="competitor")
     instagram_data = relationship("InstagramData", back_populates="competitor")
@@ -221,7 +239,8 @@ class Advertiser(Base):
     __tablename__ = "advertisers"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_name = Column(String(255), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    company_name = Column(String(255), nullable=False)
     sector = Column(String(100))  # supermarche, mode, beaute, etc.
     website = Column(String(500))
     playstore_app_id = Column(String(255))
@@ -234,6 +253,7 @@ class Advertiser(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
+    user = relationship("User", back_populates="advertiser")
     stores = relationship("Store", back_populates="advertiser")
 
 

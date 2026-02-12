@@ -334,16 +334,36 @@ export interface WatchOverview {
   critical_alerts: number;
 }
 
+// Auth token management
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("auth_token");
+}
+
+export function setToken(token: string) {
+  localStorage.setItem("auth_token", token);
+}
+
+export function clearToken() {
+  localStorage.removeItem("auth_token");
+}
+
 async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -355,6 +375,36 @@ async function fetchAPI<T>(
 
   return response.json();
 }
+
+// Auth API
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  has_brand: boolean;
+  brand_name?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export const authAPI = {
+  register: (email: string, password: string, name?: string) =>
+    fetchAPI<AuthResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password, name }),
+    }),
+
+  login: (email: string, password: string) =>
+    fetchAPI<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+
+  me: () => fetchAPI<AuthUser>("/auth/me"),
+};
 
 // Competitors API
 export const competitorsAPI = {

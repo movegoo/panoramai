@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from database import get_db, Advertiser, Competitor
+from database import get_db, Advertiser, Competitor, User
 from models.schemas import BrandSetup, BrandProfile, SetupResponse, CompetitorSuggestion, Sector
 from core.sectors import get_sector_label, get_competitors_for_sector, list_sectors, SECTORS
+from core.auth import get_current_user, get_optional_user
 
 router = APIRouter()
 
@@ -25,9 +26,12 @@ def count_configured_channels(brand: Advertiser) -> int:
     return sum(1 for c in channels if c)
 
 
-def get_current_brand(db: Session) -> Advertiser:
-    """Récupère l'enseigne courante (single-tenant pour l'instant)."""
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+def get_current_brand(db: Session, user: User | None = None) -> Advertiser:
+    """Récupère l'enseigne courante, filtrée par user si authentifié."""
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    brand = query.first()
     if not brand:
         raise HTTPException(
             status_code=404,
@@ -47,15 +51,21 @@ async def get_available_sectors():
 
 
 @router.post("/setup", response_model=SetupResponse)
-async def setup_brand(data: BrandSetup, db: Session = Depends(get_db)):
+async def setup_brand(
+    data: BrandSetup,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """
     Onboarding initial de l'enseigne.
 
     Crée le profil de l'enseigne et retourne les concurrents suggérés
     pour le secteur choisi.
     """
-    # Vérifie si une enseigne existe déjà
-    existing = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    # Vérifie si une enseigne existe déjà pour ce user
+    existing = db.query(Advertiser).filter(
+        Advertiser.user_id == user.id, Advertiser.is_active == True
+    ).first()
     if existing:
         raise HTTPException(
             status_code=400,
@@ -71,6 +81,7 @@ async def setup_brand(data: BrandSetup, db: Session = Depends(get_db)):
 
     # Crée l'enseigne
     brand = Advertiser(
+        user_id=user.id,
         company_name=data.company_name,
         sector=data.sector,
         website=data.website,
@@ -102,7 +113,9 @@ async def setup_brand(data: BrandSetup, db: Session = Depends(get_db)):
             already_tracked=False,
         ))
 
-    competitors_count = db.query(Competitor).filter(Competitor.is_active == True).count()
+    competitors_count = db.query(Competitor).filter(
+        Competitor.user_id == user.id, Competitor.is_active == True
+    ).count()
 
     profile = BrandProfile(
         id=brand.id,
@@ -128,10 +141,16 @@ async def setup_brand(data: BrandSetup, db: Session = Depends(get_db)):
 
 
 @router.get("/profile", response_model=BrandProfile)
-async def get_brand_profile(db: Session = Depends(get_db)):
+async def get_brand_profile(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Récupère le profil de mon enseigne."""
-    brand = get_current_brand(db)
-    competitors_count = db.query(Competitor).filter(Competitor.is_active == True).count()
+    brand = get_current_brand(db, user)
+    competitors_count = db.query(Competitor).filter(
+        Competitor.is_active == True,
+        *([Competitor.user_id == user.id] if user else []),
+    ).count()
 
     return BrandProfile(
         id=brand.id,
@@ -151,9 +170,13 @@ async def get_brand_profile(db: Session = Depends(get_db)):
 
 
 @router.put("/profile", response_model=BrandProfile)
-async def update_brand_profile(data: BrandSetup, db: Session = Depends(get_db)):
+async def update_brand_profile(
+    data: BrandSetup,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Met à jour le profil de mon enseigne."""
-    brand = get_current_brand(db)
+    brand = get_current_brand(db, user)
 
     brand.company_name = data.company_name
     brand.sector = data.sector
@@ -167,7 +190,10 @@ async def update_brand_profile(data: BrandSetup, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(brand)
 
-    competitors_count = db.query(Competitor).filter(Competitor.is_active == True).count()
+    competitors_count = db.query(Competitor).filter(
+        Competitor.is_active == True,
+        *([Competitor.user_id == user.id] if user else []),
+    ).count()
 
     return BrandProfile(
         id=brand.id,
@@ -187,18 +213,21 @@ async def update_brand_profile(data: BrandSetup, db: Session = Depends(get_db)):
 
 
 @router.get("/suggestions", response_model=List[CompetitorSuggestion])
-async def get_competitor_suggestions(db: Session = Depends(get_db)):
+async def get_competitor_suggestions(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Retourne les concurrents suggérés pour le secteur de l'enseigne.
     Indique lesquels sont déjà suivis.
     """
-    brand = get_current_brand(db)
+    brand = get_current_brand(db, user)
 
     # Concurrents déjà suivis
-    tracked_names = {
-        c.name.lower()
-        for c in db.query(Competitor).filter(Competitor.is_active == True).all()
-    }
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    tracked_names = {c.name.lower() for c in comp_query.all()}
 
     suggestions = []
     for comp in get_competitors_for_sector(brand.sector):
@@ -224,10 +253,11 @@ async def get_competitor_suggestions(db: Session = Depends(get_db)):
 @router.post("/suggestions/add")
 async def add_suggested_competitors(
     names: List[str],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Ajoute des concurrents à partir des suggestions."""
-    brand = get_current_brand(db)
+    brand = get_current_brand(db, user)
     sector_competitors = {c["name"].lower(): c for c in get_competitors_for_sector(brand.sector)}
 
     added = []
@@ -242,17 +272,19 @@ async def add_suggested_competitors(
             continue
 
         # Vérifie si déjà existant
-        existing = db.query(Competitor).filter(
+        exist_query = db.query(Competitor).filter(
             Competitor.name == comp_data["name"],
-            Competitor.is_active == True
-        ).first()
-
-        if existing:
+            Competitor.is_active == True,
+        )
+        if user:
+            exist_query = exist_query.filter(Competitor.user_id == user.id)
+        if exist_query.first():
             skipped.append(name)
             continue
 
         # Ajoute le concurrent
         new_competitor = Competitor(
+            user_id=user.id if user else None,
             name=comp_data["name"],
             website=comp_data.get("website"),
             playstore_app_id=comp_data.get("playstore_app_id"),
