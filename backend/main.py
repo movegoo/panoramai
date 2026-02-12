@@ -306,13 +306,29 @@ async def run_migration():
     """Run pending database migrations."""
     from sqlalchemy import text
     results = []
-    with engine.begin() as conn:
+
+    migrations = [
+        ("users.is_admin", "SELECT is_admin FROM users LIMIT 1",
+         "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE"),
+        ("advertisers.user_id", "SELECT user_id FROM advertisers LIMIT 1",
+         "ALTER TABLE advertisers ADD COLUMN user_id INTEGER REFERENCES users(id)"),
+        ("competitors.user_id", "SELECT user_id FROM competitors LIMIT 1",
+         "ALTER TABLE competitors ADD COLUMN user_id INTEGER REFERENCES users(id)"),
+    ]
+
+    for name, check_sql, alter_sql in migrations:
         try:
-            conn.execute(text('SELECT is_admin FROM users LIMIT 1'))
-            results.append("is_admin: already exists")
+            with engine.begin() as conn:
+                conn.execute(text(check_sql))
+                results.append(f"{name}: already exists")
         except Exception:
-            conn.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE'))
-            results.append("is_admin: added")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(alter_sql))
+                    results.append(f"{name}: added")
+            except Exception as e:
+                results.append(f"{name}: error - {e}")
+
     return {"migrations": results}
 
 
