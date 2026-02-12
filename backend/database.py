@@ -374,9 +374,31 @@ def _run_migrations(engine):
         logging.getLogger(__name__).warning(f"Migration warning: {e}")
 
 
+def _backfill_logos(engine):
+    """Backfill logo_url for existing competitors/advertisers with websites."""
+    try:
+        from sqlalchemy import text
+        from core.utils import get_logo_url
+        with engine.begin() as conn:
+            for table in ("competitors", "advertisers"):
+                rows = conn.execute(text(
+                    f'SELECT id, website FROM "{table}" WHERE logo_url IS NULL AND website IS NOT NULL'
+                )).fetchall()
+                for row in rows:
+                    logo = get_logo_url(row[1])
+                    if logo:
+                        conn.execute(text(
+                            f'UPDATE "{table}" SET logo_url = :logo WHERE id = :id'
+                        ), {"logo": logo, "id": row[0]})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Logo backfill warning: {e}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     _run_migrations(engine)
+    _backfill_logos(engine)
 
 
 def get_db():
