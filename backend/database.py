@@ -359,6 +359,8 @@ def _run_migrations(engine):
         inspector = inspect(engine)
         migrations = [
             ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
+            ("competitors", "logo_url", "VARCHAR(500)"),
+            ("advertisers", "logo_url", "VARCHAR(500)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
