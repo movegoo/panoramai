@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import logging
 from datetime import datetime
 
-from database import init_db, engine, Advertiser, Competitor
+from database import init_db, engine, User, Advertiser, Competitor
 from database import SessionLocal
 
 import os
@@ -215,6 +215,33 @@ async def health_check():
 async def get_scheduler_status():
     """Statut du scheduler de collecte automatique."""
     return scheduler.get_status()
+
+
+@app.get("/api/debug/db")
+async def debug_db():
+    """Debug database connectivity."""
+    results = {}
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            row = conn.execute(text("SELECT COUNT(*) FROM users")).fetchone()
+            results["raw_user_count"] = row[0]
+    except Exception as e:
+        results["raw_error"] = str(e)
+
+    try:
+        db = SessionLocal()
+        users = db.query(User).all()
+        results["orm_user_count"] = len(users)
+        db.close()
+    except Exception as e:
+        results["orm_error"] = str(e)
+        try:
+            db.close()
+        except:
+            pass
+
+    return results
 
 
 @app.post("/api/migrate")
