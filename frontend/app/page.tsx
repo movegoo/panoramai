@@ -52,6 +52,8 @@ import {
   ChevronRight,
   Store,
   Sparkles,
+  Info,
+  X,
 } from "lucide-react";
 
 /* ─────────────────────── Helpers ─────────────────────── */
@@ -142,6 +144,57 @@ function AppleIcon({ className }: { className?: string }) {
       <path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" />
       <path d="M10 2c1 .5 2 2 2 5" />
     </svg>
+  );
+}
+
+function ScoreInfoPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-sm">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold flex items-center gap-1.5">
+          <Info className="h-4 w-4 text-violet-500" />
+          Calcul du Score Global
+        </h3>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Le score global (0-100) est un indicateur composite qui mesure la presence digitale d&apos;une enseigne sur 3 axes :
+      </p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-50">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-100 shrink-0">
+            <Star className="h-4 w-4 text-amber-600" />
+          </div>
+          <div>
+            <div className="font-semibold text-xs">Note apps &mdash; 40%</div>
+            <div className="text-[11px] text-muted-foreground">Moyenne Play Store + App Store, normalisee sur 5</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-2 rounded-lg bg-pink-50">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-pink-100 shrink-0">
+            <Users className="h-4 w-4 text-pink-600" />
+          </div>
+          <div>
+            <div className="font-semibold text-xs">Followers sociaux &mdash; 40%</div>
+            <div className="text-[11px] text-muted-foreground">Instagram + TikTok + YouTube, plafonne a 1M</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-50">
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-100 shrink-0">
+            <Download className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div>
+            <div className="font-semibold text-xs">Telechargements &mdash; 20%</div>
+            <div className="text-[11px] text-muted-foreground">Downloads Play Store, plafonne a 10M</div>
+          </div>
+        </div>
+      </div>
+      <div className="text-[11px] text-muted-foreground border-t pt-2">
+        Un score de 100 signifie : note 5/5 + 1M+ followers + 10M+ telechargements.
+      </div>
+    </div>
   );
 }
 
@@ -508,6 +561,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [activeRanking, setActiveRanking] = useState(0);
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
 
   function loadDashboard() {
     setLoading(true);
@@ -588,12 +642,26 @@ export default function DashboardPage() {
                 )}
                 <h1 className="text-2xl font-bold tracking-tight">{data.brand_name}</h1>
                 {brand && (
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    brand.score >= 80 ? "bg-emerald-500/20 text-emerald-300" :
-                    brand.score >= 50 ? "bg-amber-500/20 text-amber-300" :
-                    "bg-red-500/20 text-red-300"
-                  }`}>
-                    Score {Math.round(brand.score)}/100
+                  <span className="relative inline-flex items-center gap-1">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      brand.score >= 80 ? "bg-emerald-500/20 text-emerald-300" :
+                      brand.score >= 50 ? "bg-amber-500/20 text-amber-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      Score {Math.round(brand.score)}/100
+                    </span>
+                    <button
+                      onClick={() => setShowScoreInfo(!showScoreInfo)}
+                      className="text-white/40 hover:text-white/80 transition-colors"
+                      title="Comment le score est calcule ?"
+                    >
+                      <Info className="h-3.5 w-3.5" />
+                    </button>
+                    {showScoreInfo && (
+                      <div className="absolute top-full left-0 mt-2 z-50">
+                        <ScoreInfoPanel onClose={() => setShowScoreInfo(false)} />
+                      </div>
+                    )}
                   </span>
                 )}
               </div>
@@ -698,7 +766,17 @@ export default function DashboardPage() {
             <h2 className="text-[13px] font-semibold text-foreground">
               Classements
             </h2>
+            <button
+              onClick={() => setShowScoreInfo(!showScoreInfo)}
+              className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Info className="h-3 w-3" />
+              Comment sont calcules les scores ?
+            </button>
           </div>
+          {showScoreInfo && (
+            <ScoreInfoPanel onClose={() => setShowScoreInfo(false)} />
+          )}
 
           {/* Ranking category tabs */}
           <div className="flex flex-wrap gap-1.5">
@@ -1166,7 +1244,15 @@ export default function DashboardPage() {
                   <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Megaphone className="h-3 w-3 text-violet-500" />Pubs</span>
                   </th>
-                  <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Score</th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <button
+                      onClick={() => setShowScoreInfo(!showScoreInfo)}
+                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                      title="Comment le score est calcule"
+                    >
+                      Score <Info className="h-3 w-3" />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>

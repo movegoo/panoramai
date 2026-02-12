@@ -36,6 +36,8 @@ import {
   ChevronUp,
   ExternalLink,
   Sparkles,
+  RefreshCw,
+  Info,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -301,6 +303,7 @@ export default function AccountPage() {
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [addingCompetitor, setAddingCompetitor] = useState<string | null>(null);
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const [form, setForm] = useState<BrandSetupData>({
     company_name: "",
@@ -438,6 +441,18 @@ export default function AccountPage() {
     }
   }
 
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const result = await brandAPI.sync();
+      setToast({ type: "success", text: result.message });
+    } catch (err: any) {
+      setToast({ type: "error", text: err.message || "Erreur lors de la synchronisation" });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   function updateForm(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -516,10 +531,22 @@ export default function AccountPage() {
             </div>
           </div>
           {profile && !editing && (
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="h-4 w-4 mr-1" />
-              Modifier
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync}
+                disabled={syncing}
+                title="Relancer la collecte de données sur tous les canaux"
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Synchro..." : "Synchroniser"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil className="h-4 w-4 mr-1" />
+                Modifier
+              </Button>
+            </div>
           )}
         </CardHeader>
 

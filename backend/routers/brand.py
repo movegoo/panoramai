@@ -279,8 +279,14 @@ async def sync_brand_competitor(
     """Force sync brand to competitor entry + trigger enrichment."""
     brand = get_current_brand(db, user)
     comp = _sync_brand_competitor(db, brand, user)
+
+    # Always trigger re-enrichment on manual sync
+    import asyncio
+    from routers.competitors import _auto_enrich_competitor
+    asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
+
     return JSONResponse(content={
-        "message": f"Brand '{brand.company_name}' synced as competitor (id={comp.id})",
+        "message": f"Synchronisation lancée pour '{brand.company_name}'. Les données seront mises à jour en arrière-plan.",
         "competitor_id": comp.id,
     })
 

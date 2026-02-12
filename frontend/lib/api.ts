@@ -683,6 +683,12 @@ export const brandAPI = {
       "/brand/suggestions/add",
       { method: "POST", body: JSON.stringify(names) }
     ),
+
+  sync: () =>
+    fetchAPI<{ message: string; competitor_id: number }>(
+      "/brand/sync",
+      { method: "POST" }
+    ),
 };
 
 // Admin API
