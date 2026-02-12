@@ -391,8 +391,12 @@ async def update_competitor(
     db.commit()
     db.refresh(comp)
 
+    # Auto-fetch all data in background (same as creation)
+    import asyncio
+    asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
+
     return {
-        "message": f"Concurrent '{comp.name}' mis à jour",
+        "message": f"Concurrent '{comp.name}' mis à jour — enrichissement lancé en arrière-plan",
         "updated_fields": list(update_data.keys()),
         "competitor": {
             "id": comp.id,
