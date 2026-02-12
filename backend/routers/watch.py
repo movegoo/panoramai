@@ -19,6 +19,7 @@ from models.schemas import (
 from core.trends import calculate_trend
 from core.sectors import get_sector_label
 from core.auth import get_optional_user
+from core.utils import get_logo_url
 
 router = APIRouter()
 
@@ -427,6 +428,7 @@ async def get_dashboard_data(
         competitor_data.append({
             "id": comp.id,
             "name": comp.name,
+            "logo_url": comp.logo_url or get_logo_url(comp.website),
             "score": score,
             "rank": 0,
             "instagram": ig_data,
@@ -467,6 +469,7 @@ async def get_dashboard_data(
         brand_data = {
             "id": brand.id,
             "name": brand.company_name,
+            "logo_url": brand.logo_url or get_logo_url(brand.website),
             "score": 0,
             "rank": len(competitor_data) + 1,
             "rank_among_all": len(competitor_data) + 1,
@@ -610,31 +613,31 @@ def _get_platform_leaders(competitors: list) -> dict:
     ig = [c for c in competitors if c["instagram"]]
     if ig:
         leader = max(ig, key=lambda x: x["instagram"]["followers"])
-        leaders["instagram"] = {"leader": leader["name"], "value": leader["instagram"]["followers"]}
+        leaders["instagram"] = {"leader": leader["name"], "value": leader["instagram"]["followers"], "logo_url": leader.get("logo_url")}
 
     # TikTok
     tt = [c for c in competitors if c["tiktok"]]
     if tt:
         leader = max(tt, key=lambda x: x["tiktok"]["followers"])
-        leaders["tiktok"] = {"leader": leader["name"], "value": leader["tiktok"]["followers"]}
+        leaders["tiktok"] = {"leader": leader["name"], "value": leader["tiktok"]["followers"], "logo_url": leader.get("logo_url")}
 
     # YouTube
     yt = [c for c in competitors if c["youtube"]]
     if yt:
         leader = max(yt, key=lambda x: x["youtube"]["subscribers"])
-        leaders["youtube"] = {"leader": leader["name"], "value": leader["youtube"]["subscribers"]}
+        leaders["youtube"] = {"leader": leader["name"], "value": leader["youtube"]["subscribers"], "logo_url": leader.get("logo_url")}
 
     # Play Store
     ps = [c for c in competitors if c["playstore"] and c["playstore"]["rating"]]
     if ps:
         leader = max(ps, key=lambda x: x["playstore"]["rating"])
-        leaders["playstore"] = {"leader": leader["name"], "value": leader["playstore"]["rating"]}
+        leaders["playstore"] = {"leader": leader["name"], "value": leader["playstore"]["rating"], "logo_url": leader.get("logo_url")}
 
     # App Store
     aps = [c for c in competitors if c["appstore"] and c["appstore"]["rating"]]
     if aps:
         leader = max(aps, key=lambda x: x["appstore"]["rating"])
-        leaders["appstore"] = {"leader": leader["name"], "value": leader["appstore"]["rating"]}
+        leaders["appstore"] = {"leader": leader["name"], "value": leader["appstore"]["rating"], "logo_url": leader.get("logo_url")}
 
     return leaders
 
@@ -715,6 +718,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         competitor_ad_summary.append({
             "id": cid,
             "name": cd["name"],
+            "logo_url": cd.get("logo_url"),
             "is_brand": cd["name"].lower() == brand_name.lower(),
             "total_ads": len(ads),
             "active_ads": len(active),
@@ -895,6 +899,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["total_social"],
                 "formatted": format_number(c["total_social"]),
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -914,6 +919,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["instagram"]["followers"],
                 "formatted": format_number(c["instagram"]["followers"]),
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -934,6 +940,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["tiktok"]["followers"],
                 "formatted": format_number(c["tiktok"]["followers"]),
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -954,6 +961,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["youtube"]["subscribers"],
                 "formatted": format_number(c["youtube"]["subscribers"]),
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -974,6 +982,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["avg_app_rating"],
                 "formatted": f"{c['avg_app_rating']:.2f}/5",
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -993,6 +1002,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             "entries": [{
                 "rank": i + 1,
                 "name": c["name"],
+                "logo_url": c.get("logo_url"),
                 "value": c["instagram"]["engagement_rate"],
                 "formatted": f"{c['instagram']['engagement_rate']:.1f}%",
                 "is_brand": c["name"].lower() == brand_name.lower(),
@@ -1008,6 +1018,7 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
         "entries": [{
             "rank": i + 1,
             "name": c["name"],
+            "logo_url": c.get("logo_url"),
             "value": c["score"],
             "formatted": f"{c['score']:.0f}/100",
             "is_brand": c["name"].lower() == brand_name.lower(),

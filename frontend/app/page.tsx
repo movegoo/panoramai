@@ -153,6 +153,29 @@ const PRIORITY_STYLE: Record<string, string> = {
   info: "bg-indigo-50 border-indigo-200 text-indigo-800",
 };
 
+function BrandLogo({ name, logoUrl, size = "sm", className: extraClass = "" }: { name: string; logoUrl?: string; size?: "xs" | "sm" | "md" | "lg"; className?: string }) {
+  const [imgErr, setImgErr] = useState(false);
+  const dims = { xs: "h-5 w-5", sm: "h-7 w-7", md: "h-9 w-9", lg: "h-12 w-12" }[size];
+  const textSize = { xs: "text-[9px]", sm: "text-[10px]", md: "text-xs", lg: "text-sm" }[size];
+  const initials = name.split(/[\s&]+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+  if (logoUrl && !imgErr) {
+    return (
+      <img
+        src={logoUrl}
+        alt={name}
+        className={`${dims} rounded-lg object-contain bg-white border border-border/50 shrink-0 ${extraClass}`}
+        onError={() => setImgErr(true)}
+      />
+    );
+  }
+  return (
+    <div className={`${dims} rounded-lg bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center ${textSize} font-bold text-violet-600 shrink-0 ${extraClass}`}>
+      {initials}
+    </div>
+  );
+}
+
 /* ─────────────────────── Onboarding ─────────────────────── */
 
 function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
@@ -388,6 +411,7 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
                     }`}>
                       {selected ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                     </div>
+                    <BrandLogo name={c.name} logoUrl={c.logo_url} size="sm" />
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-sm">{c.name}</div>
                       {c.website && (
@@ -557,7 +581,11 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <Shield className="h-6 w-6 text-violet-400" />
+                {brand ? (
+                  <BrandLogo name={brand.name} logoUrl={brand.logo_url} size="lg" className="border-white/20" />
+                ) : (
+                  <Shield className="h-6 w-6 text-violet-400" />
+                )}
                 <h1 className="text-2xl font-bold tracking-tight">{data.brand_name}</h1>
                 {brand && (
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
@@ -590,7 +618,10 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-pink-300 uppercase tracking-widest font-semibold">Instagram</span>
                 </div>
                 <div className="text-xl font-bold tabular-nums">{formatNumber(pl.instagram.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{pl.instagram.leader}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <BrandLogo name={pl.instagram.leader} logoUrl={(pl.instagram as any).logo_url} size="xs" />
+                  {pl.instagram.leader}
+                </div>
               </div>
             )}
             {pl.tiktok && (
@@ -600,7 +631,10 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-cyan-300 uppercase tracking-widest font-semibold">TikTok</span>
                 </div>
                 <div className="text-xl font-bold tabular-nums">{formatNumber(pl.tiktok.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{pl.tiktok.leader}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <BrandLogo name={pl.tiktok.leader} logoUrl={(pl.tiktok as any).logo_url} size="xs" />
+                  {pl.tiktok.leader}
+                </div>
               </div>
             )}
             {pl.youtube && (
@@ -610,7 +644,10 @@ export default function DashboardPage() {
                   <span className="text-[10px] text-red-300 uppercase tracking-widest font-semibold">YouTube</span>
                 </div>
                 <div className="text-xl font-bold tabular-nums">{formatNumber(pl.youtube.value)}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{pl.youtube.leader}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <BrandLogo name={pl.youtube.leader} logoUrl={(pl.youtube as any).logo_url} size="xs" />
+                  {pl.youtube.leader}
+                </div>
               </div>
             )}
             {pl.playstore && (
@@ -623,7 +660,10 @@ export default function DashboardPage() {
                   <span className="text-xl font-bold tabular-nums">{pl.playstore.value.toFixed(1)}</span>
                   <Stars rating={pl.playstore.value} />
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{pl.playstore.leader}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <BrandLogo name={pl.playstore.leader} logoUrl={(pl.playstore as any).logo_url} size="xs" />
+                  {pl.playstore.leader}
+                </div>
               </div>
             )}
             {pl.appstore && (
@@ -636,7 +676,10 @@ export default function DashboardPage() {
                   <span className="text-xl font-bold tabular-nums">{pl.appstore.value.toFixed(1)}</span>
                   <Stars rating={pl.appstore.value} />
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{pl.appstore.leader}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                  <BrandLogo name={pl.appstore.leader} logoUrl={(pl.appstore as any).logo_url} size="xs" />
+                  {pl.appstore.leader}
+                </div>
               </div>
             )}
           </div>
@@ -696,6 +739,7 @@ export default function DashboardPage() {
                       }`}>
                         {entry.rank === 1 ? <Crown className="h-3.5 w-3.5" /> : entry.rank}
                       </div>
+                      <BrandLogo name={entry.name} logoUrl={(entry as any).logo_url} size="xs" />
                       <div className="flex-1 min-w-0">
                         <span className={`text-sm font-medium ${isBrand ? "text-violet-700" : ""}`}>
                           {entry.name}
@@ -762,7 +806,8 @@ export default function DashboardPage() {
                 return (
                   <div key={cs.id} className={`px-4 py-3 ${cs.is_brand ? "bg-violet-50/60" : ""}`}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className={`text-sm font-medium ${cs.is_brand ? "text-violet-700" : ""}`}>
+                      <span className={`text-sm font-medium flex items-center gap-2 ${cs.is_brand ? "text-violet-700" : ""}`}>
+                        <BrandLogo name={cs.name} logoUrl={(cs as any).logo_url} size="xs" />
                         {cs.name}
                         {cs.is_brand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                       </span>
@@ -850,7 +895,8 @@ export default function DashboardPage() {
               <div className="space-y-2">
                 {adI.competitor_summary.map((cs) => (
                   <div key={cs.id} className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[11px] font-semibold min-w-[80px] ${cs.is_brand ? "text-violet-700" : ""}`}>
+                    <span className={`text-[11px] font-semibold min-w-[80px] flex items-center gap-1.5 ${cs.is_brand ? "text-violet-700" : ""}`}>
+                      <BrandLogo name={cs.name} logoUrl={(cs as any).logo_url} size="xs" />
                       {cs.name}
                     </span>
                     {cs.platforms.sort().map((p) => (
@@ -975,6 +1021,7 @@ export default function DashboardPage() {
                   }`}>
                     {comp.rank === 1 ? <Crown className="h-4 w-4" /> : comp.rank}
                   </div>
+                  <BrandLogo name={comp.name} logoUrl={comp.logo_url} size="md" />
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-lg truncate">{comp.name}</div>
                     <div className="text-xs text-muted-foreground">
@@ -1144,7 +1191,8 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`font-medium ${isBrand ? "text-violet-700" : ""}`}>
+                        <span className={`font-medium flex items-center gap-2 ${isBrand ? "text-violet-700" : ""}`}>
+                          <BrandLogo name={comp.name} logoUrl={comp.logo_url} size="xs" />
                           {comp.name}
                           {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                         </span>

@@ -362,9 +362,13 @@ export default function CompetitorsPage() {
                 <div className="p-4 pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 text-sm font-bold text-violet-700 shrink-0">
-                        {comp.name.charAt(0).toUpperCase()}
-                      </div>
+                      {comp.logo_url ? (
+                        <img src={comp.logo_url} alt={comp.name} className="h-10 w-10 rounded-xl object-contain bg-white border border-border/50 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 text-sm font-bold text-violet-700 shrink-0">
+                          {comp.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <h3 className="font-semibold text-[15px] text-foreground truncate">{comp.name}</h3>
                         {comp.website ? (
@@ -409,7 +413,7 @@ export default function CompetitorsPage() {
                   <div className="flex items-center gap-1 mb-2">
                     <Link2 className="h-3 w-3 text-muted-foreground/50" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      {channelCount} canal{channelCount !== 1 ? "x" : ""}
+                      {channelCount} cana{channelCount !== 1 ? "ux" : "l"}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">

@@ -11,6 +11,7 @@ from database import get_db, Advertiser, Competitor, User
 from models.schemas import BrandSetup
 from core.sectors import get_sector_label, get_competitors_for_sector, list_sectors, SECTORS
 from core.auth import get_current_user, get_optional_user
+from core.utils import get_logo_url
 
 router = APIRouter()
 
@@ -52,6 +53,7 @@ def _brand_to_dict(brand: Advertiser, competitors_count: int) -> dict:
         "sector": brand.sector,
         "sector_label": get_sector_label(brand.sector),
         "website": brand.website,
+        "logo_url": brand.logo_url or get_logo_url(brand.website),
         "playstore_app_id": brand.playstore_app_id,
         "appstore_app_id": brand.appstore_app_id,
         "instagram_username": brand.instagram_username,
@@ -68,6 +70,7 @@ def _suggestion_to_dict(comp: dict, sector: str, already_tracked: bool = False) 
     return {
         "name": comp["name"],
         "website": comp.get("website"),
+        "logo_url": get_logo_url(comp.get("website")),
         "sector": sector,
         "playstore_app_id": comp.get("playstore_app_id"),
         "appstore_app_id": comp.get("appstore_app_id"),
@@ -116,6 +119,7 @@ async def setup_brand(
         company_name=data.company_name,
         sector=data.sector,
         website=data.website,
+        logo_url=get_logo_url(data.website),
         playstore_app_id=data.playstore_app_id,
         appstore_app_id=data.appstore_app_id,
         instagram_username=data.instagram_username,
@@ -274,6 +278,7 @@ async def add_suggested_competitors(
             user_id=(user.id if user else None),
             name=comp_data["name"],
             website=comp_data.get("website"),
+            logo_url=get_logo_url(comp_data.get("website")),
             playstore_app_id=comp_data.get("playstore_app_id"),
             appstore_app_id=comp_data.get("appstore_app_id"),
             instagram_username=comp_data.get("instagram_username"),

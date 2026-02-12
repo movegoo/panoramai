@@ -796,7 +796,7 @@ export default function AccountPage() {
                           <div className="flex items-center gap-2">
                             <p className="font-medium text-sm">{comp.name}</p>
                             <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                              {channelCount} canal{channelCount > 1 ? "x" : ""}
+                              {channelCount} cana{channelCount > 1 ? "ux" : "l"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">

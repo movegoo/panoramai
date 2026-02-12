@@ -226,6 +226,7 @@ class CompetitorCard(BaseModel):
     id: int
     name: str
     website: Optional[str] = None
+    logo_url: Optional[str] = None
 
     # Identifiants des canaux
     facebook_page_id: Optional[str] = None

@@ -4,6 +4,7 @@ export interface Competitor {
   id: number;
   name: string;
   website?: string;
+  logo_url?: string;
   facebook_page_id?: string;
   instagram_username?: string;
   tiktok_username?: string;
@@ -19,6 +20,7 @@ export interface CompetitorListItem {
   id: number;
   name: string;
   website?: string;
+  logo_url?: string;
   global_score: number;
   rank: number;
   app_rating?: number;
@@ -196,6 +198,7 @@ export interface DashboardCompetitorApp {
 export interface DashboardCompetitor {
   id: number;
   name: string;
+  logo_url?: string;
   score: number;
   rank: number;
   instagram: DashboardCompetitorSocial | null;
@@ -608,6 +611,7 @@ export interface BrandProfileData {
   sector: string;
   sector_label: string;
   website?: string;
+  logo_url?: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
   instagram_username?: string;
@@ -627,6 +631,7 @@ export interface SectorData {
 export interface CompetitorSuggestionData {
   name: string;
   website?: string;
+  logo_url?: string;
   sector: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
