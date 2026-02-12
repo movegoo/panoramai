@@ -459,8 +459,26 @@ async def get_dashboard_data(
     for i, c in enumerate(competitors_only):
         c["rank"] = i + 1
 
+    # If brand not found among competitors, build minimal brand_data from Advertiser
+    if not brand_data:
+        brand_data = {
+            "id": brand.id,
+            "name": brand.company_name,
+            "score": 0,
+            "rank": len(competitor_data) + 1,
+            "rank_among_all": len(competitor_data) + 1,
+            "total_players": len(competitor_data) + 1,
+            "instagram": None,
+            "tiktok": None,
+            "youtube": None,
+            "playstore": None,
+            "appstore": None,
+            "total_social": 0,
+            "avg_app_rating": None,
+        }
+
     # Compute brand rank among all (brand included)
-    if brand_data:
+    if brand_data and "rank_among_all" not in brand_data:
         brand_data["rank_among_all"] = brand_data["rank"]
         brand_data["total_players"] = len(competitor_data)
 

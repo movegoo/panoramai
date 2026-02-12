@@ -190,6 +190,11 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
       setSelectedCompetitors(new Set(result.suggested_competitors.map((c) => c.name)));
       setStep(2);
     } catch (e: any) {
+      // Brand already exists → skip to dashboard
+      if (e.status === 400 && e.message?.includes("déjà configurée")) {
+        onComplete();
+        return;
+      }
       alert(e.message || "Erreur lors de la configuration");
     } finally {
       setSubmitting(false);
