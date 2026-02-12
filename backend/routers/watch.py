@@ -36,18 +36,12 @@ def format_number(value: Optional[float], suffix: str = "") -> str:
 
 def get_brand(db: Session, user: User | None = None) -> Advertiser:
     """Récupère l'enseigne courante, filtrée par user si authentifié."""
+    if user:
+        from core.auth import claim_orphans
+        claim_orphans(db, user)
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand = query.filter(Advertiser.user_id == user.id).first()
-        if brand:
-            return brand
-        # Fallback: claim orphan brand (user_id=NULL) for this user
-        orphan = query.filter(Advertiser.user_id == None).first()
-        if orphan:
-            orphan.user_id = user.id
-            db.commit()
-            db.refresh(orphan)
-            return orphan
+        query = query.filter(Advertiser.user_id == user.id)
     brand = query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
@@ -300,15 +294,9 @@ async def get_dashboard_data(
     Endpoint agrégé pour le dashboard frontend.
     Retourne toutes les données competitors + insights en un seul appel.
     """
-    brand = get_brand(db, user)
+    brand = get_brand(db, user)  # also claims orphans if user is logged in
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
-        # Claim orphan competitors (user_id=NULL) for this user
-        db.query(Competitor).filter(
-            Competitor.is_active == True,
-            Competitor.user_id == None,
-        ).update({"user_id": user.id})
-        db.commit()
         comp_query = comp_query.filter(Competitor.user_id == user.id)
     competitors = comp_query.all()
 

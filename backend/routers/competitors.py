@@ -117,6 +117,9 @@ async def list_competitors(
 
     Retourne des cartes synthétiques avec score et ranking.
     """
+    if user:
+        from core.auth import claim_orphans
+        claim_orphans(db, user)
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         query = query.filter(Competitor.user_id == user.id)

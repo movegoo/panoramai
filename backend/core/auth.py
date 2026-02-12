@@ -79,3 +79,17 @@ def get_optional_user(
         return get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+def claim_orphans(db: Session, user: User) -> None:
+    """Assign orphan brand & competitors (user_id=NULL) to this user."""
+    from database import Advertiser, Competitor
+    db.query(Advertiser).filter(
+        Advertiser.is_active == True,
+        Advertiser.user_id == None,
+    ).update({"user_id": user.id})
+    db.query(Competitor).filter(
+        Competitor.is_active == True,
+        Competitor.user_id == None,
+    ).update({"user_id": user.id})
+    db.commit()
