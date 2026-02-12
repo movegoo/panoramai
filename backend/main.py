@@ -301,6 +301,27 @@ async def debug_auth_test():
     return results
 
 
+@app.get("/api/debug/ownership")
+async def debug_ownership():
+    """Temporary: show user_id assignments for brand & competitors."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        users = conn.execute(text(
+            "SELECT id, email, name FROM users WHERE is_active = true ORDER BY id"
+        )).fetchall()
+        brands = conn.execute(text(
+            "SELECT id, company_name, user_id FROM advertisers WHERE is_active = true ORDER BY id"
+        )).fetchall()
+        comps = conn.execute(text(
+            "SELECT id, name, user_id FROM competitors WHERE is_active = true ORDER BY id"
+        )).fetchall()
+    return {
+        "users": [{"id": u[0], "email": u[1], "name": u[2]} for u in users],
+        "brands": [{"id": b[0], "name": b[1], "user_id": b[2]} for b in brands],
+        "competitors": [{"id": c[0], "name": c[1], "user_id": c[2]} for c in comps],
+    }
+
+
 @app.post("/api/migrate")
 async def run_migration():
     """Run pending database migrations."""
