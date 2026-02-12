@@ -89,12 +89,13 @@ async def get_available_sectors():
 async def setup_brand(
     data: BrandSetup,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User | None = Depends(get_optional_user),
 ):
     """Onboarding initial de l'enseigne."""
-    existing = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).first()
+    exist_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        exist_query = exist_query.filter(Advertiser.user_id == user.id)
+    existing = exist_query.first()
     if existing:
         raise HTTPException(
             status_code=400,
@@ -108,7 +109,7 @@ async def setup_brand(
         )
 
     brand = Advertiser(
-        user_id=user.id,
+        user_id=user.id if user else None,
         company_name=data.company_name,
         sector=data.sector,
         website=data.website,
@@ -129,7 +130,8 @@ async def setup_brand(
         suggestions.append(_suggestion_to_dict(comp, data.sector))
 
     competitors_count = db.query(Competitor).filter(
-        Competitor.user_id == user.id, Competitor.is_active == True
+        Competitor.is_active == True,
+        *([Competitor.user_id == user.id] if user else []),
     ).count()
 
     return JSONResponse(content={
@@ -240,7 +242,7 @@ async def add_suggested_competitors(
             continue
 
         new_competitor = Competitor(
-            user_id=user.id if user else None,
+            user_id=(user.id if user else None),
             name=comp_data["name"],
             website=comp_data.get("website"),
             playstore_app_id=comp_data.get("playstore_app_id"),
