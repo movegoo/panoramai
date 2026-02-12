@@ -80,9 +80,9 @@ async def lifespan(app: FastAPI):
     await scheduler.start()
     logger.info("Scheduler started")
 
-    # Enrich competitors missing BANCO stores (background)
-    import asyncio
-    asyncio.create_task(_enrich_missing_stores())
+    # BANCO enrichment disabled - exceeds Render free tier 512MB memory limit
+    # import asyncio
+    # asyncio.create_task(_enrich_missing_stores())
 
     yield
 
@@ -220,7 +220,7 @@ async def get_scheduler_status():
 @app.get("/api/debug/db")
 async def debug_db():
     """Debug database connectivity."""
-    results = {"deploy_version": "v4-traceback"}
+    results = {"deploy_version": "v5-memfix"}
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
