@@ -4,9 +4,9 @@ from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./competitive.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "") or "sqlite:///./competitive.db"
 
-# Render generates postgres:// URLs but SQLAlchemy 2.0 requires postgresql://
+# Render/Railway generate postgres:// URLs but SQLAlchemy 2.0 requires postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
