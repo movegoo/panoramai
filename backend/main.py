@@ -95,14 +95,22 @@ def _refresh_logo_urls():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle management."""
-    init_db()
-    logger.info("Database initialized")
+    try:
+        init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Database init failed (non-fatal): {e}")
 
-    # Refresh logo URLs (replace dead Clearbit with Google Favicons)
-    _refresh_logo_urls()
+    try:
+        _refresh_logo_urls()
+    except Exception as e:
+        logger.error(f"Logo refresh failed (non-fatal): {e}")
 
-    await scheduler.start()
-    logger.info("Scheduler started")
+    try:
+        await scheduler.start()
+        logger.info("Scheduler started")
+    except Exception as e:
+        logger.error(f"Scheduler start failed (non-fatal): {e}")
 
     # BANCO store enrichment (one-by-one to limit memory)
     import asyncio
@@ -110,8 +118,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    await scheduler.stop()
-    logger.info("Scheduler stopped")
+    try:
+        await scheduler.stop()
+        logger.info("Scheduler stopped")
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -218,21 +229,22 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint."""
-    db = SessionLocal()
-    try:
-        brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
-        competitors_count = db.query(Competitor).filter(Competitor.is_active == True).count()
-    finally:
-        db.close()
-
-    return {
+    """Health check endpoint (lightweight, no DB required)."""
+    result = {
         "status": "healthy",
         "version": "2.0.0",
-        "brand_configured": brand is not None,
-        "competitors_count": competitors_count,
-        "scheduler_status": scheduler.get_status(),
     }
+    try:
+        db = SessionLocal()
+        brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+        competitors_count = db.query(Competitor).filter(Competitor.is_active == True).count()
+        db.close()
+        result["brand_configured"] = brand is not None
+        result["competitors_count"] = competitors_count
+        result["scheduler_status"] = scheduler.get_status()
+    except Exception:
+        result["db"] = "unavailable"
+    return result
 
 
 @app.get("/api/scheduler/status")

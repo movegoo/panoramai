@@ -18,8 +18,8 @@ COPY . .
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv
 
-# Expose port
-EXPOSE 8000
+# Expose port (Railway sets PORT dynamically)
+EXPOSE ${PORT:-8000}
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application (PORT env var set by Railway/Render)
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
