@@ -156,6 +156,32 @@ async def get_brand_profile(
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
 
 
+@router.delete("/reset")
+async def reset_brand(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Supprime l'enseigne et ses concurrents pour reconfigurer."""
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    brand = query.first()
+    if not brand:
+        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+
+    # Deactivate competitors
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    comp_query.update({"is_active": False})
+
+    # Deactivate brand
+    brand.is_active = False
+    db.commit()
+
+    return JSONResponse(content={"message": f"Enseigne '{brand.company_name}' supprimée. Vous pouvez reconfigurer."})
+
+
 @router.put("/profile")
 async def update_brand_profile(
     data: BrandSetup,
