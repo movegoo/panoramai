@@ -698,7 +698,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
     format_counts = {}
     platform_counts = {}
     advertisers = {}  # page_name -> {ads, competitors, active, formats}
-    payers = {}  # byline/disclaimer/page_name -> {total, active, pages}
+    payers = {}  # byline/disclaimer -> {total, active, pages} (only explicit payer data)
 
     for ad in all_ads:
         fmt = ad.display_format or "AUTRE"
@@ -720,14 +720,16 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         fmt_key = ad.display_format or "AUTRE"
         advertisers[pname]["formats"][fmt_key] = advertisers[pname]["formats"].get(fmt_key, 0) + 1
 
-        # Payer tracking: byline > disclaimer_label > page_name
-        payer_name = ad.byline or ad.disclaimer_label or ad.page_name or "Inconnu"
-        if payer_name not in payers:
-            payers[payer_name] = {"total": 0, "active": 0, "pages": set(), "is_explicit": bool(ad.byline or ad.disclaimer_label)}
-        payers[payer_name]["total"] += 1
-        if ad.is_active:
-            payers[payer_name]["active"] += 1
-        payers[payer_name]["pages"].add(ad.page_name or "Inconnu")
+        # Payer tracking: only use REAL payer data (byline/disclaimer_label)
+        # Don't fallback to page_name — that's the advertiser, not the payer
+        explicit_payer = ad.byline or ad.disclaimer_label
+        if explicit_payer:
+            if explicit_payer not in payers:
+                payers[explicit_payer] = {"total": 0, "active": 0, "pages": set()}
+            payers[explicit_payer]["total"] += 1
+            if ad.is_active:
+                payers[explicit_payer]["active"] += 1
+            payers[explicit_payer]["pages"].add(pname)
 
     # Per competitor summary
     competitor_ad_summary = []
@@ -807,7 +809,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         ],
         "payers": [
             {"name": k, "total": v["total"], "active": v["active"],
-             "pages": sorted(v["pages"]), "is_explicit": v["is_explicit"]}
+             "pages": sorted(v["pages"])}
             for k, v in sorted(payers.items(), key=lambda x: -x[1]["total"])
         ],
         "competitor_summary": competitor_ad_summary,
