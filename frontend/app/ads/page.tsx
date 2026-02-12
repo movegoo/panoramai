@@ -187,27 +187,18 @@ function genderLabel(raw: string | undefined | null): string {
 
 /* ─────────────── Tooltip component ─────────────── */
 
-function InfoTooltip({ text, className = "" }: { text: string; className?: string }) {
-  const [show, setShow] = useState(false);
+function InfoTooltip({ text, className = "", light = false }: { text: string; className?: string; light?: boolean }) {
   return (
-    <span className={`relative inline-flex ${className}`}>
-      <button
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onClick={(e) => { e.stopPropagation(); setShow(!show); }}
-        className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-        type="button"
-      >
+    <span className={`relative inline-flex group/tip ${className}`}>
+      <span className={`${light ? "text-white/30 hover:text-white/70" : "text-muted-foreground/40 hover:text-muted-foreground"} transition-colors cursor-help`}>
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
           <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM8 4.5a1 1 0 100 2 1 1 0 000-2zM7 8v3.5h2V8H7z"/>
         </svg>
-      </button>
-      {show && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-foreground text-background text-[11px] leading-relaxed shadow-xl z-[100] pointer-events-none">
-          {text}
-          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
-        </span>
-      )}
+      </span>
+      <span className="invisible group-hover/tip:visible opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-gray-900 text-white text-[11px] leading-relaxed shadow-xl z-[100] pointer-events-none">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+      </span>
     </span>
   );
 }
@@ -763,20 +754,21 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
         countryData.age_gender_breakdowns
           .filter(b => b.age_range !== "Unknown")
           .forEach(b => {
+            const m = b.male || 0, f = b.female || 0, u = b.unknown || 0;
             // Apply age filter for gender stats
             if (demoAgeFilter !== "all" && b.age_range !== demoAgeFilter) {
               // Still count in age distribution but not in gender totals
             } else {
-              totalMale += b.male;
-              totalFemale += b.female;
-              totalUnknown += b.unknown;
+              totalMale += m;
+              totalFemale += f;
+              totalUnknown += u;
             }
 
             // Always aggregate age ranges (for age distribution chart)
             if (!ageRanges[b.age_range]) ageRanges[b.age_range] = { male: 0, female: 0, unknown: 0 };
-            ageRanges[b.age_range].male += b.male;
-            ageRanges[b.age_range].female += b.female;
-            ageRanges[b.age_range].unknown += b.unknown;
+            ageRanges[b.age_range].male += m;
+            ageRanges[b.age_range].female += f;
+            ageRanges[b.age_range].unknown += u;
           });
       });
     });
@@ -1593,11 +1585,11 @@ export default function AdsPage() {
             <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">
               {activeFilters > 0 ? "Filtr\u00E9es" : "Pubs"}
             </div>
-            <InfoTooltip text={METHODOLOGY.platforms} className="mt-0.5" />
+            <InfoTooltip text={METHODOLOGY.platforms} className="mt-0.5" light />
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-400">{stats.active}</div>
-            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives <InfoTooltip text={METHODOLOGY.activeAds} /></div>
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives <InfoTooltip text={METHODOLOGY.activeAds} light /></div>
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.byAdvertiser.size}</div>
@@ -1609,14 +1601,14 @@ export default function AdsPage() {
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-base sm:text-lg font-normal text-violet-300/50">j</span></div>
-            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur. moy. <InfoTooltip text={METHODOLOGY.duration} /></div>
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur. moy. <InfoTooltip text={METHODOLOGY.duration} light /></div>
           </div>
           {stats.totalSpendMax > 0 && (
             <div className="col-span-2">
               <div className="text-xl sm:text-2xl font-bold tabular-nums text-emerald-400">
                 {formatNumber(stats.totalSpendMin)}&ndash;{formatNumber(stats.totalSpendMax)}<span className="text-base sm:text-lg font-normal text-emerald-300/50">&euro;</span>
               </div>
-              <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total <InfoTooltip text={METHODOLOGY.budget} /></div>
+              <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total <InfoTooltip text={METHODOLOGY.budget} light /></div>
             </div>
           )}
           {/* Platform breakdown with icons */}
