@@ -166,6 +166,66 @@ function getSourcePlatform(ad: AdWithCompetitor): { label: string; icon: React.R
   return { label: "Meta Ads", icon: <MetaIcon className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" };
 }
 
+/* ─────────────── Gender normalization ─────────────── */
+
+function normalizeGender(raw: string | undefined | null): "all" | "male" | "female" | null {
+  if (!raw) return null;
+  const v = raw.toLowerCase();
+  if (v === "all" || v === "all genders") return "all";
+  if (v === "male" || v === "men" || v === "homme" || v === "hommes") return "male";
+  if (v === "female" || v === "women" || v === "femme" || v === "femmes") return "female";
+  return null;
+}
+
+function genderLabel(raw: string | undefined | null): string {
+  const n = normalizeGender(raw);
+  if (n === "all") return "Mixte";
+  if (n === "male") return "Hommes";
+  if (n === "female") return "Femmes";
+  return raw || "Inconnu";
+}
+
+/* ─────────────── Tooltip component ─────────────── */
+
+function InfoTooltip({ text, className = "" }: { text: string; className?: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className={`relative inline-flex ${className}`}>
+      <button
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={(e) => { e.stopPropagation(); setShow(!show); }}
+        className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+        type="button"
+      >
+        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
+          <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM8 4.5a1 1 0 100 2 1 1 0 000-2zM7 8v3.5h2V8H7z"/>
+        </svg>
+      </button>
+      {show && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-foreground text-background text-[11px] leading-relaxed shadow-xl z-[100] pointer-events-none">
+          {text}
+          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+/* ─────────────── Methodology texts ─────────────── */
+
+const METHODOLOGY = {
+  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks : FR 7.5\u20AC Meta / 4.5\u20AC TikTok. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
+  reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
+  duration: "Dur\u00E9e moyenne = (date de fin ou aujourd\u2019hui - date de d\u00E9but) pour chaque pub. Indique la long\u00E9vit\u00E9 moyenne des campagnes.",
+  demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
+  activeAds: "Une pub est consid\u00E9r\u00E9e active si elle a \u00E9t\u00E9 diffus\u00E9e dans les 7 derniers jours (Meta/Google) ou est marqu\u00E9e active par la plateforme.",
+  platforms: "Plateformes de diffusion d\u00E9clar\u00E9es : Facebook, Instagram, Messenger, Audience Network (Meta), TikTok Ads, Google Ads Transparency Center.",
+  formats: "Format cr\u00E9atif : VIDEO (vid\u00E9o), IMAGE (statique), DCO (multi-cr\u00E9atif dynamique), CAROUSEL (carrousel), DPA (catalogue produit).",
+  gender: "Ciblage genre d\u00E9clar\u00E9 par l\u2019annonceur via Meta. \u00AB Mixte \u00BB = aucun ciblage genre sp\u00E9cifique.",
+  googleAds: "Pubs collect\u00E9es via le Google Ads Transparency Center. Pas de donn\u00E9es d\u00E9mographiques disponibles (uniquement Meta).",
+};
+
 /* ─────────────── Constants ─────────────── */
 
 const PLATFORM_CONFIGS: Record<string, { label: string; color: string; iconColor: string; bg: string }> = {
@@ -481,7 +541,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
                         <Users className="h-3 w-3" />Genre
                       </div>
                       <div className="text-sm font-bold">
-                        {ad.gender_audience === "All" ? "Tous" : ad.gender_audience === "Male" ? "Hommes" : ad.gender_audience === "Female" ? "Femmes" : ad.gender_audience}
+                        {genderLabel(ad.gender_audience)}
                       </div>
                     </div>
                   )}
@@ -633,7 +693,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               return (
                 <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border border-emerald-100">
                   <div className="flex items-center justify-between mb-1.5">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Budget estimé (CPM)</div>
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Budget estim&eacute; (CPM) <InfoTooltip text={METHODOLOGY.budget} /></div>
                     <span className="text-[9px] text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">Benchmark {country}</span>
                   </div>
                   <div className="text-lg font-bold text-emerald-700 tabular-nums">
@@ -756,7 +816,7 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
               <PieChart className="h-4 w-4 text-white" />
             </div>
             <div>
-              <h3 className="text-[14px] font-semibold text-foreground">Audience & D&eacute;mographiques</h3>
+              <h3 className="text-[14px] font-semibold text-foreground flex items-center gap-1.5">Audience & D&eacute;mographiques <InfoTooltip text={METHODOLOGY.demographics} /></h3>
               <p className="text-[11px] text-muted-foreground">{demographics.adsWithData} pubs avec donn&eacute;es de transparence EU</p>
             </div>
           </div>
@@ -1216,7 +1276,7 @@ export default function AdsPage() {
   const [filterDateTo, setFilterDateTo] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [filterGender, setFilterGender] = useState<"all" | "All" | "Male" | "Female">("all");
+  const [filterGender, setFilterGender] = useState<"none" | "all" | "male" | "female">("none");
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
   const [locationSearch, setLocationSearch] = useState("");
@@ -1317,7 +1377,7 @@ export default function AdsPage() {
     setFilterDateFrom("");
     setFilterDateTo("");
     setSearchQuery("");
-    setFilterGender("all");
+    setFilterGender("none");
     setFilterLocations(new Set());
   }
 
@@ -1369,11 +1429,12 @@ export default function AdsPage() {
   }, [allAds]);
 
   const genderCounts = useMemo(() => {
-    const counts = { All: 0, Male: 0, Female: 0 };
+    const counts = { all: 0, male: 0, female: 0 };
     allAds.forEach(a => {
-      if (a.gender_audience === "All") counts.All++;
-      else if (a.gender_audience === "Male") counts.Male++;
-      else if (a.gender_audience === "Female") counts.Female++;
+      const g = normalizeGender(a.gender_audience);
+      if (g === "all") counts.all++;
+      else if (g === "male") counts.male++;
+      else if (g === "female") counts.female++;
     });
     return counts;
   }, [allAds]);
@@ -1389,7 +1450,7 @@ export default function AdsPage() {
       if (filterStatus === "inactive" && ad.is_active) return false;
       if (filterDateFrom && ad.start_date && ad.start_date < filterDateFrom) return false;
       if (filterDateTo && ad.start_date && ad.start_date > filterDateTo) return false;
-      if (filterGender !== "all" && ad.gender_audience !== filterGender) return false;
+      if (filterGender !== "none" && normalizeGender(ad.gender_audience) !== filterGender) return false;
       if (filterLocations.size > 0) {
         const adLocs = (ad.location_audience || []).map(l => l.name.split(":")[0].trim());
         if (!adLocs.some(l => filterLocations.has(l))) return false;
@@ -1409,7 +1470,7 @@ export default function AdsPage() {
   // Filtered stats
   const activeFilters = filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0) + (searchQuery ? 1 : 0)
-    + (filterGender !== "all" ? 1 : 0) + filterLocations.size;
+    + (filterGender !== "none" ? 1 : 0) + filterLocations.size;
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -1530,12 +1591,13 @@ export default function AdsPage() {
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{filteredAds.length}</div>
             <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">
-              {activeFilters > 0 ? "Filtrées" : "Pubs"}
+              {activeFilters > 0 ? "Filtr\u00E9es" : "Pubs"}
             </div>
+            <InfoTooltip text={METHODOLOGY.platforms} className="mt-0.5" />
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-400">{stats.active}</div>
-            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives</div>
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives <InfoTooltip text={METHODOLOGY.activeAds} /></div>
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.byAdvertiser.size}</div>
@@ -1547,14 +1609,14 @@ export default function AdsPage() {
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-base sm:text-lg font-normal text-violet-300/50">j</span></div>
-            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur. moy.</div>
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur. moy. <InfoTooltip text={METHODOLOGY.duration} /></div>
           </div>
           {stats.totalSpendMax > 0 && (
             <div className="col-span-2">
               <div className="text-xl sm:text-2xl font-bold tabular-nums text-emerald-400">
                 {formatNumber(stats.totalSpendMin)}&ndash;{formatNumber(stats.totalSpendMax)}<span className="text-base sm:text-lg font-normal text-emerald-300/50">&euro;</span>
               </div>
-              <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total</div>
+              <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total <InfoTooltip text={METHODOLOGY.budget} /></div>
             </div>
           )}
           {/* Platform breakdown with icons */}
@@ -1648,17 +1710,18 @@ export default function AdsPage() {
                   <FilterChip label="Termin&eacute;es" active={filterStatus === "inactive"} onClick={() => setFilterStatus("inactive")} count={allAds.filter(a => !a.is_active).length} />
                 </div>
               </div>
-              {(genderCounts.All > 0 || genderCounts.Male > 0 || genderCounts.Female > 0) && (
+              {(genderCounts.all > 0 || genderCounts.male > 0 || genderCounts.female > 0) && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Genre cible</span>
+                    <InfoTooltip text={METHODOLOGY.gender} />
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <FilterChip label="Tous" active={filterGender === "all"} onClick={() => setFilterGender("all")} />
-                    {genderCounts.All > 0 && <FilterChip label="Mixte" count={genderCounts.All} active={filterGender === "All"} onClick={() => setFilterGender(filterGender === "All" ? "all" : "All")} />}
-                    {genderCounts.Male > 0 && <FilterChip label="Hommes" count={genderCounts.Male} active={filterGender === "Male"} onClick={() => setFilterGender(filterGender === "Male" ? "all" : "Male")} />}
-                    {genderCounts.Female > 0 && <FilterChip label="Femmes" count={genderCounts.Female} active={filterGender === "Female"} onClick={() => setFilterGender(filterGender === "Female" ? "all" : "Female")} />}
+                    <FilterChip label="Tous" active={filterGender === "none"} onClick={() => setFilterGender("none")} />
+                    {genderCounts.all > 0 && <FilterChip label="Mixte" count={genderCounts.all} active={filterGender === "all"} onClick={() => setFilterGender(filterGender === "all" ? "none" : "all")} />}
+                    {genderCounts.male > 0 && <FilterChip label="Hommes" count={genderCounts.male} active={filterGender === "male"} onClick={() => setFilterGender(filterGender === "male" ? "none" : "male")} />}
+                    {genderCounts.female > 0 && <FilterChip label="Femmes" count={genderCounts.female} active={filterGender === "female"} onClick={() => setFilterGender(filterGender === "female" ? "none" : "female")} />}
                   </div>
                 </div>
               )}
@@ -1681,6 +1744,7 @@ export default function AdsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Plateforme</span>
+                    <InfoTooltip text={METHODOLOGY.platforms} />
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {availablePlatforms.map(([name, count]) => (
@@ -1692,6 +1756,7 @@ export default function AdsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Format</span>
+                    <InfoTooltip text={METHODOLOGY.formats} />
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {availableFormats.map(([name, count]) => (

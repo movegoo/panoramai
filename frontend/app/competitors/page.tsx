@@ -373,13 +373,13 @@ export default function CompetitorsPage() {
                         <h3 className="font-semibold text-[15px] text-foreground truncate">{comp.name}</h3>
                         {comp.website ? (
                           <a
-                            href={comp.website}
+                            href={comp.website.startsWith("http") ? comp.website : `https://${comp.website}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-violet-600 transition-colors"
                           >
                             <Globe className="h-3 w-3" />
-                            {new URL(comp.website).hostname}
+                            {(() => { try { return new URL(comp.website.startsWith("http") ? comp.website : `https://${comp.website}`).hostname; } catch { return comp.website; } })()}
                             <ExternalLink className="h-2.5 w-2.5 opacity-60" />
                           </a>
                         ) : (
