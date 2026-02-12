@@ -2,16 +2,21 @@
 Mon Enseigne - Brand management router.
 Central entity representing the user's retail brand.
 """
+import re
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from database import get_db, Advertiser, Competitor, User
 from models.schemas import BrandSetup
 from core.sectors import get_sector_label, get_competitors_for_sector, list_sectors, SECTORS
 from core.auth import get_current_user, get_optional_user
 from core.utils import get_logo_url
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -373,4 +378,112 @@ async def add_suggested_competitors(
         "skipped": skipped,
         "not_found": not_found,
         "total_competitors": db.query(Competitor).filter(Competitor.is_active == True).count()
+    }
+
+
+# =============================================================================
+# Social Auto-Detection
+# =============================================================================
+
+# Paths that are NOT Instagram profiles
+_IG_NON_PROFILES = {
+    "p", "reel", "reels", "stories", "explore", "accounts", "about",
+    "legal", "developer", "direct", "tv", "lite", "ar", "shop",
+}
+
+
+async def _detect_socials_from_website(website: str) -> dict:
+    """Scrape a website's HTML and extract social media links."""
+    import httpx
+
+    suggestions = {}
+    url = website if website.startswith("http") else f"https://{website}"
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+            resp = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+            })
+            html = resp.text
+
+        # Instagram
+        ig_matches = re.findall(
+            r'(?:https?://)?(?:www\.)?instagram\.com/([a-zA-Z0-9_.]{1,30})/?',
+            html
+        )
+        ig_filtered = [m for m in ig_matches if m.lower() not in _IG_NON_PROFILES]
+        if ig_filtered:
+            suggestions["instagram_username"] = ig_filtered[0]
+
+        # TikTok
+        tt_matches = re.findall(
+            r'(?:https?://)?(?:www\.)?tiktok\.com/@([a-zA-Z0-9_.]{1,30})/?',
+            html
+        )
+        if tt_matches:
+            suggestions["tiktok_username"] = tt_matches[0]
+
+        # YouTube - channel ID or @handle
+        yt_channel = re.findall(
+            r'(?:https?://)?(?:www\.)?youtube\.com/channel/(UC[a-zA-Z0-9_-]+)',
+            html
+        )
+        yt_handle = re.findall(
+            r'(?:https?://)?(?:www\.)?youtube\.com/@([a-zA-Z0-9_-]+)',
+            html
+        )
+        if yt_channel:
+            suggestions["youtube_channel_id"] = yt_channel[0]
+        elif yt_handle:
+            suggestions["youtube_channel_id"] = f"@{yt_handle[0]}"
+
+        # Play Store
+        ps_matches = re.findall(
+            r'play\.google\.com/store/apps/details\?id=([a-zA-Z0-9_.]+)',
+            html
+        )
+        if ps_matches:
+            suggestions["playstore_app_id"] = ps_matches[0]
+
+        # App Store
+        as_matches = re.findall(
+            r'apps\.apple\.com/[a-z]{2}/app/[^/\"\']+/id(\d+)',
+            html
+        )
+        if not as_matches:
+            as_matches = re.findall(
+                r'itunes\.apple\.com/[a-z]{2}/app/[^/\"\']+/id(\d+)',
+                html
+            )
+        if as_matches:
+            suggestions["appstore_app_id"] = as_matches[0]
+
+    except Exception as e:
+        logger.warning(f"Social detection failed for {website}: {e}")
+
+    return suggestions
+
+
+class SocialSuggestRequest(BaseModel):
+    company_name: str
+    website: Optional[str] = None
+
+
+@router.post("/suggest-socials")
+async def suggest_socials(data: SocialSuggestRequest):
+    """
+    Auto-detect social media handles from the brand's website.
+    Scrapes the website HTML for links to Instagram, TikTok, YouTube,
+    Play Store, and App Store.
+    """
+    suggestions = {}
+
+    # 1. Scrape website for social links
+    if data.website:
+        suggestions = await _detect_socials_from_website(data.website)
+
+    return {
+        "suggestions": suggestions,
+        "detected": len(suggestions),
+        "source": "website" if suggestions else "none",
     }
