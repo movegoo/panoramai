@@ -909,10 +909,10 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
               const malePct = age.total > 0 ? Math.round((age.male / age.total) * 100) : 0;
               const femalePct = age.total > 0 ? Math.round((age.female / age.total) * 100) : 0;
               return (
-                <div key={age.range} className="group/age">
+                <div key={age.range} className="group/age relative">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] tabular-nums text-muted-foreground w-10 text-right shrink-0 font-medium">{age.range}</span>
-                    <div className="flex-1 h-5 rounded-lg bg-muted/50 overflow-hidden flex relative">
+                    <div className="flex-1 h-5 rounded-lg bg-muted/50 overflow-hidden flex relative cursor-default">
                       <div className="h-full bg-blue-400/90 transition-all" style={{ width: `${(age.male / demographics.maxAgeTotal) * 100}%` }} />
                       <div className="h-full bg-pink-400/90 transition-all" style={{ width: `${(age.female / demographics.maxAgeTotal) * 100}%` }} />
                       {/* Percentage label inside bar */}
@@ -924,10 +924,10 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
                       {formatNumber(age.total)}
                     </span>
                   </div>
-                  {/* Hover detail */}
-                  <div className="hidden group-hover/age:flex items-center gap-3 ml-12 mt-0.5 text-[9px] text-muted-foreground">
-                    <span className="text-blue-600">{malePct}% H</span>
-                    <span className="text-pink-600">{femalePct}% F</span>
+                  {/* Hover tooltip - positioned absolutely so no layout shift */}
+                  <div className="pointer-events-none opacity-0 group-hover/age:opacity-100 transition-opacity absolute left-12 -top-7 z-10 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-popover border shadow-lg text-[9px]">
+                    <span className="text-blue-600 font-semibold">{malePct}% H</span>
+                    <span className="text-pink-600 font-semibold">{femalePct}% F</span>
                   </div>
                 </div>
               );
