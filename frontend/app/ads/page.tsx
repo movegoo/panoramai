@@ -6,6 +6,7 @@ import {
   competitorsAPI,
   facebookAPI,
   tiktokAPI,
+  googleAdsAPI,
   brandAPI,
   Ad,
 } from "@/lib/api";
@@ -102,6 +103,14 @@ function AppStoreIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function GoogleAdsIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M3.186 10.324l7.77-4.474 2.07 3.588-7.77 4.474zm14.358-6.312a3.012 3.012 0 0 0-4.122 1.1L7.91 14.998l4.122 2.378 5.512-9.542a3.012 3.012 0 0 0-1.1-4.122zM6.014 17.998a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+    </svg>
+  );
+}
+
 function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 36 36" className={className} fill="currentColor">
@@ -150,6 +159,9 @@ function getSourcePlatform(ad: AdWithCompetitor): { label: string; icon: React.R
   if (ad.platform === "tiktok") {
     return { label: "TikTok Ads", icon: <TikTokIcon className="h-3.5 w-3.5" />, color: "text-slate-800", bg: "bg-slate-100 border-slate-200" };
   }
+  if (ad.platform === "google") {
+    return { label: "Google Ads", icon: <GoogleAdsIcon className="h-3.5 w-3.5" />, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" };
+  }
   // Default: Meta (Facebook Ad Library)
   return { label: "Meta Ads", icon: <MetaIcon className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" };
 }
@@ -163,6 +175,7 @@ const PLATFORM_CONFIGS: Record<string, { label: string; color: string; iconColor
   MESSENGER: { label: "Messenger", color: "bg-violet-100 text-violet-700 border-violet-200", iconColor: "text-violet-600", bg: "bg-violet-500" },
   THREADS: { label: "Threads", color: "bg-stone-100 text-stone-700 border-stone-200", iconColor: "text-stone-600", bg: "bg-stone-500" },
   TIKTOK: { label: "TikTok", color: "bg-slate-100 text-slate-800 border-slate-200", iconColor: "text-slate-800", bg: "bg-slate-800" },
+  GOOGLE: { label: "Google", color: "bg-amber-100 text-amber-700 border-amber-200", iconColor: "text-amber-600", bg: "bg-amber-500" },
   YOUTUBE: { label: "YouTube", color: "bg-red-100 text-red-700 border-red-200", iconColor: "text-red-600", bg: "bg-red-500" },
   GOOGLE_PLAY: { label: "Google Play", color: "bg-green-100 text-green-700 border-green-200", iconColor: "text-green-600", bg: "bg-green-500" },
   APP_STORE: { label: "App Store", color: "bg-sky-100 text-sky-700 border-sky-200", iconColor: "text-sky-600", bg: "bg-sky-500" },
@@ -188,6 +201,7 @@ function PlatformIcon({ name, className = "h-3.5 w-3.5" }: { name: string; class
     case "INSTAGRAM": return <InstagramIcon className={className} />;
     case "MESSENGER": return <MessengerIcon className={className} />;
     case "TIKTOK": return <TikTokIcon className={className} />;
+    case "GOOGLE": return <GoogleAdsIcon className={className} />;
     case "YOUTUBE": return <YouTubeIcon className={className} />;
     case "GOOGLE_PLAY": case "PLAYSTORE": return <GooglePlayIcon className={className} />;
     case "APP_STORE": case "APPSTORE": return <AppStoreIcon className={className} />;
@@ -643,12 +657,12 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             </span>
           )}
           <a
-            href={ad.ad_library_url || `https://www.facebook.com/ads/library/?id=${ad.ad_id}`}
+            href={ad.ad_library_url || (ad.platform === "google" ? `https://adstransparency.google.com/advertiser/${ad.ad_id}` : `https://www.facebook.com/ads/library/?id=${ad.ad_id}`)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[11px] text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
           >
-            <ArrowUpRight className="h-3 w-3" />Ad Library
+            <ArrowUpRight className="h-3 w-3" />{ad.platform === "google" ? "Google Transparency" : "Ad Library"}
           </a>
         </div>
       </div>
@@ -1039,23 +1053,24 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
       </div>
       <div className="divide-y">
         {data.map((c, i) => (
-          <div key={c.name} className="px-5 py-4 hover:bg-muted/20 transition-colors">
-            <div className="flex items-center gap-4">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-slate-100 text-slate-600" : "bg-orange-50 text-orange-600"}`}>
+          <div key={c.name} className="px-4 sm:px-5 py-4 hover:bg-muted/20 transition-colors">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 ${i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-slate-100 text-slate-600" : "bg-orange-50 text-orange-600"}`}>
                 {i + 1}
               </div>
-              <div className="flex items-center gap-2.5 min-w-0 w-36 shrink-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-none sm:w-36 shrink-0">
                 {c.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={c.logo} alt="" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
+                  <img src={c.logo} alt="" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full object-cover border border-border shrink-0" />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center shrink-0">
-                    <span className="text-[10px] font-bold text-slate-600">{c.name.slice(0, 2).toUpperCase()}</span>
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center shrink-0">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-600">{c.name.slice(0, 2).toUpperCase()}</span>
                   </div>
                 )}
-                <span className="text-sm font-semibold truncate">{c.name}</span>
+                <span className="text-xs sm:text-sm font-semibold truncate">{c.name}</span>
               </div>
-              <div className="flex-1 grid grid-cols-5 gap-4">
+              {/* Desktop: inline stats */}
+              <div className="hidden md:grid flex-1 grid-cols-5 gap-4">
                 <div className="text-center">
                   <div className="text-lg font-bold tabular-nums">{c.total}</div>
                   <div className="text-[9px] text-muted-foreground uppercase tracking-widest">pubs</div>
@@ -1083,8 +1098,35 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
                   <div className="text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">plateformes</div>
                 </div>
               </div>
+              {/* Mobile: compact stats */}
+              <div className="md:hidden text-right shrink-0">
+                <div className="text-base font-bold tabular-nums">{c.total}</div>
+                <div className="text-[9px] text-muted-foreground">pubs</div>
+              </div>
             </div>
-            <div className="ml-12 mt-2">
+            {/* Mobile: expanded stats row */}
+            <div className="md:hidden grid grid-cols-4 gap-2 mt-2.5 ml-10">
+              <div>
+                <div className="text-xs font-bold tabular-nums text-emerald-600">{c.spendMax > 0 ? `${formatNumber(c.spendMax)}€` : "—"}</div>
+                <div className="text-[8px] text-muted-foreground uppercase">budget</div>
+              </div>
+              <div>
+                <div className="text-xs font-bold tabular-nums text-blue-600">{formatNumber(c.reach)}</div>
+                <div className="text-[8px] text-muted-foreground uppercase">reach</div>
+              </div>
+              <div>
+                <div className="text-xs font-bold tabular-nums">{c.avgDur}j</div>
+                <div className="text-[8px] text-muted-foreground uppercase">duree</div>
+              </div>
+              <div className="flex items-center gap-0.5">
+                {c.plats.slice(0, 4).map(p => (
+                  <span key={p} className="h-4 w-4 rounded-full bg-muted flex items-center justify-center">
+                    <PlatformIcon name={p} className="h-2 w-2" />
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="ml-10 sm:ml-12 mt-2">
               <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
                 <div className={`h-full rounded-full ${i === 0 ? "bg-gradient-to-r from-blue-500 to-blue-600" : "bg-blue-300"}`} style={{ width: `${(c.reach / maxReach) * 100}%` }} />
               </div>
@@ -1185,15 +1227,17 @@ export default function AdsPage() {
 
   async function loadAll() {
     try {
-      const [fbAdsRes, ttAdsRes, compRes, brandRes] = await Promise.allSettled([
+      const [fbAdsRes, ttAdsRes, gAdsRes, compRes, brandRes] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
+        googleAdsAPI.getAllAds(),
         competitorsAPI.list(),
         brandAPI.getProfile(),
       ]);
       const fbAds = fbAdsRes.status === "fulfilled" ? fbAdsRes.value : [];
       const ttAds = ttAdsRes.status === "fulfilled" ? ttAdsRes.value : [];
-      const ads = [...fbAds, ...ttAds];
+      const gAds = gAdsRes.status === "fulfilled" ? gAdsRes.value : [];
+      const ads = [...fbAds, ...ttAds, ...gAds];
       const comps = compRes.status === "fulfilled" ? compRes.value : [];
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
@@ -1206,15 +1250,18 @@ export default function AdsPage() {
           for (const c of comps) {
             try { await facebookAPI.fetchAds(c.id); } catch {}
             try { await tiktokAPI.fetchAds(c.id); } catch {}
+            try { await googleAdsAPI.fetchAds(c.id); } catch {}
           }
           try { await facebookAPI.enrichTransparency(); } catch {}
-          const [freshFb, freshTt] = await Promise.allSettled([
+          const [freshFb, freshTt, freshG] = await Promise.allSettled([
             facebookAPI.getAllAds(),
             tiktokAPI.getAllAds(),
+            googleAdsAPI.getAllAds(),
           ]);
           setAllAds([
             ...(freshFb.status === "fulfilled" ? freshFb.value : []),
             ...(freshTt.status === "fulfilled" ? freshTt.value : []),
+            ...(freshG.status === "fulfilled" ? freshG.value : []),
           ]);
         } finally {
           setFetching(false);
@@ -1233,16 +1280,19 @@ export default function AdsPage() {
       for (const c of competitors) {
         try { await facebookAPI.fetchAds(c.id); } catch {}
         try { await tiktokAPI.fetchAds(c.id); } catch {}
+        try { await googleAdsAPI.fetchAds(c.id); } catch {}
       }
       // Enrich with EU transparency data
       try { await facebookAPI.enrichTransparency(); } catch {}
-      const [fbAds, ttAds] = await Promise.allSettled([
+      const [fbAds, ttAds, gAds] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
+        googleAdsAPI.getAllAds(),
       ]);
       setAllAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
+        ...(gAds.status === "fulfilled" ? gAds.value : []),
       ]);
     } catch (err) {
       console.error(err);
@@ -1454,81 +1504,71 @@ export default function AdsPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ─────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
+          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50 shrink-0">
             <Megaphone className="h-5 w-5 text-violet-600" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
-            <p className="text-[13px] text-muted-foreground">
-              Meta &amp; TikTok Ads &mdash; Analyse et surveillance des campagnes
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
+            <p className="text-[12px] sm:text-[13px] text-muted-foreground truncate">
+              Meta, TikTok &amp; Google Ads
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2">
+        <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2 shrink-0 self-end sm:self-auto">
           <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
           Scanner tout
         </Button>
       </div>
 
       {/* ── KPI Banner ─────────────────────── */}
-      <div className="rounded-2xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-8 py-6 text-white relative overflow-hidden">
+      <div className="rounded-2xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-4 sm:px-8 py-5 sm:py-6 text-white relative overflow-hidden">
         <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-violet-400/[0.05]" />
         <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-400/[0.04]" />
-        <div className="relative flex items-center gap-8 flex-wrap">
+        <div className="relative grid grid-cols-3 sm:grid-cols-5 gap-4 sm:gap-6">
           <div>
-            <div className="text-3xl font-bold tabular-nums">{filteredAds.length}</div>
-            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">
-              {activeFilters > 0 ? "Filtrées" : "Publicités"}
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{filteredAds.length}</div>
+            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">
+              {activeFilters > 0 ? "Filtrées" : "Pubs"}
             </div>
           </div>
-          <div className="h-10 w-px bg-white/10" />
           <div>
-            <div className="text-3xl font-bold tabular-nums text-emerald-400">{stats.active}</div>
-            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives</div>
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-400">{stats.active}</div>
+            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Actives</div>
           </div>
-          <div className="h-10 w-px bg-white/10" />
           <div>
-            <div className="text-3xl font-bold tabular-nums">{stats.byAdvertiser.size}</div>
-            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Payeurs</div>
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.byAdvertiser.size}</div>
+            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Payeurs</div>
           </div>
-          <div className="h-10 w-px bg-white/10" />
           <div>
-            <div className="text-3xl font-bold tabular-nums">{stats.byCompetitor.size}</div>
-            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Concurrents</div>
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.byCompetitor.size}</div>
+            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Concurrents</div>
           </div>
-          <div className="h-10 w-px bg-white/10" />
           <div>
-            <div className="text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-lg font-normal text-violet-300/50">j</span></div>
-            <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur&eacute;e moy.</div>
+            <div className="text-2xl sm:text-3xl font-bold tabular-nums">{stats.avgDuration}<span className="text-base sm:text-lg font-normal text-violet-300/50">j</span></div>
+            <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Dur. moy.</div>
           </div>
           {stats.totalSpendMax > 0 && (
-            <>
-              <div className="h-10 w-px bg-white/10" />
-              <div>
-                <div className="text-2xl font-bold tabular-nums text-emerald-400">
-                  {formatNumber(stats.totalSpendMin)}&ndash;{formatNumber(stats.totalSpendMax)}<span className="text-lg font-normal text-emerald-300/50">&euro;</span>
-                </div>
-                <div className="text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total</div>
+            <div className="col-span-2">
+              <div className="text-xl sm:text-2xl font-bold tabular-nums text-emerald-400">
+                {formatNumber(stats.totalSpendMin)}&ndash;{formatNumber(stats.totalSpendMax)}<span className="text-base sm:text-lg font-normal text-emerald-300/50">&euro;</span>
               </div>
-            </>
+              <div className="text-[10px] sm:text-[11px] text-violet-300/60 uppercase tracking-widest mt-0.5">Budget total</div>
+            </div>
           )}
           {/* Platform breakdown with icons */}
           {stats.byPlatform.size > 0 && (
-            <>
-              <div className="h-10 w-px bg-white/10" />
-              <div className="flex items-center gap-3">
-                {Array.from(stats.byPlatform.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, count]) => (
-                  <div key={p} className="text-center flex flex-col items-center gap-1">
-                    <div className="h-7 w-7 rounded-lg bg-white/[0.08] backdrop-blur-sm flex items-center justify-center border border-white/[0.06]">
-                      <PlatformIcon name={p} className="h-3.5 w-3.5 text-white/80" />
-                    </div>
-                    <div className="text-sm font-semibold tabular-nums">{count}</div>
+            <div className="col-span-3 sm:col-span-2 flex items-center gap-2 sm:gap-3">
+              {Array.from(stats.byPlatform.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, count]) => (
+                <div key={p} className="text-center flex flex-col items-center gap-1">
+                  <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-white/[0.08] backdrop-blur-sm flex items-center justify-center border border-white/[0.06]">
+                    <PlatformIcon name={p} className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/80" />
                   </div>
-                ))}
-              </div>
-            </>
+                  <div className="text-xs sm:text-sm font-semibold tabular-nums">{count}</div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

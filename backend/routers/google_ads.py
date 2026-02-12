@@ -45,6 +45,52 @@ def _parse_date(date_str: str | None) -> datetime | None:
         return None
 
 
+@router.get("/ads/all")
+async def get_all_google_ads(
+    active_only: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    """Liste toutes les pubs Google avec le nom du concurrent."""
+    query = db.query(Ad, Competitor.name).join(
+        Competitor, Ad.competitor_id == Competitor.id
+    ).filter(Ad.platform == "google")
+
+    if active_only:
+        query = query.filter(Ad.is_active == True)
+
+    rows = query.all()
+
+    results = []
+    for ad, comp_name in rows:
+        countries = []
+        if ad.targeted_countries:
+            try:
+                countries = json.loads(ad.targeted_countries) if isinstance(ad.targeted_countries, str) else ad.targeted_countries
+            except (json.JSONDecodeError, TypeError):
+                pass
+        results.append({
+            "id": ad.id,
+            "ad_id": ad.ad_id,
+            "competitor_id": ad.competitor_id,
+            "competitor_name": comp_name,
+            "platform": "google",
+            "creative_url": ad.creative_url,
+            "ad_text": ad.ad_text,
+            "cta": ad.cta,
+            "start_date": ad.start_date.isoformat() if ad.start_date else None,
+            "end_date": ad.end_date.isoformat() if ad.end_date else None,
+            "is_active": ad.is_active,
+            "page_name": ad.page_name,
+            "display_format": ad.display_format,
+            "ad_library_url": ad.ad_library_url,
+            "link_url": ad.link_url,
+            "targeted_countries": countries,
+            "publisher_platforms": ["GOOGLE"],
+        })
+
+    return results
+
+
 @router.get("/ads/{competitor_id}")
 async def get_google_ads(
     competitor_id: int,

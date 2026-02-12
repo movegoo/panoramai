@@ -28,6 +28,7 @@ import {
   Activity,
   LogOut,
   Shield,
+  X,
 } from "lucide-react";
 
 const navigation = [
@@ -42,20 +43,20 @@ const navigation = [
     name: "Veille",
     items: [
       { name: "Concurrents", href: "/competitors", icon: Users },
-      { name: "Publicités", href: "/ads", icon: Megaphone },
-      { name: "Réseaux sociaux", href: "/social", icon: Activity },
+      { name: "Publicit\u00e9s", href: "/ads", icon: Megaphone },
+      { name: "R\u00e9seaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
     ],
   },
   {
-    name: "Paramètres",
+    name: "Param\u00e8tres",
     items: [
       { name: "Mon enseigne", href: "/account", icon: Settings },
     ],
   },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -75,9 +76,9 @@ export function SidebarNav() {
   }
 
   return (
-    <aside className="w-[220px] flex flex-col border-r border-border bg-card shrink-0">
+    <aside className="w-[220px] h-full flex flex-col border-r border-border bg-card shrink-0">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-border">
+      <div className="px-5 py-5 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 shadow-md shadow-violet-200/50">
             <span className="text-sm font-bold text-white tracking-tight">P</span>
@@ -91,6 +92,15 @@ export function SidebarNav() {
             </span>
           </div>
         </div>
+        {/* Close button - mobile only */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
       </div>
 
       {/* Nav sections */}

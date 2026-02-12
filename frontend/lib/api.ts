@@ -604,6 +604,29 @@ export const appstoreAPI = {
     fetchAPI<any[]>(`/appstore/search?query=${encodeURIComponent(query)}`),
 };
 
+// Google Ads API
+export const googleAdsAPI = {
+  getAllAds: (activeOnly = false) =>
+    fetchAPI<(Ad & { competitor_name: string })[]>(
+      `/google/ads/all?active_only=${activeOnly}`
+    ),
+
+  getAds: (competitorId: number) =>
+    fetchAPI<any>(`/google/ads/${competitorId}`),
+
+  fetchAds: (competitorId: number, country = "FR") =>
+    fetchAPI<{ competitor: string; domain: string; fetched: number; new: number; updated: number }>(
+      `/google/fetch/${competitorId}?country=${country}`,
+      { method: "POST" }
+    ),
+
+  fetchAll: (country = "FR") =>
+    fetchAPI<{ message: string; results: any[] }>(
+      `/google/fetch-all?country=${country}`,
+      { method: "POST" }
+    ),
+};
+
 // Brand / Mon Compte API
 export interface BrandProfileData {
   id: number;
