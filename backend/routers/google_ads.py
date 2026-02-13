@@ -90,6 +90,8 @@ async def get_all_google_ads(
             "link_url": ad.link_url,
             "targeted_countries": countries,
             "publisher_platforms": ["GOOGLE"],
+            "impressions_min": ad.impressions_min,
+            "impressions_max": ad.impressions_max,
         })
 
     return results
@@ -211,10 +213,19 @@ async def _fetch_and_store_google_ads(
             if last_shown:
                 is_active = (datetime.utcnow() - last_shown.replace(tzinfo=None)).days <= 7
 
+            # Parse impressions if available
+            impressions = ad.get("overallImpressions") or {}
+            imp_min = impressions.get("min") if isinstance(impressions, dict) else None
+            imp_max = impressions.get("max") if isinstance(impressions, dict) else None
+
             if existing:
                 # Update last_shown and active status
                 existing.end_date = last_shown
                 existing.is_active = is_active
+                if imp_min is not None:
+                    existing.impressions_min = imp_min
+                if imp_max is not None:
+                    existing.impressions_max = imp_max
                 updated_count += 1
             else:
                 new_ad = Ad(
@@ -227,6 +238,8 @@ async def _fetch_and_store_google_ads(
                     start_date=first_shown,
                     end_date=last_shown,
                     is_active=is_active,
+                    impressions_min=imp_min,
+                    impressions_max=imp_max,
                     page_name=ad.get("advertiserName") or "",
                     display_format=(ad.get("format") or "").upper(),
                     ad_library_url=ad.get("adUrl") or "",
