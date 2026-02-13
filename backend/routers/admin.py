@@ -1,6 +1,7 @@
 """
 Admin backoffice router.
-Platform stats and user management, restricted to admins.
+Platform stats accessible to all authenticated users (scoped to their data).
+User management restricted to admins.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from database import (
     get_db, User, Advertiser, Competitor,
     Ad, InstagramData, TikTokData, YouTubeData, AppData, StoreLocation,
 )
-from core.auth import get_admin_user
+from core.auth import get_current_user, get_admin_user
 from services.scheduler import scheduler
 
 router = APIRouter()
@@ -18,24 +19,35 @@ router = APIRouter()
 
 @router.get("/stats")
 async def get_stats(
-    admin: User = Depends(get_admin_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Global platform statistics."""
-    total_users = db.query(func.count(User.id)).scalar()
-    active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar()
-    total_brands = db.query(func.count(Advertiser.id)).filter(Advertiser.is_active == True).scalar()
-    total_competitors = db.query(func.count(Competitor.id)).filter(Competitor.is_active == True).scalar()
+    """Platform statistics scoped to the current user."""
+    # User's competitors
+    user_comp_ids = [
+        row[0] for row in
+        db.query(Competitor.id).filter(
+            Competitor.user_id == user.id, Competitor.is_active == True
+        ).all()
+    ]
 
-    total_ads = db.query(func.count(Ad.id)).scalar()
-    total_instagram = db.query(func.count(InstagramData.id)).scalar()
-    total_tiktok = db.query(func.count(TikTokData.id)).scalar()
-    total_youtube = db.query(func.count(YouTubeData.id)).scalar()
-    total_apps = db.query(func.count(AppData.id)).scalar()
-    total_stores = db.query(func.count(StoreLocation.id)).scalar()
+    total_brands = db.query(func.count(Advertiser.id)).filter(
+        Advertiser.user_id == user.id, Advertiser.is_active == True
+    ).scalar()
+    total_competitors = len(user_comp_ids)
+
+    # Data volume scoped to user's competitors
+    if user_comp_ids:
+        total_ads = db.query(func.count(Ad.id)).filter(Ad.competitor_id.in_(user_comp_ids)).scalar()
+        total_instagram = db.query(func.count(InstagramData.id)).filter(InstagramData.competitor_id.in_(user_comp_ids)).scalar()
+        total_tiktok = db.query(func.count(TikTokData.id)).filter(TikTokData.competitor_id.in_(user_comp_ids)).scalar()
+        total_youtube = db.query(func.count(YouTubeData.id)).filter(YouTubeData.competitor_id.in_(user_comp_ids)).scalar()
+        total_apps = db.query(func.count(AppData.id)).filter(AppData.competitor_id.in_(user_comp_ids)).scalar()
+        total_stores = db.query(func.count(StoreLocation.id)).filter(StoreLocation.competitor_id.in_(user_comp_ids)).scalar()
+    else:
+        total_ads = total_instagram = total_tiktok = total_youtube = total_apps = total_stores = 0
 
     return {
-        "users": {"total": total_users, "active": active_users},
         "brands": total_brands,
         "competitors": total_competitors,
         "data_volume": {

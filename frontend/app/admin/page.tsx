@@ -55,21 +55,23 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && (!user || !user.is_admin)) {
+    if (!loading && !user) {
       router.replace("/");
     }
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user?.is_admin) {
+    if (user) {
       adminAPI
         .getStats()
         .then(setStats)
         .catch((e) => setError(e.message));
-      adminAPI
-        .getUsers()
-        .then(setUsers)
-        .catch(() => {});
+      if (user.is_admin) {
+        adminAPI
+          .getUsers()
+          .then(setUsers)
+          .catch(() => {});
+      }
     }
   }, [user]);
 
@@ -81,7 +83,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!user?.is_admin) return null;
+  if (!user) return null;
 
   if (error) {
     return (
@@ -101,9 +103,9 @@ export default function AdminPage() {
           <Shield className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground">Backoffice Admin</h1>
+          <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
           <p className="text-sm text-muted-foreground">
-            Statistiques globales de la plateforme
+            Statistiques de votre veille concurrentielle
           </p>
         </div>
       </div>
@@ -116,12 +118,6 @@ export default function AdminPage() {
         <>
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <StatCard
-              icon={Users}
-              label="Utilisateurs"
-              value={stats.users.total}
-              sub={`${stats.users.active} actifs`}
-            />
             <StatCard icon={Store} label="Enseignes" value={stats.brands} />
             <StatCard icon={Target} label="Concurrents" value={stats.competitors} />
             <StatCard icon={Megaphone} label="Publicites" value={stats.data_volume.ads} />
@@ -178,8 +174,8 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Users table */}
-          <div className="rounded-xl border border-border bg-card">
+          {/* Users table (admin only) */}
+          {user?.is_admin && <div className="rounded-xl border border-border bg-card">
             <div className="px-5 py-4 border-b border-border">
               <h2 className="text-sm font-semibold text-foreground">
                 Utilisateurs ({users.length})
@@ -238,7 +234,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </div>}
         </>
       )}
     </div>

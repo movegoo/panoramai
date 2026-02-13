@@ -722,7 +722,6 @@ export const brandAPI = {
 
 // Admin API
 export interface AdminStats {
-  users: { total: number; active: number };
   brands: number;
   competitors: number;
   data_volume: {
