@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 
 from database import get_db, Competitor, AppData, User
@@ -164,6 +164,7 @@ async def fetch_appstore_data(
 
 @router.get("/comparison")
 async def compare_appstore_apps(
+    days: int = 7,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -186,6 +187,20 @@ async def compare_appstore_apps(
         )
 
         if latest:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            old = (
+                db.query(AppData)
+                .filter(AppData.competitor_id == competitor.id, AppData.store == "appstore", AppData.recorded_at <= cutoff)
+                .order_by(desc(AppData.recorded_at))
+                .first()
+            )
+            rating_growth = None
+            reviews_growth = None
+            if old and old.rating and latest.rating:
+                rating_growth = round(latest.rating - old.rating, 2)
+            if old and old.reviews_count and latest.reviews_count:
+                reviews_growth = latest.reviews_count - old.reviews_count
+
             comparison.append({
                 "competitor_id": competitor.id,
                 "competitor_name": competitor.name,
@@ -195,7 +210,9 @@ async def compare_appstore_apps(
                 "reviews_count": latest.reviews_count,
                 "version": latest.version,
                 "last_updated": latest.last_updated.isoformat() if latest.last_updated else None,
-                "recorded_at": latest.recorded_at.isoformat()
+                "recorded_at": latest.recorded_at.isoformat(),
+                "rating_growth": rating_growth,
+                "reviews_growth": reviews_growth,
             })
 
     comparison.sort(key=lambda x: x["rating"] or 0, reverse=True)

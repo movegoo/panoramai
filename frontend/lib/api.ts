@@ -575,7 +575,7 @@ export const playstoreAPI = {
       { method: "POST" }
     ),
 
-  getComparison: () => fetchAPI<any[]>("/playstore/comparison"),
+  getComparison: (days?: number) => fetchAPI<any[]>(`/playstore/comparison${days ? `?days=${days}` : ""}`),
 
   getReviews: (competitorId: number) =>
     fetchAPI<any>(`/playstore/reviews/${competitorId}`),
@@ -598,7 +598,7 @@ export const appstoreAPI = {
       { method: "POST" }
     ),
 
-  getComparison: () => fetchAPI<any[]>("/appstore/comparison"),
+  getComparison: (days?: number) => fetchAPI<any[]>(`/appstore/comparison${days ? `?days=${days}` : ""}`),
 
   getReviews: (competitorId: number) =>
     fetchAPI<any>(`/appstore/reviews/${competitorId}`),

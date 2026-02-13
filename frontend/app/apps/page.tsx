@@ -27,6 +27,7 @@ import {
   Clock,
   ChevronRight,
 } from "lucide-react";
+import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 
 type Store = "playstore" | "appstore";
 type RankingView = "rating" | "reviews" | "downloads";
@@ -109,14 +110,16 @@ export default function AppsPage() {
   const [brandName, setBrandName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
+  const [initialLoad, setInitialLoad] = useState(true);
 
   useEffect(() => {
     async function loadAll() {
       try {
         const [comp, ps, as_, brand] = await Promise.allSettled([
           competitorsAPI.list(),
-          playstoreAPI.getComparison(),
-          appstoreAPI.getComparison(),
+          playstoreAPI.getComparison(periodDays),
+          appstoreAPI.getComparison(periodDays),
           brandAPI.getProfile(),
         ]);
         const allComp = comp.status === "fulfilled" ? comp.value : [];
@@ -125,35 +128,37 @@ export default function AppsPage() {
         if (ps.status === "fulfilled") setPsComparison(ps.value);
         if (as_.status === "fulfilled") setAsComparison(as_.value);
         if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
-        if (withApps.length > 0) setSelectedCompetitor(withApps[0].id);
+        if (withApps.length > 0 && !selectedCompetitor) setSelectedCompetitor(withApps[0].id);
 
-        // Load trends for all competitors
-        const trendMap: Record<string, any> = {};
-        await Promise.allSettled(
-          withApps.map(async (c) => {
-            try {
-              if (c.playstore_app_id) {
-                const t = await playstoreAPI.getTrends(c.id);
-                trendMap[`ps_${c.id}`] = t;
-              }
-            } catch {}
-            try {
-              if (c.appstore_app_id) {
-                const t = await appstoreAPI.getTrends(c.id);
-                trendMap[`as_${c.id}`] = t;
-              }
-            } catch {}
-          })
-        );
-        setTrends(trendMap);
+        // Load trends for all competitors (only on first load)
+        if (initialLoad) {
+          const trendMap: Record<string, any> = {};
+          await Promise.allSettled(
+            withApps.map(async (c) => {
+              try {
+                if (c.playstore_app_id) {
+                  const t = await playstoreAPI.getTrends(c.id);
+                  trendMap[`ps_${c.id}`] = t;
+                }
+              } catch {}
+              try {
+                if (c.appstore_app_id) {
+                  const t = await appstoreAPI.getTrends(c.id);
+                  trendMap[`as_${c.id}`] = t;
+                }
+              } catch {}
+            })
+          );
+          setTrends(trendMap);
+        }
       } catch (err) {
         console.error("Failed to load:", err);
       } finally {
-        setLoading(false);
+        if (initialLoad) { setLoading(false); setInitialLoad(false); }
       }
     }
     loadAll();
-  }, []);
+  }, [periodDays]);
 
   useEffect(() => {
     if (selectedCompetitor) {

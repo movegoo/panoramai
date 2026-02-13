@@ -202,6 +202,10 @@ class StoreLocation(Base):
     longitude = Column(Float)
     siret = Column(String(20))
     source = Column(String(100))
+    google_rating = Column(Float, nullable=True)
+    google_reviews_count = Column(Integer, nullable=True)
+    google_place_id = Column(String(255), nullable=True)
+    rating_fetched_at = Column(DateTime, nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow)
 
     competitor = relationship("Competitor", backref="store_locations")
