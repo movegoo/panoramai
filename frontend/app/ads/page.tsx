@@ -125,16 +125,17 @@ function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
 /* ─────────────── CPM Benchmarks & Budget Estimation ─────────────── */
 
 // CPM benchmarks by country (EUR) - Source: industry averages 2025-2026
-const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number }> = {
-  FR: { meta: 3.0, tiktok: 2.0 },
-  DE: { meta: 3.0, tiktok: 2.5 },
-  ES: { meta: 2.5, tiktok: 1.5 },
-  IT: { meta: 2.5, tiktok: 1.5 },
-  BE: { meta: 3.0, tiktok: 2.0 },
-  NL: { meta: 3.0, tiktok: 2.5 },
-  UK: { meta: 3.0, tiktok: 2.5 },
-  US: { meta: 3.0, tiktok: 2.5 },
-  DEFAULT: { meta: 3.0, tiktok: 2.0 },
+// Google Display ~1-2€, Google Search ~10-15€ → blended ~4€ for awareness/display campaigns
+const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number; google: number }> = {
+  FR: { meta: 3.0, tiktok: 2.0, google: 4.0 },
+  DE: { meta: 3.0, tiktok: 2.5, google: 4.5 },
+  ES: { meta: 2.5, tiktok: 1.5, google: 3.5 },
+  IT: { meta: 2.5, tiktok: 1.5, google: 3.5 },
+  BE: { meta: 3.0, tiktok: 2.0, google: 4.0 },
+  NL: { meta: 3.0, tiktok: 2.5, google: 4.5 },
+  UK: { meta: 3.0, tiktok: 2.5, google: 5.0 },
+  US: { meta: 3.0, tiktok: 2.5, google: 5.0 },
+  DEFAULT: { meta: 3.0, tiktok: 2.0, google: 4.0 },
 };
 
 function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | null {
@@ -145,10 +146,10 @@ function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | nu
   if (!reach || reach < 100) return null;
 
   // Determine platform CPM
-  const isTikTok = ad.platform === "tiktok";
+  const source = normalizeSource(ad.platform);
   const country = ad.targeted_countries?.[0] || "FR";
   const benchmark = CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT;
-  const cpm = isTikTok ? benchmark.tiktok : benchmark.meta;
+  const cpm = (benchmark as Record<string, number>)[source] || benchmark.meta;
 
   // Budget = (reach / 1000) * CPM (with range +-30%)
   const estimated = (reach / 1000) * cpm;
@@ -221,7 +222,7 @@ function InfoTooltip({ text, className = "", light = false }: { text: string; cl
 /* ─────────────── Methodology texts ─────────────── */
 
 const METHODOLOGY = {
-  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks : FR 3\u20AC Meta / 2\u20AC TikTok. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
+  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks FR : 3\u20AC Meta / 2\u20AC TikTok / 4\u20AC Google. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
   reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
   duration: "Dur\u00E9e moyenne = (date de fin - date de d\u00E9but) pour chaque pub termin\u00E9e. Les pubs encore actives (sans date de fin) sont exclues du calcul.",
   demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
@@ -697,8 +698,9 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               const budget = estimateBudget(ad);
               if (!budget) return null;
               const country = ad.targeted_countries?.[0] || "FR";
-              const isTikTok = ad.platform === "tiktok";
-              const cpm = (CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT)[isTikTok ? "tiktok" : "meta"];
+              const source = normalizeSource(ad.platform);
+              const cpm = ((CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT) as Record<string, number>)[source] || CPM_BENCHMARKS.DEFAULT.meta;
+              const sourceLabel = SOURCE_CONFIG[source]?.label || "Meta";
               return (
                 <div className="p-3 rounded-lg bg-gradient-to-r from-emerald-50/80 to-teal-50/80 border border-emerald-100">
                   <div className="flex items-center justify-between mb-1.5">
@@ -709,7 +711,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
                     {formatNumber(budget.min)} - {formatNumber(budget.max)} €
                   </div>
                   <div className="text-[10px] text-muted-foreground mt-1">
-                    CPM {isTikTok ? "TikTok" : "Meta"} : ~{cpm}€ &middot; Reach : {formatNumber(ad.eu_total_reach || 0)}
+                    CPM {sourceLabel} : ~{cpm}€ &middot; Reach : {formatNumber(ad.eu_total_reach || 0)}
                   </div>
                 </div>
               );
