@@ -43,6 +43,8 @@ import {
   TrendingUp,
   PieChart,
   Megaphone,
+  ImageOff,
+  Radio,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 
@@ -166,6 +168,12 @@ function getSourcePlatform(ad: AdWithCompetitor): { label: string; icon: React.R
   // Default: Meta (Facebook Ad Library)
   return { label: "Meta Ads", icon: <MetaIcon className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" };
 }
+
+const SOURCE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
+  meta: { label: "Meta", icon: <MetaIcon className="h-3 w-3" /> },
+  tiktok: { label: "TikTok", icon: <TikTokIcon className="h-3 w-3" /> },
+  google: { label: "Google", icon: <GoogleAdsIcon className="h-3 w-3" /> },
+};
 
 /* ─────────────── Gender normalization ─────────────── */
 
@@ -335,22 +343,24 @@ function GenderBar({ male, female, unknown, compact = false }: { male: number; f
 
 function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetitor; expanded: boolean; onToggle: () => void; advertiserLogo?: string }) {
   const durationDays = (ad.start_date && ad.end_date) ? Math.ceil((new Date(ad.end_date).getTime() - new Date(ad.start_date).getTime()) / 86400000) : 0;
+  const [imgError, setImgError] = useState(false);
+  const linkHref = ad.ad_library_url || ad.link_url || ad.creative_url;
   return (
     <div className="group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
       {/* Image */}
-      {ad.creative_url ? (
-        <a href={ad.creative_url} target="_blank" rel="noopener noreferrer" className="block">
-          <div className="relative aspect-[4/3] bg-muted overflow-hidden">
+      {ad.creative_url && !imgError ? (
+        <a href={linkHref} target="_blank" rel="noopener noreferrer" className="block">
+          <div className="relative aspect-[4/3] bg-slate-900 overflow-hidden flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={ad.creative_url}
               alt=""
               loading="lazy"
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              className="max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-[1.03]"
+              onError={() => setImgError(true)}
             />
-            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/40 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/40 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
             {/* Status dot */}
             <div className="absolute top-3 right-3">
               <span className={`relative flex h-2.5 w-2.5 rounded-full ${ad.is_active ? "bg-emerald-400" : "bg-gray-400"}`}>
@@ -402,7 +412,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
         </a>
       ) : (
         <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2 relative">
-          <Eye className="h-8 w-8 text-muted-foreground/20" />
+          {imgError ? <ImageOff className="h-8 w-8 text-muted-foreground/20" /> : <Eye className="h-8 w-8 text-muted-foreground/20" />}
           <div className="flex items-center gap-2">
             {advertiserLogo && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -1266,6 +1276,7 @@ export default function AdsPage() {
   const [filterPlatforms, setFilterPlatforms] = useState<Set<string>>(new Set());
   const [filterFormats, setFilterFormats] = useState<Set<string>>(new Set());
   const [filterAdvertisers, setFilterAdvertisers] = useState<Set<string>>(new Set());
+  const [filterSource, setFilterSource] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
   const [filterDateFrom, setFilterDateFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 90);
@@ -1420,6 +1431,15 @@ export default function AdsPage() {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
 
+  const availableSources = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      const src = a.platform || "meta";
+      map.set(src, (map.get(src) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
   const availableAdvertisers = useMemo(() => {
     const map = new Map<string, number>();
     allAds.forEach(a => { if (a.page_name) map.set(a.page_name, (map.get(a.page_name) || 0) + 1); });
@@ -1451,6 +1471,7 @@ export default function AdsPage() {
   // Apply filters
   const filteredAds = useMemo(() => {
     return allAds.filter(ad => {
+      if (filterSource.size > 0 && !filterSource.has(ad.platform || "meta")) return false;
       if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
       if (filterPlatforms.size > 0 && !(ad.publisher_platforms || []).some(p => filterPlatforms.has(p))) return false;
       if (filterFormats.size > 0 && (!ad.display_format || !filterFormats.has(ad.display_format))) return false;
@@ -1474,16 +1495,16 @@ export default function AdsPage() {
       }
       return true;
     });
-  }, [allAds, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
 
   // Filtered stats
-  const activeFilters = filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
+  const activeFilters = filterSource.size + filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size;
 
@@ -1658,6 +1679,43 @@ export default function AdsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Channel pills ─────────────────────── */}
+      {availableSources.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Canal</span>
+          <button
+            onClick={() => setFilterSource(new Set())}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              filterSource.size === 0
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+          >
+            Tous
+            <span className={`text-[10px] tabular-nums ${filterSource.size === 0 ? "text-background/70" : "text-muted-foreground/60"}`}>{allAds.length}</span>
+          </button>
+          {availableSources.map(([src, count]) => {
+            const cfg = SOURCE_CONFIG[src] || { label: src, icon: null };
+            const active = filterSource.has(src);
+            return (
+              <button
+                key={src}
+                onClick={() => toggleFilter(filterSource, src, setFilterSource)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  active
+                    ? "bg-foreground text-background shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                }`}
+              >
+                {cfg.icon}
+                {cfg.label}
+                <span className={`text-[10px] tabular-nums ${active ? "text-background/70" : "text-muted-foreground/60"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Filters (collapsible, closed by default) ─ */}
       <div className="rounded-2xl border bg-card overflow-hidden">
