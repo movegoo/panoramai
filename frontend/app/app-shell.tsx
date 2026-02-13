@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1 overflow-auto bg-background flex flex-col min-w-0">
         {/* Mobile header with hamburger */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm shrink-0">
+        <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-muted transition-colors"
@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Desktop breadcrumb */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:block sticky top-0 z-30">
           <Breadcrumb />
         </div>
 
