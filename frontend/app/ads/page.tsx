@@ -175,6 +175,12 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = 
   google: { label: "Google", icon: <GoogleAdsIcon className="h-3 w-3" /> },
 };
 
+function normalizeSource(platform: string | undefined | null): string {
+  if (platform === "tiktok") return "tiktok";
+  if (platform === "google") return "google";
+  return "meta";
+}
+
 /* ─────────────── Gender normalization ─────────────── */
 
 function normalizeGender(raw: string | undefined | null): "all" | "male" | "female" | null {
@@ -1431,14 +1437,19 @@ export default function AdsPage() {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
 
+  // Count sources from date-filtered ads (independent of source filter to avoid circular dep)
   const availableSources = useMemo(() => {
     const map = new Map<string, number>();
+    let total = 0;
     allAds.forEach(a => {
-      const src = a.platform || "meta";
+      if (filterDateFrom && a.start_date && a.start_date < filterDateFrom) return;
+      if (filterDateTo && a.start_date && a.start_date > filterDateTo) return;
+      const src = normalizeSource(a.platform);
       map.set(src, (map.get(src) || 0) + 1);
+      total++;
     });
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-  }, [allAds]);
+    return { entries: Array.from(map.entries()).sort((a, b) => b[1] - a[1]), total };
+  }, [allAds, filterDateFrom, filterDateTo]);
 
   const availableAdvertisers = useMemo(() => {
     const map = new Map<string, number>();
@@ -1471,7 +1482,7 @@ export default function AdsPage() {
   // Apply filters
   const filteredAds = useMemo(() => {
     return allAds.filter(ad => {
-      if (filterSource.size > 0 && !filterSource.has(ad.platform || "meta")) return false;
+      if (filterSource.size > 0 && !filterSource.has(normalizeSource(ad.platform))) return false;
       if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
       if (filterPlatforms.size > 0 && !(ad.publisher_platforms || []).some(p => filterPlatforms.has(p))) return false;
       if (filterFormats.size > 0 && (!ad.display_format || !filterFormats.has(ad.display_format))) return false;
@@ -1681,7 +1692,7 @@ export default function AdsPage() {
       </div>
 
       {/* ── Channel pills ─────────────────────── */}
-      {availableSources.length > 1 && (
+      {availableSources.entries.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Canal</span>
           <button
@@ -1693,9 +1704,9 @@ export default function AdsPage() {
             }`}
           >
             Tous
-            <span className={`text-[10px] tabular-nums ${filterSource.size === 0 ? "text-background/70" : "text-muted-foreground/60"}`}>{allAds.length}</span>
+            <span className={`text-[10px] tabular-nums ${filterSource.size === 0 ? "text-background/70" : "text-muted-foreground/60"}`}>{availableSources.total}</span>
           </button>
-          {availableSources.map(([src, count]) => {
+          {availableSources.entries.map(([src, count]) => {
             const cfg = SOURCE_CONFIG[src] || { label: src, icon: null };
             const active = filterSource.has(src);
             return (
