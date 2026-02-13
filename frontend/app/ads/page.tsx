@@ -44,7 +44,7 @@ import {
   PieChart,
   Megaphone,
 } from "lucide-react";
-import { DateRangeFilter } from "@/components/period-filter";
+import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -209,7 +209,7 @@ function InfoTooltip({ text, className = "", light = false }: { text: string; cl
 const METHODOLOGY = {
   budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks : FR 3\u20AC Meta / 2\u20AC TikTok. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
   reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
-  duration: "Dur\u00E9e moyenne = (date de fin ou aujourd\u2019hui - date de d\u00E9but) pour chaque pub. Indique la long\u00E9vit\u00E9 moyenne des campagnes.",
+  duration: "Dur\u00E9e moyenne = (date de fin - date de d\u00E9but) pour chaque pub termin\u00E9e. Les pubs encore actives (sans date de fin) sont exclues du calcul.",
   demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
   activeAds: "Une pub est consid\u00E9r\u00E9e active si elle a \u00E9t\u00E9 diffus\u00E9e dans les 7 derniers jours (Meta/Google) ou est marqu\u00E9e active par la plateforme.",
   platforms: "Plateformes de diffusion d\u00E9clar\u00E9es : Facebook, Instagram, Messenger, Audience Network (Meta), TikTok Ads, Google Ads Transparency Center.",
@@ -334,7 +334,7 @@ function GenderBar({ male, female, unknown, compact = false }: { male: number; f
 }
 
 function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetitor; expanded: boolean; onToggle: () => void; advertiserLogo?: string }) {
-  const durationDays = ad.start_date ? Math.ceil(((ad.end_date ? new Date(ad.end_date) : new Date()).getTime() - new Date(ad.start_date).getTime()) / 86400000) : 0;
+  const durationDays = (ad.start_date && ad.end_date) ? Math.ceil((new Date(ad.end_date).getTime() - new Date(ad.start_date).getTime()) / 86400000) : 0;
   return (
     <div className="group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
       {/* Image */}
@@ -959,8 +959,8 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
 
     filteredAds.forEach(a => {
       if (a.eu_total_reach) reachByComp.set(a.competitor_name, (reachByComp.get(a.competitor_name) || 0) + a.eu_total_reach);
-      if (a.start_date) {
-        const days = Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date).getTime()) / 86400000);
+      if (a.start_date && a.end_date) {
+        const days = Math.ceil((new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / 86400000);
         if (days > 0) {
           const d = durationByComp.get(a.competitor_name) || { total: 0, count: 0 };
           d.total += days; d.count++;
@@ -1267,8 +1267,12 @@ export default function AdsPage() {
   const [filterFormats, setFilterFormats] = useState<Set<string>>(new Set());
   const [filterAdvertisers, setFilterAdvertisers] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90);
+    return d.toISOString().split("T")[0];
+  });
+  const [filterDateTo, setFilterDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(90);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterGender, setFilterGender] = useState<"none" | "all" | "male" | "female">("none");
@@ -1278,6 +1282,15 @@ export default function AdsPage() {
   const [locationSearch, setLocationSearch] = useState("");
   const [advertiserSearch, setAdvertiserSearch] = useState("");
   const [brandName, setBrandName] = useState<string>("");
+
+  function handlePeriodChange(days: PeriodDays) {
+    setPeriodDays(days);
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    setFilterDateFrom(from.toISOString().split("T")[0]);
+    setFilterDateTo(to.toISOString().split("T")[0]);
+  }
 
   useEffect(() => { loadAll(); }, []);
 
@@ -1471,7 +1484,7 @@ export default function AdsPage() {
 
   // Filtered stats
   const activeFilters = filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
-    + (filterStatus !== "all" ? 1 : 0) + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0) + (searchQuery ? 1 : 0)
+    + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size;
 
   const stats = useMemo(() => {
@@ -1537,10 +1550,10 @@ export default function AdsPage() {
       if (a.impressions_min && a.impressions_min > 0) totalImpressions += a.impressions_min;
       if (a.eu_total_reach && a.eu_total_reach > 0) totalReach += a.eu_total_reach;
 
-      // Duration stats
-      if (a.start_date) {
+      // Duration stats — only count ads with both start and end dates for accurate average
+      if (a.start_date && a.end_date) {
         const start = new Date(a.start_date);
-        const end = a.end_date ? new Date(a.end_date) : new Date();
+        const end = new Date(a.end_date);
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
         if (days > 0) { totalDurationDays += days; durationCount++; }
       }
@@ -1585,10 +1598,13 @@ export default function AdsPage() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2 shrink-0 self-end sm:self-auto">
-          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-          Scanner tout
-        </Button>
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          <PeriodFilter selectedDays={periodDays} onDaysChange={handlePeriodChange} />
+          <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2">
+            <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+            Scanner tout
+          </Button>
+        </div>
       </div>
 
       {/* ── KPI Banner ─────────────────────── */}
