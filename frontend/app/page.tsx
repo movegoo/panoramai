@@ -150,7 +150,9 @@ function AppleIcon({ className }: { className?: string }) {
 
 function ScoreInfoPanel({ onClose }: { onClose: () => void }) {
   return (
-    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-md">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/20" />
+    <div className="relative rounded-xl border bg-card shadow-2xl p-4 space-y-3 text-sm max-w-md mx-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-1.5">
           <Info className="h-4 w-4 text-violet-500" />
@@ -216,12 +218,15 @@ function ScoreInfoPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </div>
   );
 }
 
 function BudgetInfoPanel({ onClose }: { onClose: () => void }) {
   return (
-    <div className="rounded-xl border bg-card shadow-lg p-4 space-y-3 text-sm max-w-md">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/20" />
+    <div className="relative rounded-xl border bg-card shadow-2xl p-4 space-y-3 text-sm max-w-md mx-4" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold flex items-center gap-1.5">
           <Info className="h-4 w-4 text-emerald-500" />
@@ -270,6 +275,7 @@ function BudgetInfoPanel({ onClose }: { onClose: () => void }) {
         <Shield className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
         <span>Toutes les donnees proviennent de la <strong className="text-foreground">Bibliotheque publicitaire de Meta</strong> (transparence UE). Aucune donnee privee n&apos;est utilisee.</span>
       </div>
+    </div>
     </div>
   );
 }
@@ -768,9 +774,7 @@ export default function DashboardPage() {
                       <Info className="h-3.5 w-3.5" />
                     </button>
                     {showScoreInfo && (
-                      <div className="absolute top-full left-0 mt-2 z-50">
-                        <ScoreInfoPanel onClose={() => setShowScoreInfo(false)} />
-                      </div>
+                      <ScoreInfoPanel onClose={() => setShowScoreInfo(false)} />
                     )}
                   </span>
                 )}
