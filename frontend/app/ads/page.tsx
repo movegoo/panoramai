@@ -127,15 +127,15 @@ function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
 // CPM benchmarks by country (EUR) - Source: industry averages 2025-2026
 // Google Display ~1-2€, Google Search ~10-15€ → blended ~4€ for awareness/display campaigns
 const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number; google: number }> = {
-  FR: { meta: 3.0, tiktok: 2.0, google: 4.0 },
-  DE: { meta: 3.0, tiktok: 2.5, google: 4.5 },
-  ES: { meta: 2.5, tiktok: 1.5, google: 3.5 },
-  IT: { meta: 2.5, tiktok: 1.5, google: 3.5 },
-  BE: { meta: 3.0, tiktok: 2.0, google: 4.0 },
-  NL: { meta: 3.0, tiktok: 2.5, google: 4.5 },
-  UK: { meta: 3.0, tiktok: 2.5, google: 5.0 },
-  US: { meta: 3.0, tiktok: 2.5, google: 5.0 },
-  DEFAULT: { meta: 3.0, tiktok: 2.0, google: 4.0 },
+  FR: { meta: 3.0, tiktok: 2.0, google: 1.0 },
+  DE: { meta: 3.0, tiktok: 2.5, google: 1.0 },
+  ES: { meta: 2.5, tiktok: 1.5, google: 1.0 },
+  IT: { meta: 2.5, tiktok: 1.5, google: 1.0 },
+  BE: { meta: 3.0, tiktok: 2.0, google: 1.0 },
+  NL: { meta: 3.0, tiktok: 2.5, google: 1.0 },
+  UK: { meta: 3.0, tiktok: 2.5, google: 1.0 },
+  US: { meta: 3.0, tiktok: 2.5, google: 1.0 },
+  DEFAULT: { meta: 3.0, tiktok: 2.0, google: 1.0 },
 };
 
 function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | null {
@@ -222,7 +222,7 @@ function InfoTooltip({ text, className = "", light = false }: { text: string; cl
 /* ─────────────── Methodology texts ─────────────── */
 
 const METHODOLOGY = {
-  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks FR : 3\u20AC Meta / 2\u20AC TikTok / 4\u20AC Google. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
+  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks FR : 3\u20AC Meta / 2\u20AC TikTok / 1\u20AC Google. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
   reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
   duration: "Dur\u00E9e moyenne = (date de fin - date de d\u00E9but) pour chaque pub termin\u00E9e. Les pubs encore actives (sans date de fin) sont exclues du calcul.",
   demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
