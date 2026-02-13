@@ -642,8 +642,8 @@ export default function DashboardPage() {
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [showAllAdvertisers, setShowAllAdvertisers] = useState(false);
 
-  function loadDashboard() {
-    setLoading(true);
+  function loadDashboard(isRefresh = false) {
+    if (!isRefresh) setLoading(true);
     setError(null);
     setNeedsOnboarding(false);
     watchAPI
@@ -660,15 +660,20 @@ export default function DashboardPage() {
         // Other errors = actual API failure → show error
         if ((err as any).status === 404) {
           setNeedsOnboarding(true);
-        } else {
+        } else if (!isRefresh) {
           setError("Le serveur est en cours de démarrage, veuillez patienter...");
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!isRefresh) setLoading(false); });
   }
 
+  // Initial load shows spinner
+  useEffect(() => { loadDashboard(false); }, []);
+  // Period change just refreshes data silently
+  const firstMount = useState(true);
   useEffect(() => {
-    loadDashboard();
+    if (firstMount[0]) { firstMount[1](false); return; }
+    loadDashboard(true);
   }, [periodDays]);
 
   if (loading)
@@ -691,7 +696,7 @@ export default function DashboardPage() {
           <AlertTriangle className="h-8 w-8 text-amber-400 mx-auto" />
           <p className="text-muted-foreground font-medium">{error || "Erreur inconnue"}</p>
           <button
-            onClick={loadDashboard}
+            onClick={() => loadDashboard()}
             className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
           >
             Réessayer

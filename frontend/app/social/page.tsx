@@ -104,6 +104,8 @@ export default function SocialPage() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
 
+  const [initialLoad, setInitialLoad] = useState(true);
+
   useEffect(() => {
     async function loadAll() {
       try {
@@ -122,7 +124,7 @@ export default function SocialPage() {
       } catch (err) {
         console.error("Failed to load:", err);
       } finally {
-        setLoading(false);
+        if (initialLoad) { setLoading(false); setInitialLoad(false); }
       }
     }
     loadAll();
