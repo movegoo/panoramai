@@ -138,6 +138,11 @@ interface QuickLocation {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 type AnalysisMode = "radius" | "postal_code" | "iris";
 
 // Quick access locations for empty state
@@ -264,7 +269,7 @@ export default function FranceMap() {
 
   const loadStores = async () => {
     try {
-      const res = await fetch(`${API_BASE}/geo/stores`);
+      const res = await fetch(`${API_BASE}/geo/stores`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setStores(data);
@@ -332,7 +337,7 @@ export default function FranceMap() {
     try {
       const res = await fetch(`${API_BASE}/geo/zone/analyze-enriched`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           latitude: lat,
           longitude: lng,
@@ -402,7 +407,7 @@ export default function FranceMap() {
 
       const res = await fetch(`${API_BASE}/geo/zone/analyze-enriched`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           latitude: lat,
           longitude: lng,
@@ -541,7 +546,7 @@ export default function FranceMap() {
 
       const res = await fetch(`${API_BASE}/geo/zone/analyze-enriched`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           latitude: centerLat,
           longitude: centerLng,
@@ -778,7 +783,7 @@ export default function FranceMap() {
   const competitorStoreDataRef = useRef<CompetitorStoreGroup[]>([]);
 
   const loadCompetitorStoresLayer = async (map: any, L: any) => {
-    const res = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`);
+    const res = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`, { headers: authHeaders() });
     if (!res.ok) return;
 
     const data = await res.json();

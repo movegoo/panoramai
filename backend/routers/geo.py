@@ -11,7 +11,8 @@ import csv
 import io
 import json
 
-from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor
+from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User
+from core.auth import get_optional_user
 from services.geodata import (
     geodata_service,
     haversine_distance,
@@ -94,10 +95,14 @@ class MapDataResponse(BaseModel):
 @router.get("/stores", response_model=List[StoreResponse])
 async def list_stores(
     department: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Liste les magasins de l'enseigne."""
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    brand = query.first()
     if not brand:
         return []
 
@@ -366,7 +371,8 @@ async def analyze_store_zone(
 @router.get("/map/data")
 async def get_map_data(
     department: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Données pour affichage carte de France.
@@ -374,7 +380,10 @@ async def get_map_data(
     Retourne les magasins et les données par commune
     pour superposition cartographique.
     """
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    brand = brand_query.first()
 
     # Magasins
     stores_query = db.query(Store).filter(Store.is_active == True)
@@ -497,13 +506,24 @@ COMPETITOR_COLORS = {
 async def get_all_competitor_stores(
     include_stores: bool = False,
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Retourne les magasins concurrents groupés par concurrent.
 
     Par défaut ne renvoie que les comptages (léger).
     Passer include_stores=true pour obtenir le détail de chaque magasin (carte).
+    Filtre par les concurrents de l'utilisateur connecté.
     """
     from sqlalchemy import func
+
+    # Get the user's competitor IDs to filter store locations
+    user_comp_query = db.query(Competitor.id).filter(Competitor.is_active == True)
+    if user:
+        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    user_comp_ids = [row[0] for row in user_comp_query.all()]
+
+    if not user_comp_ids:
+        return {"total_competitors": 0, "total_stores": 0, "competitors": []}
 
     # Always get counts via aggregate query (lightweight)
     counts = (
@@ -513,7 +533,7 @@ async def get_all_competitor_stores(
         )
         .filter(
             StoreLocation.source == "BANCO",
-            StoreLocation.competitor_id.isnot(None),
+            StoreLocation.competitor_id.in_(user_comp_ids),
             StoreLocation.latitude.isnot(None),
             StoreLocation.longitude.isnot(None),
         )
@@ -574,15 +594,22 @@ async def get_all_competitor_stores(
 
 
 @router.get("/competitor-stores/{competitor_id}")
-async def get_competitor_stores_geo(competitor_id: int, db: Session = Depends(get_db)):
+async def get_competitor_stores_geo(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Magasins d'un concurrent spécifique."""
+    # Verify competitor belongs to this user
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if user and comp and comp.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+
     stores = db.query(StoreLocation).filter(
         StoreLocation.competitor_id == competitor_id,
         StoreLocation.source == "BANCO",
         StoreLocation.latitude.isnot(None),
     ).all()
-
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
 
     return {
         "competitor_id": competitor_id,
