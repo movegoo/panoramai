@@ -865,7 +865,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Two-column layout: Rankings + Ad Intelligence ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* ── CLASSEMENTS ────────────────────────────────── */}
         <div className="space-y-4">
@@ -1437,7 +1437,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Payeurs & Annonceurs detail ────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Payeurs (qui paye les pubs) */}
         <div className="space-y-3">
           <div className="flex items-center gap-2.5">
