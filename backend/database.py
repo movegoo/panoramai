@@ -365,6 +365,10 @@ def _run_migrations(engine):
             ("users", "is_admin", "BOOLEAN DEFAULT FALSE"),
             ("competitors", "logo_url", "VARCHAR(500)"),
             ("advertisers", "logo_url", "VARCHAR(500)"),
+            ("store_locations", "google_rating", "FLOAT"),
+            ("store_locations", "google_reviews_count", "INTEGER"),
+            ("store_locations", "google_place_id", "VARCHAR(255)"),
+            ("store_locations", "rating_fetched_at", "TIMESTAMP"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
