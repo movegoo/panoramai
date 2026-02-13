@@ -346,6 +346,7 @@ async def get_watch_overview(
 
 @router.get("/dashboard")
 async def get_dashboard_data(
+    days: int = 7,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -360,7 +361,7 @@ async def get_dashboard_data(
     competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
 
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.utcnow() - timedelta(days=days)
 
     # Batch-load all data (12 queries instead of 10*N)
     ig_latest_map = _batch_load_latest(db, InstagramData, comp_ids)

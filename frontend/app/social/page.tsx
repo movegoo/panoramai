@@ -26,6 +26,7 @@ import {
   Heart,
   Crown,
 } from "lucide-react";
+import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
 type Platform = "instagram" | "tiktok" | "youtube";
 type RankingView = "audience" | "engagement" | "growth" | "efficiency";
@@ -66,10 +67,10 @@ const PLATFORM_CONFIG = {
   },
 };
 
-const RANKING_VIEWS: { key: RankingView; label: string; icon: React.ReactNode }[] = [
+const RANKING_VIEWS_BASE: { key: RankingView; label: string; icon: React.ReactNode }[] = [
   { key: "audience", label: "Audience", icon: <Users className="h-3 w-3" /> },
   { key: "engagement", label: "Engagement", icon: <Target className="h-3 w-3" /> },
-  { key: "growth", label: "Croissance 7j", icon: <TrendingUp className="h-3 w-3" /> },
+  { key: "growth", label: "Croissance", icon: <TrendingUp className="h-3 w-3" /> },
   { key: "efficiency", label: "Efficacite", icon: <Zap className="h-3 w-3" /> },
 ];
 
@@ -94,6 +95,7 @@ const MEDAL = ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-700", "bg
 export default function SocialPage() {
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [rankingView, setRankingView] = useState<RankingView>("audience");
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [competitors, setCompetitors] = useState<CompetitorListItem[]>([]);
   const [igComparison, setIgComparison] = useState<any[]>([]);
   const [ttComparison, setTtComparison] = useState<any[]>([]);
@@ -107,9 +109,9 @@ export default function SocialPage() {
       try {
         const [comp, ig, tt, yt, brand] = await Promise.allSettled([
           competitorsAPI.list(),
-          instagramAPI.getComparison(),
-          tiktokAPI.getComparison(),
-          youtubeAPI.getComparison(),
+          instagramAPI.getComparison(periodDays),
+          tiktokAPI.getComparison(periodDays),
+          youtubeAPI.getComparison(periodDays),
           brandAPI.getProfile(),
         ]);
         if (comp.status === "fulfilled") setCompetitors(comp.value);
@@ -124,7 +126,7 @@ export default function SocialPage() {
       }
     }
     loadAll();
-  }, []);
+  }, [periodDays]);
 
   async function handleRefreshAll() {
     setFetching(true);
@@ -143,9 +145,9 @@ export default function SocialPage() {
         } catch {}
       }
       const [ig, tt, yt] = await Promise.allSettled([
-        instagramAPI.getComparison(),
-        tiktokAPI.getComparison(),
-        youtubeAPI.getComparison(),
+        instagramAPI.getComparison(periodDays),
+        tiktokAPI.getComparison(periodDays),
+        youtubeAPI.getComparison(periodDays),
       ]);
       if (ig.status === "fulfilled") setIgComparison(ig.value);
       if (tt.status === "fulfilled") setTtComparison(tt.value);
@@ -256,10 +258,13 @@ export default function SocialPage() {
             <p className="text-[13px] text-muted-foreground">Comparaison multi-plateformes</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
-          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-          Rafra&icirc;chir
-        </Button>
+        <div className="flex items-center gap-3">
+          <PeriodFilter selectedDays={periodDays} onDaysChange={setPeriodDays} />
+          <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
+            <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+            Rafra&icirc;chir
+          </Button>
+        </div>
       </div>
 
       {/* ── Cross-Platform Overview ── */}
@@ -368,7 +373,7 @@ export default function SocialPage() {
           {/* ── Ranking View Selector ── */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mr-1">Classer par</span>
-            {RANKING_VIEWS.map(rv => (
+            {RANKING_VIEWS_BASE.map(rv => (
               <button
                 key={rv.key}
                 onClick={() => setRankingView(rv.key)}

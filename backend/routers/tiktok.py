@@ -138,6 +138,7 @@ async def fetch_tiktok_data(
 
 @router.get("/comparison")
 async def compare_tiktok_accounts(
+    days: int = 7,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -160,8 +161,8 @@ async def compare_tiktok_accounts(
         )
 
         if latest:
-            # Get data from 7 days ago for growth calculation
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            # Get data from N days ago for growth calculation
+            week_ago = datetime.utcnow() - timedelta(days=days)
             old_data = (
                 db.query(TikTokData)
                 .filter(

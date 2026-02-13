@@ -102,6 +102,7 @@ async def fetch_instagram_data(
 
 @router.get("/comparison")
 async def compare_instagram_accounts(
+    days: int = 7,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -121,8 +122,8 @@ async def compare_instagram_accounts(
         ).order_by(desc(InstagramData.recorded_at)).first()
 
         if latest:
-            # Get data from 7 days ago for growth calculation
-            week_ago = datetime.utcnow() - timedelta(days=7)
+            # Get data from N days ago for growth calculation
+            week_ago = datetime.utcnow() - timedelta(days=days)
             old_data = db.query(InstagramData).filter(
                 InstagramData.competitor_id == competitor.id,
                 InstagramData.recorded_at <= week_ago

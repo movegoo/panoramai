@@ -444,7 +444,7 @@ export const competitorsAPI = {
 // Watch/Overview API
 export const watchAPI = {
   getOverview: () => fetchAPI<WatchOverview>("/watch/overview"),
-  getDashboard: () => fetchAPI<DashboardData>("/watch/dashboard"),
+  getDashboard: (days?: number) => fetchAPI<DashboardData>(`/watch/dashboard${days ? `?days=${days}` : ""}`),
   getAlerts: () => fetchAPI<any[]>("/watch/alerts"),
   getRankings: () => fetchAPI<any>("/watch/rankings"),
 };
@@ -495,7 +495,7 @@ export const instagramAPI = {
       { method: "POST" }
     ),
 
-  getComparison: () => fetchAPI<any[]>("/instagram/comparison"),
+  getComparison: (days?: number) => fetchAPI<any[]>(`/instagram/comparison${days ? `?days=${days}` : ""}`),
 };
 
 // TikTok API
@@ -514,7 +514,7 @@ export const tiktokAPI = {
       { method: "POST" }
     ),
 
-  getComparison: () => fetchAPI<any[]>("/tiktok/comparison"),
+  getComparison: (days?: number) => fetchAPI<any[]>(`/tiktok/comparison${days ? `?days=${days}` : ""}`),
 
   getVideos: (competitorId: number) =>
     fetchAPI<any>(`/tiktok/videos/${competitorId}`),
@@ -555,7 +555,7 @@ export const youtubeAPI = {
       { method: "POST" }
     ),
 
-  getComparison: () => fetchAPI<any[]>("/youtube/comparison"),
+  getComparison: (days?: number) => fetchAPI<any[]>(`/youtube/comparison${days ? `?days=${days}` : ""}`),
 
   getVideos: (competitorId: number) =>
     fetchAPI<any>(`/youtube/videos/${competitorId}`),

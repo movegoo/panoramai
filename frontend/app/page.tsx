@@ -55,6 +55,7 @@ import {
   Info,
   X,
 } from "lucide-react";
+import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -638,13 +639,15 @@ export default function DashboardPage() {
   const [activeRanking, setActiveRanking] = useState(0);
   const [showScoreInfo, setShowScoreInfo] = useState(false);
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
+  const [showAllAdvertisers, setShowAllAdvertisers] = useState(false);
 
   function loadDashboard() {
     setLoading(true);
     setError(null);
     setNeedsOnboarding(false);
     watchAPI
-      .getDashboard()
+      .getDashboard(periodDays)
       .then((d) => {
         if (!d.brand) {
           setNeedsOnboarding(true);
@@ -666,7 +669,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+  }, [periodDays]);
 
   if (loading)
     return (
@@ -771,10 +774,10 @@ export default function DashboardPage() {
                 Veille concurrentielle &mdash; {data.sector}
               </p>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] text-slate-500 uppercase tracking-widest">Derniere maj</div>
-              <div className="text-xs text-slate-400 mt-0.5 tabular-nums">
-                {(() => { try { return new Date(data.last_updated).toLocaleString("fr-FR"); } catch { return data.last_updated; } })()}
+            <div className="flex flex-col items-end gap-2">
+              <PeriodFilter selectedDays={periodDays} onDaysChange={setPeriodDays} variant="dark" />
+              <div className="text-[10px] text-slate-500 tabular-nums">
+                Maj {(() => { try { return new Date(data.last_updated).toLocaleString("fr-FR"); } catch { return data.last_updated; } })()}
               </div>
             </div>
           </div>
@@ -1437,54 +1440,56 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Payeurs & Annonceurs detail ────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className={`grid gap-6 items-start ${adI.payers.length > 0 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
         {/* Payeurs (qui paye les pubs) */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
-              <Shield className="h-4 w-4 text-emerald-600" />
+        {adI.payers.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100">
+                <Shield className="h-4 w-4 text-emerald-600" />
+              </div>
+              <h2 className="text-[13px] font-semibold text-foreground">
+                Payeurs
+              </h2>
+              <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.payers.length} entités</span>
             </div>
-            <h2 className="text-[13px] font-semibold text-foreground">
-              Payeurs
-            </h2>
-            <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.payers.length} entités</span>
-          </div>
-          <div className="rounded-2xl border bg-card overflow-hidden">
-            <div className="divide-y">
-              {adI.payers.map((payer) => {
-                const maxTotal = Math.max(...adI.payers.map(p => p.total), 1);
-                const pct = (payer.total / maxTotal) * 100;
-                return (
-                  <div key={payer.name} className="px-4 py-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-medium text-sm truncate">{payer.name}</span>
-                        {payer.is_explicit && (
-                          <span className="shrink-0 text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">
-                            Verifie
-                          </span>
+            <div className="rounded-2xl border bg-card overflow-hidden">
+              <div className="divide-y">
+                {adI.payers.map((payer) => {
+                  const maxTotal = Math.max(...adI.payers.map(p => p.total), 1);
+                  const pct = (payer.total / maxTotal) * 100;
+                  return (
+                    <div key={payer.name} className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium text-sm truncate">{payer.name}</span>
+                          {payer.is_explicit && (
+                            <span className="shrink-0 text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">
+                              Verifie
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm font-bold tabular-nums shrink-0 ml-2">{payer.total}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                        <span className="text-emerald-600 font-medium">{payer.active} actives</span>
+                        {payer.pages.length > 1 && (
+                          <span>{payer.pages.length} pages</span>
+                        )}
+                        {payer.pages.length === 1 && payer.pages[0] !== payer.name && (
+                          <span>via {payer.pages[0]}</span>
                         )}
                       </div>
-                      <span className="text-sm font-bold tabular-nums shrink-0 ml-2">{payer.total}</span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
-                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      <span className="text-emerald-600 font-medium">{payer.active} actives</span>
-                      {payer.pages.length > 1 && (
-                        <span>{payer.pages.length} pages</span>
-                      )}
-                      {payer.pages.length === 1 && payer.pages[0] !== payer.name && (
-                        <span>via {payer.pages[0]}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Annonceurs (pages qui diffusent) */}
         <div className="space-y-3">
@@ -1499,27 +1504,44 @@ export default function DashboardPage() {
           </div>
           <div className="rounded-2xl border bg-card overflow-hidden">
             <div className="divide-y">
-              {adI.advertisers.map((adv) => {
-                const maxTotal = Math.max(...adI.advertisers.map(a => a.total), 1);
-                const pct = (adv.total / maxTotal) * 100;
+              {(() => {
+                const ADV_LIMIT = 6;
+                const visible = showAllAdvertisers ? adI.advertisers : adI.advertisers.slice(0, ADV_LIMIT);
+                const hasMore = adI.advertisers.length > ADV_LIMIT;
                 return (
-                  <div key={adv.name} className="px-4 py-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-medium text-sm truncate">{adv.name}</span>
-                      <span className="text-sm font-bold tabular-nums shrink-0 ml-2">{adv.total}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
-                      <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-purple-500" style={{ width: `${pct}%` }} />
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      <span className="text-violet-600 font-medium">{adv.active} actives</span>
-                      {adv.top_format && (
-                        <span className="bg-muted px-1.5 py-0.5 rounded">Top: {adv.top_format}</span>
-                      )}
-                    </div>
-                  </div>
+                  <>
+                    {visible.map((adv) => {
+                      const maxTotal = Math.max(...adI.advertisers.map(a => a.total), 1);
+                      const pct = (adv.total / maxTotal) * 100;
+                      return (
+                        <div key={adv.name} className="px-4 py-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-medium text-sm truncate">{adv.name}</span>
+                            <span className="text-sm font-bold tabular-nums shrink-0 ml-2">{adv.total}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-1.5">
+                            <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-purple-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                            <span className="text-violet-600 font-medium">{adv.active} actives</span>
+                            {adv.top_format && (
+                              <span className="bg-muted px-1.5 py-0.5 rounded">Top: {adv.top_format}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {hasMore && (
+                      <button
+                        onClick={() => setShowAllAdvertisers(v => !v)}
+                        className="w-full px-4 py-2.5 text-xs font-medium text-violet-600 hover:bg-muted/30 transition-colors"
+                      >
+                        {showAllAdvertisers ? "Réduire" : `Voir tout (${adI.advertisers.length})`}
+                      </button>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
         </div>

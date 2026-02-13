@@ -44,6 +44,7 @@ import {
   PieChart,
   Megaphone,
 } from "lucide-react";
+import { DateRangeFilter } from "@/components/period-filter";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -1693,18 +1694,14 @@ export default function AdsPage() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">P&eacute;riode</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Période</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
-                  <span className="text-xs text-muted-foreground shrink-0">&agrave;</span>
-                  <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
-                  {(filterDateFrom || filterDateTo) && (
-                    <button onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); }} className="text-muted-foreground hover:text-foreground shrink-0">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
+                <DateRangeFilter
+                  dateFrom={filterDateFrom}
+                  dateTo={filterDateTo}
+                  onDateFromChange={setFilterDateFrom}
+                  onDateToChange={setFilterDateTo}
+                />
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-2">
