@@ -66,12 +66,10 @@ export default function AdminPage() {
         .getStats()
         .then(setStats)
         .catch((e) => setError(e.message));
-      if (user.is_admin) {
-        adminAPI
-          .getUsers()
-          .then(setUsers)
-          .catch(() => {});
-      }
+      adminAPI
+        .getUsers()
+        .then(setUsers)
+        .catch(() => {});
     }
   }, [user]);
 
@@ -174,8 +172,8 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Users table (admin only) */}
-          {user?.is_admin && <div className="rounded-xl border border-border bg-card">
+          {/* Users table */}
+          <div className="rounded-xl border border-border bg-card">
             <div className="px-5 py-4 border-b border-border">
               <h2 className="text-sm font-semibold text-foreground">
                 Utilisateurs ({users.length})
@@ -234,7 +232,7 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
-          </div>}
+          </div>
         </>
       )}
     </div>

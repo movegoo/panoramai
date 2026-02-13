@@ -144,7 +144,10 @@ def calculate_global_score(
 # =============================================================================
 
 @router.get("/overview")
-async def get_watch_overview(db: Session = Depends(get_db)):
+async def get_watch_overview(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Vue d'ensemble de la veille concurrentielle.
 
@@ -153,8 +156,11 @@ async def get_watch_overview(db: Session = Depends(get_db)):
     - KPIs clés avec comparaison au meilleur concurrent
     - Résumé textuel de la situation
     """
-    brand = get_brand(db)
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    brand = get_brand(db, user)
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
 
     # Batch-load all latest data (6 queries instead of 5*N)
@@ -1076,7 +1082,8 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
 async def get_alerts(
     limit: int = 20,
     unread_only: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Liste les alertes de veille concurrentielle.
@@ -1087,20 +1094,25 @@ async def get_alerts(
     - app_update: Mise à jour d'app
     - new_ad: Nouvelle publicité détectée
     """
-    brand = get_brand(db)
+    brand = get_brand(db, user)
     alerts = []
 
-    # Build competitor name lookup (single query)
-    all_comps = db.query(Competitor).filter(Competitor.is_active == True).all()
+    # Build competitor name lookup (single query, scoped to user)
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    all_comps = comp_query.all()
     comp_names = {c.id: c.name for c in all_comps}
 
     # Génère des alertes basées sur les données récentes
     week_ago = datetime.utcnow() - timedelta(days=7)
+    comp_ids = [c.id for c in all_comps]
 
     # Alertes sur les mises à jour d'apps
-    recent_apps = db.query(AppData).filter(
-        AppData.recorded_at >= week_ago
-    ).order_by(desc(AppData.recorded_at)).limit(10).all()
+    app_query = db.query(AppData).filter(AppData.recorded_at >= week_ago)
+    if comp_ids:
+        app_query = app_query.filter(AppData.competitor_id.in_(comp_ids))
+    recent_apps = app_query.order_by(desc(AppData.recorded_at)).limit(10).all()
 
     for app in recent_apps:
         name = comp_names.get(app.competitor_id)
@@ -1120,9 +1132,10 @@ async def get_alerts(
         ))
 
     # Alertes sur les données Instagram
-    recent_ig = db.query(InstagramData).filter(
-        InstagramData.recorded_at >= week_ago
-    ).order_by(desc(InstagramData.recorded_at)).limit(5).all()
+    ig_query = db.query(InstagramData).filter(InstagramData.recorded_at >= week_ago)
+    if comp_ids:
+        ig_query = ig_query.filter(InstagramData.competitor_id.in_(comp_ids))
+    recent_ig = ig_query.order_by(desc(InstagramData.recorded_at)).limit(5).all()
 
     for ig in recent_ig:
         name = comp_names.get(ig.competitor_id)
@@ -1158,14 +1171,20 @@ async def get_alerts(
 # =============================================================================
 
 @router.get("/rankings")
-async def get_rankings(db: Session = Depends(get_db)):
+async def get_rankings(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Classements par canal.
 
     Retourne le leaderboard pour chaque métrique clé.
     """
-    brand = get_brand(db)
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    brand = get_brand(db, user)
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
     rankings = []
 

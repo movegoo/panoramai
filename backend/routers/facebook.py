@@ -381,9 +381,13 @@ async def get_ads_stats(
 @router.get("/comparison")
 async def compare_competitors_ads(
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
-    """Compare les activités publicitaires de tous les concurrents."""
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    """Compare les activités publicitaires des concurrents de l'utilisateur."""
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = comp_query.all()
 
     items = []
     for comp in competitors:

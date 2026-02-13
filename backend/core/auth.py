@@ -84,12 +84,10 @@ def get_optional_user(
 def claim_orphans(db: Session, user: User) -> None:
     """Assign orphan brand & competitors to this user.
 
-    Claims records with user_id=NULL.
-    Also reclaims competitors held by users who don't own any brand,
-    so that they go to an actual brand owner instead.
+    Only claims records with user_id=NULL.
+    Never touches records belonging to other users.
     """
     from database import Advertiser, Competitor
-    from sqlalchemy import and_
 
     # 1. Claim orphan brands (user_id=NULL)
     db.query(Advertiser).filter(
@@ -102,34 +100,5 @@ def claim_orphans(db: Session, user: User) -> None:
         Competitor.is_active == True,
         Competitor.user_id == None,
     ).update({"user_id": user.id})
-
-    db.flush()
-
-    # 3. If this user has a brand, reclaim competitors stuck on users without brands
-    has_brand = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id,
-        Advertiser.is_active == True,
-    ).first()
-
-    if has_brand:
-        # IDs of users who own an active brand (other than current user)
-        other_brand_owners = {
-            row[0] for row in
-            db.query(Advertiser.user_id).filter(
-                Advertiser.is_active == True,
-                Advertiser.user_id != None,
-                Advertiser.user_id != user.id,
-            ).all()
-        }
-
-        # Reclaim competitors from non-brand-owners
-        stray = db.query(Competitor).filter(
-            Competitor.is_active == True,
-            Competitor.user_id != user.id,
-            Competitor.user_id != None,
-        )
-        if other_brand_owners:
-            stray = stray.filter(~Competitor.user_id.in_(other_brand_owners))
-        stray.update({"user_id": user.id}, synchronize_session=False)
 
     db.commit()

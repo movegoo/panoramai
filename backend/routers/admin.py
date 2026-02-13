@@ -11,7 +11,7 @@ from database import (
     get_db, User, Advertiser, Competitor,
     Ad, InstagramData, TikTokData, YouTubeData, AppData, StoreLocation,
 )
-from core.auth import get_current_user, get_admin_user
+from core.auth import get_current_user
 from services.scheduler import scheduler
 
 router = APIRouter()
@@ -64,7 +64,7 @@ async def get_stats(
 
 @router.get("/users")
 async def list_users(
-    admin: User = Depends(get_admin_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all users with their brand/competitor info."""

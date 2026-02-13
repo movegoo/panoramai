@@ -55,18 +55,25 @@ def calculate_score(
 # =============================================================================
 
 @router.get("/dashboard")
-async def get_dashboard(db: Session = Depends(get_db)):
+async def get_dashboard(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """
     Dashboard stats for the homepage.
     Returns aggregate metrics and recent activity.
     """
     from database import Ad
 
-    competitors = db.query(Competitor).all()
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = comp_query.all()
+    comp_ids = [c.id for c in competitors]
 
     # Count totals
     total_competitors = len(competitors)
-    total_ads = db.query(Ad).count()
+    total_ads = db.query(Ad).filter(Ad.competitor_id.in_(comp_ids)).count() if comp_ids else 0
     total_apps = sum(1 for c in competitors if c.playstore_app_id or c.appstore_app_id)
     total_instagram = sum(1 for c in competitors if c.instagram_username)
 
@@ -76,28 +83,33 @@ async def get_dashboard(db: Session = Depends(get_db)):
     # Build competitor name lookup
     comp_names = {c.id: c.name for c in competitors}
 
-    recent_app_data = db.query(AppData).order_by(desc(AppData.recorded_at)).limit(5).all()
-    for app in recent_app_data:
-        name = comp_names.get(app.competitor_id)
-        if name:
-            recent_activity.append({
-                "type": "app",
-                "competitor": name,
-                "description": f"App data updated - Rating: {app.rating}",
-                "date": app.recorded_at.isoformat() if app.recorded_at else None,
-            })
+    if comp_ids:
+        recent_app_data = db.query(AppData).filter(
+            AppData.competitor_id.in_(comp_ids)
+        ).order_by(desc(AppData.recorded_at)).limit(5).all()
+        for app in recent_app_data:
+            name = comp_names.get(app.competitor_id)
+            if name:
+                recent_activity.append({
+                    "type": "app",
+                    "competitor": name,
+                    "description": f"App data updated - Rating: {app.rating}",
+                    "date": app.recorded_at.isoformat() if app.recorded_at else None,
+                })
 
-    recent_insta = db.query(InstagramData).order_by(desc(InstagramData.recorded_at)).limit(5).all()
-    for insta in recent_insta:
-        name = comp_names.get(insta.competitor_id)
-        if name:
-            followers = insta.followers or 0
-            recent_activity.append({
-                "type": "instagram",
-                "competitor": name,
-                "description": f"Instagram updated - {followers:,} followers",
-                "date": insta.recorded_at.isoformat() if insta.recorded_at else None,
-            })
+        recent_insta = db.query(InstagramData).filter(
+            InstagramData.competitor_id.in_(comp_ids)
+        ).order_by(desc(InstagramData.recorded_at)).limit(5).all()
+        for insta in recent_insta:
+            name = comp_names.get(insta.competitor_id)
+            if name:
+                followers = insta.followers or 0
+                recent_activity.append({
+                    "type": "instagram",
+                    "competitor": name,
+                    "description": f"Instagram updated - {followers:,} followers",
+                    "date": insta.recorded_at.isoformat() if insta.recorded_at else None,
+                })
 
     # Sort by date
     recent_activity.sort(key=lambda x: x["date"] or "", reverse=True)
@@ -190,10 +202,16 @@ async def list_competitors(
 
 
 @router.get("/{competitor_id}")
-async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
+async def get_competitor(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Profil détaillé d'un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if user and comp.user_id and comp.user_id != user.id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     # Récupère toutes les données
@@ -277,8 +295,11 @@ async def get_competitor(competitor_id: int, db: Session = Depends(get_db)):
             }
         )
 
-    # Calcul du score et du rang (batch-load for all competitors)
-    all_competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    # Calcul du score et du rang (scoped to user's competitors)
+    all_comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        all_comp_query = all_comp_query.filter(Competitor.user_id == user.id)
+    all_competitors = all_comp_query.all()
     all_ids = [c.id for c in all_competitors]
     from routers.watch import _batch_load_latest
     all_ps = _batch_load_latest(db, AppData, all_ids, AppData.store == "playstore")
@@ -373,7 +394,8 @@ async def create_competitor(
 async def update_competitor(
     competitor_id: int,
     data: CompetitorUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Met à jour les identifiants d'un concurrent.
@@ -382,6 +404,8 @@ async def update_competitor(
     """
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if user and comp.user_id and comp.user_id != user.id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     update_data = data.model_dump(exclude_unset=True)
@@ -411,10 +435,16 @@ async def update_competitor(
 
 
 @router.delete("/{competitor_id}")
-async def delete_competitor(competitor_id: int, db: Session = Depends(get_db)):
+async def delete_competitor(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Supprime un concurrent (soft delete)."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if user and comp.user_id and comp.user_id != user.id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     comp.is_active = False

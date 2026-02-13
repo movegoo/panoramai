@@ -8,7 +8,8 @@ from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime
 
-from database import get_db, Advertiser, Competitor
+from database import get_db, Advertiser, Competitor, User
+from core.auth import get_optional_user
 from models.schemas import (
     AdvertiserCreate,
     AdvertiserUpdate,
@@ -317,7 +318,8 @@ async def onboard_advertiser(
 @router.get("/suggestions/{sector}")
 async def get_competitor_suggestions(
     sector: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ) -> List[CompetitorSuggestion]:
     """
     Get competitor suggestions for a given sector.
@@ -332,7 +334,10 @@ async def get_competitor_suggestions(
         )
 
     suggestions = []
-    existing_names = {c.name.lower() for c in db.query(Competitor).filter(Competitor.is_active == True).all()}
+    existing_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        existing_query = existing_query.filter(Competitor.user_id == user.id)
+    existing_names = {c.name.lower() for c in existing_query.all()}
 
     for comp in COMPETITORS_BY_SECTOR[sector]:
         already_monitored = comp["name"].lower() in existing_names
