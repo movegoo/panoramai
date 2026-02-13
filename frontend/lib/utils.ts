@@ -6,13 +6,15 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatNumber(num: number): string {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + "M";
+  if (num >= 1_000_000) {
+    const v = num / 1_000_000;
+    return (v >= 10 ? Math.round(v).toString() : v.toFixed(1).replace(/\.0$/, "")) + "M";
   }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + "K";
+  if (num >= 1_000) {
+    const v = num / 1_000;
+    return (v >= 10 ? Math.round(v).toString() : v.toFixed(1).replace(/\.0$/, "")) + "K";
   }
-  return num.toString();
+  return Math.round(num).toLocaleString("fr-FR");
 }
 
 export function formatDate(dateString: string): string {

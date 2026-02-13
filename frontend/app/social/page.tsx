@@ -439,53 +439,53 @@ export default function SocialPage() {
                   {/* Secondary metrics */}
                   <div className="flex items-center gap-2 flex-wrap">
                     {rankingView !== "audience" && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        <Users className="h-2.5 w-2.5" />{formatNumber(followers)}
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                        <Users className="h-3 w-3" />{formatNumber(followers)}
                       </span>
                     )}
                     {platform === "instagram" && (
                       <>
                         {rankingView !== "engagement" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            <Target className="h-2.5 w-2.5" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
                           </span>
                         )}
                         {rankingView !== "efficiency" && c.avg_likes != null && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            <Heart className="h-2.5 w-2.5" />{formatNumber(c.avg_likes)} moy
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Heart className="h-3 w-3" />{formatNumber(Math.round(c.avg_likes))} moy
                           </span>
                         )}
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                           {formatNumber(c.posts_count || 0)} posts
                         </span>
                       </>
                     )}
                     {platform === "tiktok" && (
                       <>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                          <Heart className="h-2.5 w-2.5" />{formatNumber(c.likes || 0)}
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          <Heart className="h-3 w-3" />{formatNumber(c.likes || 0)}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                           {formatNumber(c.videos_count || 0)} videos
                         </span>
                         {c.videos_count > 0 && rankingView !== "efficiency" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            <Zap className="h-2.5 w-2.5" />{formatNumber(Math.round(c.likes / c.videos_count))}/vid
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Zap className="h-3 w-3" />{formatNumber(Math.round(c.likes / c.videos_count))}/vid
                           </span>
                         )}
                       </>
                     )}
                     {platform === "youtube" && (
                       <>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                           {formatNumber(c.total_views || 0)} vues
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                           {formatNumber(c.videos_count || 0)} videos
                         </span>
                         {rankingView !== "engagement" && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            <Target className="h-2.5 w-2.5" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
                           </span>
                         )}
                       </>
@@ -560,7 +560,7 @@ export default function SocialPage() {
                         {platform === "instagram" && (
                           <>
                             <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_likes != null ? formatNumber(c.avg_likes) : "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_likes != null ? formatNumber(Math.round(c.avg_likes)) : "\u2014"}</td>
                             <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.posts_count || 0)}</td>
                           </>
                         )}
