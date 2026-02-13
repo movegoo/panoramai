@@ -62,6 +62,38 @@ async def get_stats(
     }
 
 
+@router.get("/data-audit")
+async def audit_data(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Show ownership of all brands and competitors for debugging."""
+    brands = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    users = {u.id: u.email for u in db.query(User).all()}
+
+    return {
+        "brands": [
+            {
+                "id": b.id,
+                "company_name": b.company_name,
+                "user_id": b.user_id,
+                "user_email": users.get(b.user_id, "orphan"),
+            }
+            for b in brands
+        ],
+        "competitors": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "user_id": c.user_id,
+                "user_email": users.get(c.user_id, "orphan"),
+            }
+            for c in competitors
+        ],
+    }
+
+
 @router.get("/users")
 async def list_users(
     user: User = Depends(get_current_user),

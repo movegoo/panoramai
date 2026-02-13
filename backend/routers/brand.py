@@ -377,7 +377,10 @@ async def add_suggested_competitors(
         "added": added,
         "skipped": skipped,
         "not_found": not_found,
-        "total_competitors": db.query(Competitor).filter(Competitor.is_active == True).count()
+        "total_competitors": db.query(Competitor).filter(
+            Competitor.is_active == True,
+            *([Competitor.user_id == user.id] if user else []),
+        ).count()
     }
 
 

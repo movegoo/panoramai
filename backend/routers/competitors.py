@@ -385,7 +385,10 @@ async def create_competitor(
         playstore_app_id=comp.playstore_app_id,
         appstore_app_id=comp.appstore_app_id,
         global_score=0,
-        rank=db.query(Competitor).filter(Competitor.is_active == True).count(),
+        rank=db.query(Competitor).filter(
+            Competitor.is_active == True,
+            *([Competitor.user_id == user.id] if user else []),
+        ).count(),
         active_channels=get_active_channels(comp),
     )
 
@@ -458,10 +461,16 @@ async def delete_competitor(
 # =============================================================================
 
 @router.get("/{competitor_id}/stores")
-async def get_competitor_stores(competitor_id: int, db: Session = Depends(get_db)):
+async def get_competitor_stores(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Liste les magasins d'un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if user and comp.user_id and comp.user_id != user.id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     stores = db.query(StoreLocation).filter(
@@ -492,10 +501,16 @@ async def get_competitor_stores(competitor_id: int, db: Session = Depends(get_db
 
 
 @router.post("/{competitor_id}/refresh-stores")
-async def refresh_competitor_stores(competitor_id: int, db: Session = Depends(get_db)):
+async def refresh_competitor_stores(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Relance la recherche de magasins pour un concurrent."""
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if user and comp.user_id and comp.user_id != user.id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     from services.banco import banco_service

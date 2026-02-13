@@ -118,9 +118,16 @@ async def list_stores(
 
 
 @router.post("/stores")
-async def create_store(data: StoreCreate, db: Session = Depends(get_db)):
+async def create_store(
+    data: StoreCreate,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Ajoute un magasin."""
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    brand = brand_query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
 
@@ -155,7 +162,8 @@ async def create_store(data: StoreCreate, db: Session = Depends(get_db)):
 @router.post("/stores/upload")
 async def upload_stores(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Upload massif de magasins via CSV.
@@ -171,7 +179,10 @@ async def upload_stores(
     - store_type
     - surface_m2
     """
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    brand = brand_query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
 
@@ -271,7 +282,8 @@ async def delete_store(store_id: int, db: Session = Depends(get_db)):
 @router.post("/zone/analyze")
 async def analyze_zone(
     data: ZoneAnalysisRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Analyse une zone de chalandise.
@@ -302,7 +314,10 @@ async def analyze_zone(
     total_pop = sum(c["population"] for c in communes_with_data)
 
     # Cherche les concurrents proches (autres magasins en base)
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    brand = brand_query.first()
     concurrents = []
 
     if brand:
@@ -772,7 +787,8 @@ async def refresh_datasets():
 @router.post("/zone/analyze-enriched")
 async def analyze_zone_enriched(
     data: ZoneAnalysisRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """
     Analyse de zone enrichie avec données data.gouv.fr.
@@ -811,7 +827,10 @@ async def analyze_zone_enriched(
     enrichment = await datagouv_service.enrich_zone_analysis(communes_in_zone)
 
     # Concurrents
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    brand = brand_query.first()
     concurrents = []
 
     if brand:

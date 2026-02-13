@@ -105,7 +105,10 @@ export default function CompetitorsPage() {
 
       // Fetch store counts
       try {
-        const res = await fetch(`${API_BASE}/geo/competitor-stores`);
+        const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+        const res = await fetch(`${API_BASE}/geo/competitor-stores`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (res.ok) {
           const storeData = await res.json();
           const counts: Record<number, number> = {};
