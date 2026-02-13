@@ -4,9 +4,10 @@ from sqlalchemy import desc
 from typing import List
 from datetime import datetime, timedelta
 
-from database import get_db, Competitor, InstagramData
+from database import get_db, Competitor, InstagramData, User
 from models.schemas import InstagramDataResponse
 from services.scrapecreators import scrapecreators
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -100,12 +101,18 @@ async def fetch_instagram_data(
 
 
 @router.get("/comparison")
-async def compare_instagram_accounts(db: Session = Depends(get_db)):
+async def compare_instagram_accounts(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Compare Instagram metrics across all tracked competitors"""
-    competitors = db.query(Competitor).filter(
+    query = db.query(Competitor).filter(
         Competitor.instagram_username.isnot(None),
         Competitor.is_active == True
-    ).all()
+    )
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    competitors = query.all()
 
     comparison = []
     for competitor in competitors:

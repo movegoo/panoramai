@@ -9,13 +9,14 @@ from typing import List
 from datetime import datetime, timedelta
 import json
 
-from database import get_db, Competitor, TikTokData, Ad
+from database import get_db, Competitor, TikTokData, Ad, User
 
 from models.schemas import TikTokDataResponse, TrendResponse
 from services.tiktok_scraper import tiktok_scraper
 from services.scrapecreators import scrapecreators
 from core.trends import calculate_trend
 from core.config import settings
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -136,13 +137,18 @@ async def fetch_tiktok_data(
 
 
 @router.get("/comparison")
-async def compare_tiktok_accounts(db: Session = Depends(get_db)):
+async def compare_tiktok_accounts(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Compare TikTok metrics across all tracked competitors."""
-    competitors = (
+    query = (
         db.query(Competitor)
         .filter(Competitor.tiktok_username.isnot(None), Competitor.is_active == True)
-        .all()
     )
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    competitors = query.all()
 
     comparison = []
     for competitor in competitors:
@@ -264,15 +270,19 @@ async def get_recent_videos(
 @router.get("/ads/all")
 async def get_all_tiktok_ads(
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Get all TikTok ads stored in the database."""
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        comp_query = comp_query.filter(Competitor.user_id == user.id)
+    competitors = {c.id: c.name for c in comp_query.all()}
     ads = (
         db.query(Ad)
-        .filter(Ad.platform == "tiktok")
+        .filter(Ad.platform == "tiktok", Ad.competitor_id.in_(competitors.keys()))
         .order_by(desc(Ad.start_date))
         .all()
     )
-    competitors = {c.id: c.name for c in db.query(Competitor).all()}
     return [
         {**_serialize_tiktok_ad(ad), "competitor_name": competitors.get(ad.competitor_id, "?")}
         for ad in ads

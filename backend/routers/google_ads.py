@@ -10,8 +10,9 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, Competitor, Ad
+from database import get_db, Competitor, Ad, User
 from services.scrapecreators import scrapecreators
+from core.auth import get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +50,15 @@ def _parse_date(date_str: str | None) -> datetime | None:
 async def get_all_google_ads(
     active_only: bool = Query(False),
     db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Liste toutes les pubs Google avec le nom du concurrent."""
     query = db.query(Ad, Competitor.name).join(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(Ad.platform == "google")
 
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
     if active_only:
         query = query.filter(Ad.is_active == True)
 

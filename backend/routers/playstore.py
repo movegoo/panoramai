@@ -9,9 +9,10 @@ from typing import List
 from datetime import datetime
 import asyncio
 
-from database import get_db, Competitor, AppData
+from database import get_db, Competitor, AppData, User
 from models.schemas import AppDataResponse, TrendResponse
 from core.trends import calculate_trend, parse_download_count
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -154,13 +155,18 @@ async def fetch_playstore_data(
 
 
 @router.get("/comparison")
-async def compare_playstore_apps(db: Session = Depends(get_db)):
+async def compare_playstore_apps(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Compare Play Store metrics across all tracked competitors."""
-    competitors = (
+    query = (
         db.query(Competitor)
         .filter(Competitor.playstore_app_id.isnot(None), Competitor.is_active == True)
-        .all()
     )
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    competitors = query.all()
 
     comparison = []
     for competitor in competitors:

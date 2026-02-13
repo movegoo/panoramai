@@ -8,10 +8,11 @@ from sqlalchemy import desc
 from typing import List
 from datetime import datetime, timedelta
 
-from database import get_db, Competitor, YouTubeData
+from database import get_db, Competitor, YouTubeData, User
 from models.schemas import YouTubeDataResponse, TrendResponse
 from services.youtube_api import youtube_api
 from core.trends import calculate_trend
+from core.auth import get_optional_user
 
 router = APIRouter()
 
@@ -103,13 +104,18 @@ async def fetch_youtube_data(
 
 
 @router.get("/comparison")
-async def compare_youtube_channels(db: Session = Depends(get_db)):
+async def compare_youtube_channels(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Compare YouTube metrics across all tracked competitors."""
-    competitors = (
+    query = (
         db.query(Competitor)
         .filter(Competitor.youtube_channel_id.isnot(None), Competitor.is_active == True)
-        .all()
     )
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    competitors = query.all()
 
     comparison = []
     for competitor in competitors:
