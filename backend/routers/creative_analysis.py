@@ -179,8 +179,8 @@ async def debug_next_ad(
     key_from_settings = settings.ANTHROPIC_API_KEY if hasattr(settings, "ANTHROPIC_API_KEY") else ""
     key_from_analyzer = creative_analyzer.api_key
 
-    # List all env vars that contain "ANTHROP" or "API_KEY"
-    matching_vars = {k: v[:15] + "..." for k, v in _os.environ.items() if "ANTHROP" in k.upper() or "GEMINI" in k.upper()}
+    # List all env var NAMES to check what Railway injects
+    all_env_names = sorted(_os.environ.keys())
 
     return {
         "ad_id": ad.ad_id,
@@ -194,7 +194,7 @@ async def debug_next_ad(
         "key_from_env": f"{key_from_env[:15]}..." if key_from_env else "EMPTY",
         "key_from_settings": f"{key_from_settings[:15]}..." if key_from_settings else "EMPTY",
         "key_from_analyzer": f"{key_from_analyzer[:15]}..." if key_from_analyzer else "EMPTY",
-        "matching_env_vars": matching_vars,
+        "all_env_names": all_env_names,
     }
 
 
