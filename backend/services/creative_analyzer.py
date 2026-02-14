@@ -7,6 +7,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from typing import Optional
 
 import httpx
@@ -51,10 +52,10 @@ MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
 class CreativeAnalyzer:
     """Analyze ad creatives using Anthropic Claude Vision API."""
 
-    def __init__(self):
-        self.api_key = settings.ANTHROPIC_API_KEY
-        if not self.api_key:
-            logger.warning("ANTHROPIC_API_KEY not configured. Creative analysis disabled.")
+    @property
+    def api_key(self) -> str:
+        """Read API key at call time (not import time) to support late-loaded env vars."""
+        return os.getenv("ANTHROPIC_API_KEY", "") or settings.ANTHROPIC_API_KEY
 
     async def analyze_creative(
         self,
