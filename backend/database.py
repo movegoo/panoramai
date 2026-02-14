@@ -427,6 +427,31 @@ class SerpResult(Base):
     competitor = relationship("Competitor", backref="serp_results")
 
 
+class GeoResult(Base):
+    """GEO (Generative Engine Optimization) tracking result."""
+    __tablename__ = "geo_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    keyword = Column(String(255), nullable=False, index=True)
+    query = Column(Text)
+    platform = Column(String(50), index=True)  # "claude", "gemini"
+
+    raw_answer = Column(Text)
+    analysis = Column(Text)  # JSON
+
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=True, index=True)
+    mentioned = Column(Boolean, default=False)
+    position_in_answer = Column(Integer)
+    recommended = Column(Boolean, default=False)
+    sentiment = Column(String(20))  # positif, neutre, négatif
+    context_snippet = Column(Text)
+    primary_recommendation = Column(String(100))
+
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", backref="geo_results")
+
+
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"

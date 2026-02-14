@@ -29,6 +29,7 @@ import {
   LogOut,
   Shield,
   X,
+  Sparkles,
 } from "lucide-react";
 
 const navigation = [
@@ -47,6 +48,7 @@ const navigation = [
       { name: "R\u00e9seaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
       { name: "SEO", href: "/seo", icon: Globe },
+      { name: "GEO", href: "/geo-tracking", icon: Sparkles },
     ],
   },
   {

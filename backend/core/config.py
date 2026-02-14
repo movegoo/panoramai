@@ -27,6 +27,9 @@ class Settings:
     # Anthropic Claude API (for AI creative analysis)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
+    # Google Gemini API (for GEO tracking)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))

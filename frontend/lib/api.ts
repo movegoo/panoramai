@@ -901,6 +901,57 @@ export const seoAPI = {
   getInsights: () => fetchAPI<SeoInsights>("/seo/insights"),
 };
 
+// GEO (Generative Engine Optimization) API
+export interface GeoMention {
+  competitor_name: string;
+  competitor_id: number | null;
+  position_in_answer: number;
+  recommended: boolean;
+  sentiment: string;
+  context: string;
+}
+
+export interface GeoQueryResult {
+  keyword: string;
+  query: string;
+  platforms: {
+    claude: GeoMention[];
+    gemini: GeoMention[];
+  };
+}
+
+export interface GeoInsights {
+  total_queries: number;
+  platforms: string[];
+  last_tracked: string | null;
+  share_of_voice: { competitor: string; competitor_id: number; mentions: number; pct: number }[];
+  avg_position: { competitor: string; competitor_id: number; avg_pos: number }[];
+  recommendation_rate: { competitor: string; competitor_id: number; rate: number; recommended_count: number }[];
+  sentiment: { competitor: string; competitor_id: number; positive: number; neutral: number; negative: number }[];
+  platform_comparison: {
+    competitor: string; competitor_id: number;
+    claude_mentions: number; gemini_mentions: number;
+    claude_pct: number; gemini_pct: number;
+  }[];
+  key_criteria: { criterion: string; count: number }[];
+  missing_keywords: { competitor: string; competitor_id: number; keywords: string[] }[];
+  seo_vs_geo: { competitor: string; competitor_id: number; seo_pct: number; geo_pct: number; gap: number }[];
+  recommendations: string[];
+}
+
+export const geoTrackingAPI = {
+  track: () =>
+    fetchAPI<{ tracked_queries: number; platforms: string[]; total_mentions: number; matched_competitors: number }>(
+      "/geo-tracking/track",
+      { method: "POST" }
+    ),
+
+  getResults: () =>
+    fetchAPI<{ queries: GeoQueryResult[]; last_tracked: string | null }>("/geo-tracking/results"),
+
+  getInsights: () => fetchAPI<GeoInsights>("/geo-tracking/insights"),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[] }>(
