@@ -715,6 +715,9 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             pps = json.loads(ad.publisher_platforms) if ad.publisher_platforms else []
         except (json.JSONDecodeError, TypeError):
             pps = []
+        # Fallback: use ad.platform for ads without publisher_platforms (e.g. Google Ads)
+        if not pps and ad.platform:
+            pps = [ad.platform.upper()]
         for pp in pps:
             platform_counts[pp] = platform_counts.get(pp, 0) + 1
 
@@ -755,6 +758,8 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
                 pps = json.loads(a.publisher_platforms) if a.publisher_platforms else []
             except (json.JSONDecodeError, TypeError):
                 pps = []
+            if not pps and a.platform:
+                pps = [a.platform.upper()]
             for pp in pps:
                 comp_platforms.add(pp)
 
