@@ -38,6 +38,19 @@ async def analyze_all_creatives(
     user: User | None = Depends(get_optional_user),
 ):
     """Batch-analyze ad creatives that haven't been analyzed yet."""
+    # Auto-reset previous failures (score=0) so they can be retried
+    reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
+        Ad.creative_analyzed_at.isnot(None),
+        Ad.creative_score == 0,
+    )
+    if user:
+        reset_query = reset_query.filter(Competitor.user_id == user.id)
+    for ad in reset_query.all():
+        ad.creative_analyzed_at = None
+        ad.creative_score = None
+        ad.creative_analysis = None
+    db.commit()
+
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
         Ad.creative_analyzed_at.is_(None),
         Ad.creative_url.isnot(None),
@@ -55,9 +68,13 @@ async def analyze_all_creatives(
         if fmt != "VIDEO" and len(ads_to_analyze) < limit:
             ads_to_analyze.append(ad)
 
+    # Count remaining for this user
+    remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
+    if user:
+        remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+
     if not ads_to_analyze:
-        remaining = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None)).count()
-        return {"message": "No ads to analyze", "analyzed": 0, "errors": 0, "remaining": remaining}
+        return {"message": "No ads to analyze", "analyzed": 0, "errors": 0, "remaining": remaining_query.count()}
 
     analyzed = 0
     errors = 0
