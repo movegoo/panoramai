@@ -876,8 +876,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Two-column layout: Rankings + Ad Intelligence ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      {/* ── Rankings + Ad Intelligence ── */}
+      <div className="space-y-6">
 
         {/* ── CLASSEMENTS ────────────────────────────────── */}
         <div className="space-y-4">
@@ -974,7 +974,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── INTELLIGENCE PUBLICITAIRE ───────────────────── */}
-        <div className="space-y-4">
+        <div className="space-y-4" id="ad-intelligence">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
               <Megaphone className="h-4 w-4 text-violet-600" />
@@ -1001,6 +1001,9 @@ export default function DashboardPage() {
           {showBudgetInfo && (
             <BudgetInfoPanel onClose={() => setShowBudgetInfo(false)} />
           )}
+
+          {/* Ad intelligence grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Ad volume comparison */}
           <div className="rounded-2xl border bg-card overflow-hidden">
@@ -1055,6 +1058,9 @@ export default function DashboardPage() {
               })}
             </div>
           </div>
+
+          {/* Right sub-column: Format + Platforms */}
+          <div className="space-y-4">
 
           {/* Format breakdown */}
           <div className="rounded-2xl border bg-card overflow-hidden">
@@ -1119,6 +1125,9 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          </div>{/* end right sub-column */}
+          </div>{/* end ad intelligence grid */}
         </div>
       </div>
 
