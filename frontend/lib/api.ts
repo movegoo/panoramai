@@ -880,6 +880,8 @@ export interface SerpRanking {
 export interface SeoInsights {
   total_keywords: number;
   last_tracked: string | null;
+  brand_name: string | null;
+  brand_competitor_id: number | null;
   share_of_voice: { competitor: string; competitor_id: number; appearances: number; pct: number }[];
   avg_position: { competitor: string; competitor_id: number; avg_pos: number; keywords_in_top10: number }[];
   best_keywords: { competitor: string; competitor_id: number; keyword: string; position: number }[];

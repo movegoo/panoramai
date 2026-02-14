@@ -224,7 +224,10 @@ async def get_insights(
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_q = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_q = brand_q.filter(Advertiser.user_id == user.id)
+    brand = brand_q.first()
     brand_comp = None
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
@@ -233,6 +236,8 @@ async def get_insights(
     if not latest:
         return {
             "total_keywords": 0, "last_tracked": None,
+            "brand_name": brand.company_name if brand else None,
+            "brand_competitor_id": brand_comp.id if brand_comp else None,
             "share_of_voice": [], "avg_position": [], "best_keywords": [],
             "missing_keywords": [], "top_domains": [], "recommendations": [],
         }
@@ -329,6 +334,8 @@ async def get_insights(
     return {
         "total_keywords": total_keywords,
         "last_tracked": latest.isoformat(),
+        "brand_name": brand.company_name if brand else None,
+        "brand_competitor_id": brand_comp.id if brand_comp else None,
         "share_of_voice": share_of_voice,
         "avg_position": avg_position,
         "best_keywords": best_keywords,

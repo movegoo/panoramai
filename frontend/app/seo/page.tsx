@@ -4,9 +4,6 @@ import { useState, useEffect } from "react";
 import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
 import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
 
-// Brand competitor id (Auchan)
-const BRAND_ID = 5;
-
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
   const d = new Date(iso);
@@ -63,10 +60,14 @@ export default function SeoPage() {
     }
   }
 
+  // Dynamic brand info from insights
+  const brandId = insights?.brand_competitor_id;
+  const brandName = insights?.brand_name || "Ma marque";
+
   // Derived data
-  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === BRAND_ID);
-  const brandAvg = insights?.avg_position.find(a => a.competitor_id === BRAND_ID);
-  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === BRAND_ID);
+  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
+  const brandAvg = insights?.avg_position.find(a => a.competitor_id === brandId);
+  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === brandId);
 
   // Build competitor list for ranking grid
   const competitorNames: string[] = [];
@@ -130,14 +131,14 @@ export default function SeoPage() {
               color="blue"
             />
             <KpiCard
-              label="Position moy. Auchan"
+              label={`Position moy. ${brandName}`}
               value={brandAvg ? brandAvg.avg_pos.toFixed(1) : "—"}
               icon={TrendingUp}
               color="indigo"
               subtitle={brandAvg ? `${brandAvg.keywords_in_top10} mots-cles dans le top 10` : undefined}
             />
             <KpiCard
-              label="Part de voix Auchan"
+              label={`Part de voix ${brandName}`}
               value={brandSov ? `${brandSov.pct}%` : "0%"}
               icon={BarChart3}
               color="violet"
@@ -159,7 +160,7 @@ export default function SeoPage() {
             </h2>
             <div className="space-y-3">
               {insights.share_of_voice.map((s) => {
-                const isBrand = s.competitor_id === BRAND_ID;
+                const isBrand = s.competitor_id === brandId;
                 return (
                   <div key={s.competitor_id} className="flex items-center gap-3">
                     <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-blue-700 font-bold" : "text-foreground"}`}>
@@ -191,7 +192,7 @@ export default function SeoPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {insights.avg_position.map((a, i) => {
-                const isBrand = a.competitor_id === BRAND_ID;
+                const isBrand = a.competitor_id === brandId;
                 return (
                   <div key={a.competitor_id} className={`rounded-xl p-4 ${isBrand ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200"}`}>
                     <div className="flex items-center justify-between mb-2">
@@ -259,10 +260,10 @@ export default function SeoPage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
               <h2 className="text-base font-semibold text-amber-800 mb-3 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
-                Mots-cles manquants pour Auchan
+                Mots-cles manquants pour {brandName}
               </h2>
               <p className="text-sm text-amber-700 mb-3">
-                Auchan n&apos;apparait pas dans le top 10 Google pour les requetes suivantes :
+                {brandName} n&apos;apparait pas dans le top 10 Google pour les requetes suivantes :
               </p>
               <div className="flex flex-wrap gap-2">
                 {brandMissing.keywords.map((kw) => (
