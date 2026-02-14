@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import {
@@ -212,17 +213,40 @@ function genderLabel(raw: string | undefined | null): string {
 /* ─────────────── Tooltip component ─────────────── */
 
 function InfoTooltip({ text, className = "", light = false }: { text: string; className?: string; light?: boolean }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const handleEnter = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setPos({ top: r.top - 8, left: r.left + r.width / 2 });
+    }
+    setShow(true);
+  };
+
   return (
-    <span className={`relative inline-flex group/tip ${className}`}>
-      <span className={`${light ? "text-white/30 hover:text-white/70" : "text-muted-foreground/40 hover:text-muted-foreground"} transition-colors cursor-help`}>
+    <span className={`inline-flex ${className}`}>
+      <span
+        ref={ref}
+        onMouseEnter={handleEnter}
+        onMouseLeave={() => setShow(false)}
+        className={`${light ? "text-white/30 hover:text-white/70" : "text-muted-foreground/40 hover:text-muted-foreground"} transition-colors cursor-help`}
+      >
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
           <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM8 4.5a1 1 0 100 2 1 1 0 000-2zM7 8v3.5h2V8H7z"/>
         </svg>
       </span>
-      <span className="invisible group-hover/tip:visible opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 rounded-lg bg-gray-900 text-white text-[11px] leading-relaxed shadow-xl z-[100] pointer-events-none">
-        {text}
-        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-      </span>
+      {show && createPortal(
+        <span
+          className="fixed z-[9999] w-64 px-3 py-2 rounded-lg bg-gray-900 text-white text-[11px] leading-relaxed shadow-xl pointer-events-none"
+          style={{ top: pos.top, left: pos.left, transform: "translate(-50%, -100%)" }}
+        >
+          {text}
+          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+        </span>,
+        document.body
+      )}
     </span>
   );
 }
