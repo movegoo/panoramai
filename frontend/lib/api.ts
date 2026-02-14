@@ -913,5 +913,6 @@ export const socialContentAPI = {
       { method: "POST" }
     ),
 
-  getInsights: () => fetchAPI<ContentInsights>("/social-content/insights"),
+  getInsights: (platform?: string) =>
+    fetchAPI<ContentInsights>(`/social-content/insights${platform ? `?platform=${platform}` : ""}`),
 };

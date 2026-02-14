@@ -291,6 +291,7 @@ async def analyze_all_content(
 
 @router.get("/insights")
 async def get_content_insights(
+    platform: str | None = Query(None, description="Filter by platform: tiktok, youtube, instagram"),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -303,6 +304,8 @@ async def get_content_insights(
     )
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if platform:
+        query = query.filter(SocialPost.platform == platform.lower())
 
     rows = query.all()
 

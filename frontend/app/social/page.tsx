@@ -34,6 +34,10 @@ import {
   Eye,
   Clock,
   Calendar,
+  Instagram,
+  Music,
+  Youtube,
+  Layers,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
@@ -117,6 +121,7 @@ export default function SocialPage() {
   const [contentLoading, setContentLoading] = useState(false);
   const [contentStatus, setContentStatus] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [contentPlatform, setContentPlatform] = useState<string | null>(null); // null = overview (all)
 
   useEffect(() => {
     async function loadAll() {
@@ -127,7 +132,7 @@ export default function SocialPage() {
           tiktokAPI.getComparison(periodDays),
           youtubeAPI.getComparison(periodDays),
           brandAPI.getProfile(),
-          socialContentAPI.getInsights(),
+          socialContentAPI.getInsights(contentPlatform || undefined),
         ]);
         if (comp.status === "fulfilled") setCompetitors(comp.value);
         if (ig.status === "fulfilled") setIgComparison(ig.value);
@@ -142,7 +147,7 @@ export default function SocialPage() {
       }
     }
     loadAll();
-  }, [periodDays]);
+  }, [periodDays, contentPlatform]);
 
   async function handleRefreshAll() {
     setFetching(true);
@@ -191,7 +196,7 @@ export default function SocialPage() {
       );
 
       // Step 3: Refresh insights
-      const insights = await socialContentAPI.getInsights();
+      const insights = await socialContentAPI.getInsights(contentPlatform || undefined);
       setContentInsights(insights);
     } catch (err) {
       console.error("Content analysis failed:", err);
@@ -688,6 +693,32 @@ export default function SocialPage() {
             <Brain className={`h-3.5 w-3.5 ${contentLoading ? "animate-pulse" : ""}`} />
             {contentLoading ? "Analyse..." : "Analyser le contenu"}
           </Button>
+        </div>
+
+        {/* Content Platform Switcher */}
+        <div className="flex items-center gap-1 p-1 rounded-full bg-card border border-border w-fit">
+          {([
+            { key: null, label: "Vue globale", icon: <Layers className="h-3 w-3" /> },
+            { key: "instagram", label: "Instagram", icon: <Instagram className="h-3 w-3" /> },
+            { key: "tiktok", label: "TikTok", icon: <Music className="h-3 w-3" /> },
+            { key: "youtube", label: "YouTube", icon: <Youtube className="h-3 w-3" /> },
+          ] as { key: string | null; label: string; icon: React.ReactNode }[]).map((p) => {
+            const isActive = contentPlatform === p.key;
+            return (
+              <button
+                key={p.key ?? "all"}
+                onClick={() => setContentPlatform(p.key)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                {p.icon}
+                {p.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Status */}
