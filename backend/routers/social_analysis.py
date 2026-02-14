@@ -5,13 +5,13 @@ Collect social posts, analyze with AI, aggregate insights.
 import asyncio
 import json
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, Competitor, User, SocialPost
+from database import get_db, Competitor, User, SocialPost, Advertiser
 from services.scrapecreators import scrapecreators
 from services.social_content_analyzer import social_content_analyzer
 from core.auth import get_optional_user
@@ -342,12 +342,12 @@ async def get_content_insights(
         if post.content_format:
             format_counter[post.content_format] += 1
 
-        # Parse hashtags
+        # Parse hashtags (strip leading # to avoid double ##)
         try:
             tags = json.loads(post.content_hashtags) if post.content_hashtags else []
             for t in tags:
                 if t:
-                    hashtag_counter[t] += 1
+                    hashtag_counter[t.lstrip("#")] += 1
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -466,6 +466,14 @@ async def get_content_insights(
         })
     platform_stats.sort(key=lambda p: p["count"], reverse=True)
 
+    # --- Posting frequency & timing analysis ---
+    posting_frequency = _build_posting_frequency(rows)
+    posting_timing = _build_posting_timing(rows)
+
+    # Get brand name for recommendations
+    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_name = brand.company_name if brand else "Auchan"
+
     # Recommendations
     recommendations = _generate_recommendations(
         themes=theme_counter,
@@ -475,6 +483,11 @@ async def get_content_insights(
         platform_stats=platform_stats,
         avg_score=avg_score,
         total=total,
+        posting_timing=posting_timing,
+        posting_frequency=posting_frequency,
+        brand_name=brand_name,
+        all_posts_data=all_posts_data,
+        rows=rows,
     )
 
     return {
@@ -488,7 +501,126 @@ async def get_content_insights(
         "top_performers": top_performers,
         "by_competitor": competitor_stats,
         "by_platform": platform_stats,
+        "posting_frequency": posting_frequency,
+        "posting_timing": posting_timing,
         "recommendations": recommendations,
+    }
+
+
+def _build_posting_frequency(rows) -> dict:
+    """Compute posting frequency stats: avg per month, per week, by competitor."""
+    DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
+    by_competitor = defaultdict(list)
+    for post, comp_name in rows:
+        if post.published_at:
+            by_competitor[comp_name].append(post.published_at)
+
+    competitor_freq = []
+    for comp, dates in by_competitor.items():
+        if len(dates) < 2:
+            competitor_freq.append({
+                "competitor": comp,
+                "total_posts": len(dates),
+                "avg_per_week": 0,
+                "avg_per_month": 0,
+            })
+            continue
+
+        dates_sorted = sorted(dates)
+        span_days = max((dates_sorted[-1] - dates_sorted[0]).days, 1)
+        span_weeks = max(span_days / 7, 1)
+        span_months = max(span_days / 30, 1)
+
+        competitor_freq.append({
+            "competitor": comp,
+            "total_posts": len(dates),
+            "avg_per_week": round(len(dates) / span_weeks, 1),
+            "avg_per_month": round(len(dates) / span_months, 1),
+        })
+
+    competitor_freq.sort(key=lambda c: c["avg_per_week"], reverse=True)
+
+    # Day of week distribution across all posts
+    day_counts = Counter()
+    for post, _ in rows:
+        if post.published_at:
+            day_counts[post.published_at.weekday()] += 1
+
+    day_distribution = [
+        {"day": DAY_LABELS[i], "day_index": i, "count": day_counts.get(i, 0)}
+        for i in range(7)
+    ]
+
+    return {
+        "by_competitor": competitor_freq,
+        "day_distribution": day_distribution,
+    }
+
+
+def _build_posting_timing(rows) -> dict:
+    """Analyze posting hours and find best day/hour for engagement."""
+    DAY_LABELS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+
+    hour_counts = Counter()
+    hour_engagement = defaultdict(list)
+    day_hour_engagement = defaultdict(list)
+    by_competitor_hours = defaultdict(lambda: Counter())
+
+    for post, comp_name in rows:
+        if not post.published_at:
+            continue
+
+        hour = post.published_at.hour
+        day = post.published_at.weekday()
+        engagement = (post.likes or 0) + (post.comments or 0) * 2 + (post.shares or 0) * 3
+
+        hour_counts[hour] += 1
+        hour_engagement[hour].append(engagement)
+        day_hour_engagement[(day, hour)].append(engagement)
+        by_competitor_hours[comp_name][hour] += 1
+
+    # Hour distribution
+    hour_distribution = []
+    for h in range(24):
+        engs = hour_engagement.get(h, [])
+        hour_distribution.append({
+            "hour": h,
+            "label": f"{h:02d}h",
+            "count": hour_counts.get(h, 0),
+            "avg_engagement": round(sum(engs) / len(engs)) if engs else 0,
+        })
+
+    # Best day/hour combos by engagement
+    best_slots = []
+    for (day, hour), engs in day_hour_engagement.items():
+        if len(engs) >= 1:
+            best_slots.append({
+                "day": DAY_LABELS[day],
+                "day_index": day,
+                "hour": hour,
+                "label": f"{DAY_LABELS[day]} {hour:02d}h",
+                "posts": len(engs),
+                "avg_engagement": round(sum(engs) / len(engs)),
+            })
+    best_slots.sort(key=lambda s: s["avg_engagement"], reverse=True)
+
+    # Peak hours by competitor
+    competitor_peak_hours = []
+    for comp, hours in by_competitor_hours.items():
+        if hours:
+            peak_hour = hours.most_common(1)[0][0]
+            competitor_peak_hours.append({
+                "competitor": comp,
+                "peak_hour": peak_hour,
+                "peak_label": f"{peak_hour:02d}h",
+                "posts_at_peak": hours[peak_hour],
+            })
+
+    return {
+        "hour_distribution": hour_distribution,
+        "best_slots": best_slots[:10],
+        "competitor_peak_hours": competitor_peak_hours,
     }
 
 
@@ -500,62 +632,118 @@ def _generate_recommendations(
     platform_stats: list,
     avg_score: float,
     total: int,
+    posting_timing: dict = None,
+    posting_frequency: dict = None,
+    brand_name: str = "Auchan",
+    all_posts_data: list = None,
+    rows: list = None,
 ) -> list[str]:
-    """Generate strategic content recommendations based on analysis data."""
+    """Generate expert community management recommendations based on engagement data."""
     recs = []
 
     if not total:
         return recs
 
-    # Top theme insight
-    if themes:
-        top_theme, top_count = themes.most_common(1)[0]
-        pct = round(top_count / total * 100)
-        recs.append(
-            f"Le theme \"{top_theme}\" domine avec {pct}% des contenus. "
-            f"Diversifiez vos themes pour toucher de nouvelles audiences."
-        )
-
-    # Tone gap
-    if tones:
-        top_tones = [t for t, _ in tones.most_common(3)]
-        underused = [t for t in ("authentique", "communautaire", "educatif", "humour")
-                     if t not in top_tones]
-        if underused:
-            recs.append(
-                f"Les tons \"{underused[0]}\" et \"{underused[1] if len(underused) > 1 else 'inspirant'}\" "
-                f"sont sous-exploites — une opportunite de differenciation sur les reseaux."
-            )
-
-    # Score leader
+    # --- 1. High-engagement competitor strategy to replicate ---
     if competitor_stats and len(competitor_stats) >= 2:
         leader = competitor_stats[0]
+        # Find brand stats
+        brand_stats = next((c for c in competitor_stats if c["competitor"].lower() == brand_name.lower()), None)
+
+        if leader["avg_score"] >= 60:
+            recs.append(
+                f"{leader['competitor']} obtient le meilleur engagement ({leader['avg_score']}/100) "
+                f"avec un ton \"{leader['top_tone']}\" sur le theme \"{leader['top_theme']}\". "
+                f"Inspirez-vous de cette approche pour vos prochains contenus."
+            )
+
+        # Brand gap
+        if brand_stats and leader["competitor"].lower() != brand_name.lower():
+            gap = leader["avg_score"] - brand_stats["avg_score"]
+            if gap > 10:
+                recs.append(
+                    f"Ecart d'engagement de {gap:.0f} points entre {leader['competitor']} et {brand_name}. "
+                    f"Analysez leurs posts les plus performants et adaptez leur strategie "
+                    f"(\"{leader['top_theme']}\" / \"{leader['top_tone']}\") a votre marque."
+                )
+
+    # --- 2. Best posting time recommendation ---
+    if posting_timing and posting_timing.get("best_slots"):
+        best = posting_timing["best_slots"][0]
         recs.append(
-            f"{leader['competitor']} a le meilleur score contenu moyen ({leader['avg_score']}/100) "
-            f"avec une strategie axee \"{leader['top_theme']}\" / \"{leader['top_tone']}\"."
+            f"Le creneau {best['label']} genere le plus d'engagement (moy. {best['avg_engagement']:,} interactions). "
+            f"Planifiez vos publications cles sur ce creneau pour maximiser la visibilite."
         )
 
-    # Format insight
-    if formats:
-        top_format = formats.most_common(1)[0][0]
-        if top_format == "short-form":
+    # --- 3. Posting frequency benchmark ---
+    if posting_frequency and posting_frequency.get("by_competitor"):
+        freq_list = posting_frequency["by_competitor"]
+        most_active = freq_list[0] if freq_list else None
+        brand_freq = next((f for f in freq_list if f["competitor"].lower() == brand_name.lower()), None)
+
+        if most_active and brand_freq and most_active["competitor"].lower() != brand_name.lower():
+            if most_active["avg_per_week"] > brand_freq["avg_per_week"] * 1.5:
+                recs.append(
+                    f"{most_active['competitor']} publie {most_active['avg_per_week']:.1f}x/semaine "
+                    f"contre {brand_freq['avg_per_week']:.1f}x pour {brand_name}. "
+                    f"Augmentez la cadence a au moins {max(most_active['avg_per_week'] * 0.8, brand_freq['avg_per_week'] + 1):.0f} posts/semaine."
+                )
+        elif most_active and not brand_freq:
             recs.append(
-                "Le format short-form domine. Testez des formats plus longs "
-                "(tutorials, interviews) pour approfondir l'engagement."
-            )
-        elif top_format in ("long-form", "tutorial"):
-            recs.append(
-                "Les formats longs dominent. Integrez plus de contenus courts "
-                "(reels, challenges) pour maximiser la portee."
+                f"{most_active['competitor']} est le plus actif avec {most_active['avg_per_week']:.1f} posts/semaine. "
+                f"Visez au minimum ce rythme pour rester competitif."
             )
 
-    # Platform insight
+    # --- 4. High-engagement content to replicate ---
+    if all_posts_data:
+        high_eng = [p for p in all_posts_data if p["score"] >= 70]
+        if high_eng:
+            top_themes_eng = Counter(p["theme"] for p in high_eng if p["theme"])
+            if top_themes_eng:
+                best_theme, best_count = top_themes_eng.most_common(1)[0]
+                pct = round(best_count / len(high_eng) * 100)
+                recs.append(
+                    f"{pct}% des contenus a fort engagement (score 70+) portent sur le theme \"{best_theme}\". "
+                    f"Doublez la production sur cette thematique."
+                )
+
+    # --- 5. Tone that drives engagement ---
+    if rows and tones:
+        tone_engagement = defaultdict(list)
+        for post, _ in rows:
+            if post.content_tone and post.content_engagement_score:
+                tone_engagement[post.content_tone].append(post.content_engagement_score)
+        if tone_engagement:
+            best_tone = max(tone_engagement.items(), key=lambda x: sum(x[1]) / len(x[1]) if x[1] else 0)
+            avg_eng = round(sum(best_tone[1]) / len(best_tone[1]), 1)
+            if avg_eng > avg_score:
+                recs.append(
+                    f"Le ton \"{best_tone[0]}\" genere un score moyen de {avg_eng}/100, "
+                    f"au-dessus de la moyenne ({avg_score}/100). Privilegiez ce ton dans vos publications."
+                )
+
+    # --- 6. Platform-specific insight ---
     if platform_stats:
         best_plat = max(platform_stats, key=lambda p: p["avg_score"])
+        worst_plat = min(platform_stats, key=lambda p: p["avg_score"]) if len(platform_stats) >= 2 else None
         if best_plat["count"] >= 3:
             recs.append(
-                f"La plateforme {best_plat['platform']} obtient le meilleur score moyen "
-                f"({best_plat['avg_score']}/100). Renforcez votre presence sur ce canal."
+                f"{best_plat['platform'].title()} obtient le meilleur engagement moyen "
+                f"({best_plat['avg_score']}/100). "
+                + (f"A l'inverse, {worst_plat['platform'].title()} est en retrait ({worst_plat['avg_score']}/100) — "
+                   f"revoyez votre strategie sur cette plateforme."
+                   if worst_plat and worst_plat["avg_score"] < best_plat["avg_score"] - 10 else
+                   "Renforcez votre presence sur ce canal.")
             )
 
-    return recs[:5]
+    # --- 7. Day of week insight ---
+    if posting_frequency and posting_frequency.get("day_distribution"):
+        days = posting_frequency["day_distribution"]
+        if any(d["count"] > 0 for d in days):
+            best_day = max(days, key=lambda d: d["count"])
+            recs.append(
+                f"La majorite des publications tombent le {best_day['day']}. "
+                f"Testez d'autres jours pour eviter la saturation et capter l'attention."
+            )
+
+    return recs[:7]

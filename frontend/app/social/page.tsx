@@ -32,6 +32,8 @@ import {
   Hash,
   Play,
   Eye,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
@@ -773,7 +775,7 @@ export default function SocialPage() {
                       key={h.hashtag}
                       className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                     >
-                      #{h.hashtag}
+                      #{h.hashtag.replace(/^#/, "")}
                       <span className="text-emerald-400 text-[10px]">{h.count}</span>
                     </span>
                   ))}
@@ -805,6 +807,127 @@ export default function SocialPage() {
                 </div>
               </div>
             </div>
+
+            {/* Posting Frequency */}
+            {contentInsights.posting_frequency && contentInsights.posting_frequency.by_competitor.length > 0 && (
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-emerald-500" />
+                  Frequence de publication
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Per competitor frequency */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Par concurrent</span>
+                    {contentInsights.posting_frequency.by_competitor.map((f) => (
+                      <div key={f.competitor} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+                        <span className="text-sm font-medium truncate">{f.competitor}</span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs text-muted-foreground">{f.avg_per_week}/sem</span>
+                          <span className="text-sm font-bold tabular-nums text-emerald-600">{f.avg_per_month}/mois</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Day of week distribution */}
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Jour de publication</span>
+                    <div className="mt-2 space-y-1.5">
+                      {contentInsights.posting_frequency.day_distribution.map((d) => {
+                        const maxCount = Math.max(...contentInsights.posting_frequency!.day_distribution.map(x => x.count), 1);
+                        return (
+                          <div key={d.day} className="flex items-center gap-2">
+                            <span className="text-xs font-medium w-16 text-muted-foreground">{d.day.slice(0, 3)}</span>
+                            <div className="flex-1 h-4 bg-muted/50 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-400 rounded-full transition-all"
+                                style={{ width: `${(d.count / maxCount) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-bold tabular-nums w-6 text-right">{d.count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Posting Timing */}
+            {contentInsights.posting_timing && contentInsights.posting_timing.hour_distribution.some(h => h.count > 0) && (
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-emerald-500" />
+                  Heures de publication & engagement
+                </h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Hour distribution heatmap */}
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Volume par heure</span>
+                    <div className="mt-2 flex items-end gap-[3px] h-24">
+                      {contentInsights.posting_timing.hour_distribution.map((h) => {
+                        const maxCount = Math.max(...contentInsights.posting_timing!.hour_distribution.map(x => x.count), 1);
+                        const pct = (h.count / maxCount) * 100;
+                        const maxEng = Math.max(...contentInsights.posting_timing!.hour_distribution.map(x => x.avg_engagement), 1);
+                        const engRatio = h.avg_engagement / maxEng;
+                        return (
+                          <div key={h.hour} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                            <div
+                              className={`w-full rounded-t transition-all ${engRatio > 0.7 ? "bg-emerald-500" : engRatio > 0.4 ? "bg-emerald-300" : "bg-gray-200"}`}
+                              style={{ height: `${Math.max(pct, 3)}%` }}
+                            />
+                            <span className="text-[8px] text-muted-foreground mt-0.5">{h.hour % 6 === 0 ? h.label : ""}</span>
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 bg-foreground text-background text-[10px] rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                              {h.label} — {h.count} posts, eng. moy. {h.avg_engagement.toLocaleString("fr-FR")}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Fort engagement</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-300" /> Moyen</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-200" /> Faible</span>
+                    </div>
+                  </div>
+
+                  {/* Best slots */}
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Meilleurs creneaux (engagement)</span>
+                    <div className="mt-2 space-y-1.5">
+                      {contentInsights.posting_timing.best_slots.slice(0, 5).map((s, i) => (
+                        <div key={i} className={`flex items-center gap-2 rounded-lg px-3 py-2 ${i === 0 ? "bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800" : "bg-muted/30"}`}>
+                          <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold shrink-0 ${
+                            i === 0 ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"
+                          }`}>
+                            {i + 1}
+                          </span>
+                          <span className={`text-sm font-medium flex-1 ${i === 0 ? "text-emerald-700 dark:text-emerald-300" : ""}`}>{s.label}</span>
+                          <span className="text-xs text-muted-foreground">{s.posts} posts</span>
+                          <span className="text-sm font-bold tabular-nums text-emerald-600">{s.avg_engagement.toLocaleString("fr-FR")}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Competitor peak hours */}
+                    {contentInsights.posting_timing.competitor_peak_hours.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Heure de pointe par concurrent</span>
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {contentInsights.posting_timing.competitor_peak_hours.map((c) => (
+                            <span key={c.competitor} className="inline-flex items-center gap-1.5 text-xs bg-muted/50 rounded-lg px-2.5 py-1.5">
+                              <span className="font-medium">{c.competitor}</span>
+                              <span className="font-bold text-emerald-600">{c.peak_label}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Top Performers */}
             {contentInsights.top_performers.length > 0 && (

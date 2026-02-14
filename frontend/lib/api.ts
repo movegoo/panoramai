@@ -849,6 +849,15 @@ export interface ContentInsights {
     avg_score: number;
     total_views: number;
   }[];
+  posting_frequency?: {
+    by_competitor: { competitor: string; total_posts: number; avg_per_week: number; avg_per_month: number }[];
+    day_distribution: { day: string; day_index: number; count: number }[];
+  };
+  posting_timing?: {
+    hour_distribution: { hour: number; label: string; count: number; avg_engagement: number }[];
+    best_slots: { day: string; day_index: number; hour: number; label: string; posts: number; avg_engagement: number }[];
+    competitor_peak_hours: { competitor: string; peak_hour: number; peak_label: string; posts_at_peak: number }[];
+  };
   recommendations: string[];
 }
 
