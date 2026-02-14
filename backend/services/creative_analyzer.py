@@ -1,8 +1,7 @@
 """
 Creative Analyzer Service.
-Uses Google Gemini Flash API (free tier) to analyze ad creative images.
+Uses Anthropic Claude Vision API to analyze ad creative images.
 Extracts: concept, hook, tone, colors, text overlay, score, tags.
-Free tier: 15 RPM, 1500 RPD.
 """
 import asyncio
 import base64
@@ -44,18 +43,18 @@ Critères de score :
 - Exécution professionnelle (25%) : qualité graphique, cohérence
 - Persuasion (20%) : incitation à l'action, urgence, désirabilité"""
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 class CreativeAnalyzer:
-    """Analyze ad creatives using Google Gemini Flash Vision API."""
+    """Analyze ad creatives using Anthropic Claude Vision API."""
 
     def __init__(self):
-        self.api_key = settings.GEMINI_API_KEY
+        self.api_key = settings.ANTHROPIC_API_KEY
         if not self.api_key:
-            logger.warning("GEMINI_API_KEY not configured. Creative analysis disabled.")
+            logger.warning("ANTHROPIC_API_KEY not configured. Creative analysis disabled.")
 
     async def analyze_creative(
         self,
@@ -63,12 +62,12 @@ class CreativeAnalyzer:
         ad_text: str = "",
         platform: str = "meta",
     ) -> Optional[dict]:
-        """Analyze a single ad creative image with Gemini Flash.
+        """Analyze a single ad creative image with Claude Vision.
 
         Returns parsed analysis dict or None on failure.
         """
         if not self.api_key:
-            logger.error("Cannot analyze: GEMINI_API_KEY not set")
+            logger.error("Cannot analyze: ANTHROPIC_API_KEY not set")
             return None
 
         if not creative_url:
@@ -88,67 +87,65 @@ class CreativeAnalyzer:
             ad_text=(ad_text or "")[:500],
         )
 
-        # Call Gemini API with retry for rate limits
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": media_type,
-                                "data": b64_image,
-                            }
-                        },
-                        {
-                            "text": prompt,
-                        },
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 1024,
-                "responseMimeType": "application/json",
-            },
-        }
-
+        # Call Claude API with retry for rate limits
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(
-                        f"{GEMINI_URL}?key={self.api_key}",
-                        headers={"content-type": "application/json"},
-                        json=payload,
+                        CLAUDE_API_URL,
+                        headers={
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": "claude-sonnet-4-5-20250929",
+                            "max_tokens": 1024,
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "image",
+                                            "source": {
+                                                "type": "base64",
+                                                "media_type": media_type,
+                                                "data": b64_image,
+                                            },
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": prompt,
+                                        },
+                                    ],
+                                }
+                            ],
+                        },
                     )
 
                 if response.status_code == 429:
                     wait = 10 * (attempt + 1)
-                    logger.warning(f"Gemini rate limit (429), waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                    logger.warning(f"Claude rate limit (429), waiting {wait}s (attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(wait)
                     continue
 
                 if response.status_code != 200:
-                    logger.error(f"Gemini API error {response.status_code}: {response.text[:300]}")
+                    logger.error(f"Claude API error {response.status_code}: {response.text[:300]}")
                     return None
 
                 result = response.json()
-                candidates = result.get("candidates", [])
-                if not candidates:
-                    logger.error(f"Gemini: no candidates in response")
-                    return None
-
-                text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                text_content = result.get("content", [{}])[0].get("text", "")
                 return self._parse_analysis(text_content)
 
             except httpx.TimeoutException:
-                logger.error(f"Gemini API timeout for {creative_url[:80]}")
+                logger.error(f"Claude API timeout for {creative_url[:80]}")
                 return None
             except Exception as e:
-                logger.error(f"Gemini API error: {e}")
+                logger.error(f"Claude API error: {e}")
                 return None
 
-        logger.error(f"Gemini: max retries reached for {creative_url[:80]}")
+        logger.error(f"Claude: max retries reached for {creative_url[:80]}")
         return None
 
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
@@ -192,7 +189,7 @@ class CreativeAnalyzer:
             return None, ""
 
     def _parse_analysis(self, text: str) -> Optional[dict]:
-        """Parse Gemini's JSON response into a validated dict."""
+        """Parse Claude's JSON response into a validated dict."""
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]

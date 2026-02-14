@@ -1,6 +1,6 @@
 """
 Creative Analysis Router.
-AI-powered visual analysis of ad creatives using Google Gemini Flash.
+AI-powered visual analysis of ad creatives using Claude Vision.
 """
 import asyncio
 import json
@@ -99,8 +99,8 @@ async def analyze_all_creatives(
             ad.creative_score = 0
             errors += 1
 
-        # Rate limiting — Gemini free tier = 15 RPM
-        await asyncio.sleep(4.5)
+        # Rate limiting
+        await asyncio.sleep(1.0)
 
     db.commit()
 
