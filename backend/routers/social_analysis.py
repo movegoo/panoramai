@@ -469,6 +469,20 @@ async def get_content_insights(
         })
     platform_stats.sort(key=lambda p: p["count"], reverse=True)
 
+    # --- Best tone by engagement ---
+    tone_engagement = defaultdict(list)
+    for post, _ in rows:
+        if post.content_tone and post.content_engagement_score:
+            tone_engagement[post.content_tone].append(post.content_engagement_score)
+    best_tone_engagement = None
+    if tone_engagement:
+        best = max(tone_engagement.items(), key=lambda x: sum(x[1]) / len(x[1]))
+        best_tone_engagement = {
+            "tone": best[0],
+            "avg_score": round(sum(best[1]) / len(best[1]), 1),
+            "count": len(best[1]),
+        }
+
     # --- Posting frequency & timing analysis ---
     posting_frequency = _build_posting_frequency(rows)
     posting_timing = _build_posting_timing(rows)
@@ -506,6 +520,7 @@ async def get_content_insights(
         "by_platform": platform_stats,
         "posting_frequency": posting_frequency,
         "posting_timing": posting_timing,
+        "best_tone_engagement": best_tone_engagement,
         "recommendations": recommendations,
     }
 

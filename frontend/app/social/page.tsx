@@ -728,7 +728,15 @@ export default function SocialPage() {
           </div>
         )}
 
-        {contentInsights && contentInsights.total_analyzed > 0 && (
+        {contentInsights && contentInsights.total_analyzed > 0 && (() => {
+          // Pre-compute key engagement insights for hero cards
+          const bestSlot = contentInsights.posting_timing?.best_slots?.[0];
+          const bestDay = contentInsights.posting_frequency?.day_distribution
+            ?.filter(d => d.count > 0)
+            .sort((a, b) => b.count - a.count)[0];
+          const bestTone = contentInsights.best_tone_engagement;
+
+          return (
           <div className="space-y-5">
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -747,6 +755,53 @@ export default function SocialPage() {
                 </div>
               ))}
             </div>
+
+            {/* ── KEY ENGAGEMENT INSIGHTS (hero cards) ── */}
+            {(bestSlot || bestDay || bestTone) && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Best time slot */}
+                {bestSlot && (
+                  <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-5 shadow-lg shadow-emerald-200/40">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-5 w-5 text-emerald-100" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-100">Meilleur creneau</span>
+                    </div>
+                    <div className="text-2xl font-black">{bestSlot.label}</div>
+                    <p className="text-emerald-100 text-xs mt-1">
+                      {bestSlot.avg_engagement.toLocaleString("fr-FR")} interactions moy. sur {bestSlot.posts} posts
+                    </p>
+                  </div>
+                )}
+
+                {/* Best day */}
+                {bestDay && (
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 shadow-lg shadow-blue-200/40">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="h-5 w-5 text-blue-100" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-blue-100">Jour le plus actif</span>
+                    </div>
+                    <div className="text-2xl font-black">{bestDay.day}</div>
+                    <p className="text-blue-100 text-xs mt-1">
+                      {bestDay.count} publications ce jour
+                    </p>
+                  </div>
+                )}
+
+                {/* Best tone by engagement */}
+                {bestTone && (
+                  <div className="rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 shadow-lg shadow-violet-200/40">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap className="h-5 w-5 text-violet-100" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-violet-100">Ton le + engageant</span>
+                    </div>
+                    <div className="text-2xl font-black capitalize">{bestTone.tone}</div>
+                    <p className="text-violet-100 text-xs mt-1">
+                      Score moy. {bestTone.avg_score}/100 sur {bestTone.count} posts
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Insights Grid */}
             <div className="grid gap-4 md:grid-cols-2">
@@ -1030,7 +1085,8 @@ export default function SocialPage() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Empty state */}
         {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (

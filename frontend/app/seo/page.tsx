@@ -73,7 +73,7 @@ export default function SeoPage() {
   if (insights) {
     const nameSet = new Set<string>();
     insights.share_of_voice.forEach(s => nameSet.add(s.competitor));
-    competitorNames.push(...nameSet);
+    competitorNames.push(...Array.from(nameSet));
   }
 
   return (

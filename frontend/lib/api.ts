@@ -858,6 +858,7 @@ export interface ContentInsights {
     best_slots: { day: string; day_index: number; hour: number; label: string; posts: number; avg_engagement: number }[];
     competitor_peak_hours: { competitor: string; peak_hour: number; peak_label: string; posts_at_peak: number }[];
   };
+  best_tone_engagement?: { tone: string; avg_score: number; count: number };
   recommendations: string[];
 }
 
