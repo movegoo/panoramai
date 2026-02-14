@@ -78,6 +78,7 @@ async def analyze_all_creatives(
 
     analyzed = 0
     errors = 0
+    error_details = []
 
     for ad in ads_to_analyze:
         try:
@@ -109,12 +110,14 @@ async def analyze_all_creatives(
                 ad.creative_analyzed_at = datetime.utcnow()
                 ad.creative_score = 0
                 errors += 1
+                error_details.append(f"{ad.ad_id}: returned None (url={ad.creative_url[:80] if ad.creative_url else 'empty'})")
 
         except Exception as e:
             logger.error(f"Error analyzing ad {ad.ad_id}: {e}")
             ad.creative_analyzed_at = datetime.utcnow()
             ad.creative_score = 0
             errors += 1
+            error_details.append(f"{ad.ad_id}: {str(e)[:120]}")
 
         # Rate limiting
         await asyncio.sleep(1.0)
@@ -131,6 +134,7 @@ async def analyze_all_creatives(
         "analyzed": analyzed,
         "errors": errors,
         "remaining": remaining,
+        "error_details": error_details[:10] if error_details else [],
     }
 
 

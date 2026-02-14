@@ -71,11 +71,13 @@ class CreativeAnalyzer:
             return None
 
         if not creative_url:
+            logger.error("Cannot analyze: empty creative_url")
             return None
 
         # Download image
         image_data, media_type = await self._download_image(creative_url)
         if not image_data:
+            logger.error(f"Image download failed for: {creative_url[:100]}")
             return None
 
         # Encode to base64
