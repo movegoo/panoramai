@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from database import get_db, Ad, Competitor, User
 from services.creative_analyzer import creative_analyzer
 from core.auth import get_optional_user
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -172,9 +173,14 @@ async def debug_next_ad(
     except Exception as e:
         img_error = f"{type(e).__name__}: {e}"
 
-    # Test API key
-    api_key = creative_analyzer.api_key
-    key_status = f"set ({api_key[:12]}...{api_key[-4:]})" if api_key else "NOT SET"
+    # Test API key from multiple sources
+    import os as _os
+    key_from_env = _os.getenv("ANTHROPIC_API_KEY", "")
+    key_from_settings = settings.ANTHROPIC_API_KEY if hasattr(settings, "ANTHROPIC_API_KEY") else ""
+    key_from_analyzer = creative_analyzer.api_key
+
+    # List all env vars that contain "ANTHROP" or "API_KEY"
+    matching_vars = {k: v[:15] + "..." for k, v in _os.environ.items() if "ANTHROP" in k.upper() or "GEMINI" in k.upper()}
 
     return {
         "ad_id": ad.ad_id,
@@ -185,7 +191,10 @@ async def debug_next_ad(
         "image_size": img_size,
         "image_content_type": img_content_type,
         "image_error": img_error,
-        "api_key_status": key_status,
+        "key_from_env": f"{key_from_env[:15]}..." if key_from_env else "EMPTY",
+        "key_from_settings": f"{key_from_settings[:15]}..." if key_from_settings else "EMPTY",
+        "key_from_analyzer": f"{key_from_analyzer[:15]}..." if key_from_analyzer else "EMPTY",
+        "matching_env_vars": matching_vars,
     }
 
 
