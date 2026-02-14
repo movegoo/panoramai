@@ -453,63 +453,90 @@ class GeoAnalyzer:
             logger.error(f"Analysis error: {e}")
             return None
 
+    async def _process_single_query(
+        self, keyword: str, query: str, brand_names: list[str],
+    ) -> list[dict[str, Any]]:
+        """Process a single GEO query across all platforms in parallel."""
+        results: list[dict[str, Any]] = []
+
+        # Query all engines in parallel
+        claude_task = asyncio.create_task(self._query_claude(query))
+        gemini_task = asyncio.create_task(self._query_gemini(query))
+        chatgpt_task = asyncio.create_task(self._query_chatgpt(query))
+
+        answers_raw = await asyncio.gather(claude_task, gemini_task, chatgpt_task)
+        platform_names = ["claude", "gemini", "chatgpt"]
+
+        answers = {
+            name: ans for name, ans in zip(platform_names, answers_raw) if ans
+        }
+
+        if not answers:
+            return results
+
+        # Analyse all responses in parallel
+        analysis_tasks = {
+            platform: asyncio.create_task(
+                self._analyze_response(query, answer, brand_names)
+            )
+            for platform, answer in answers.items()
+        }
+
+        for platform, task in analysis_tasks.items():
+            analysis = await task
+            if not analysis:
+                continue
+
+            primary_rec = analysis.get("primary_recommendation", "")
+            brands_mentioned = analysis.get("brands_mentioned", [])
+
+            for mention in brands_mentioned:
+                results.append({
+                    "keyword": keyword,
+                    "query": query,
+                    "platform": platform,
+                    "raw_answer": answers[platform],
+                    "analysis": json.dumps(analysis, ensure_ascii=False),
+                    "brand_name": mention.get("name", ""),
+                    "position_in_answer": mention.get("position"),
+                    "recommended": mention.get("recommended", False),
+                    "sentiment": mention.get("sentiment", "neutre"),
+                    "context_snippet": mention.get("context", ""),
+                    "primary_recommendation": primary_rec,
+                    "key_criteria": analysis.get("key_criteria", []),
+                })
+
+        return results
+
     async def run_full_analysis(
         self, brand_names: list[str], sector: str = "supermarche", sector_label: str = ""
     ) -> list[dict[str, Any]]:
         """Run all GEO queries against Claude + Gemini + ChatGPT and return structured results.
 
+        Queries are processed in batches of 3 with parallel platform calls for speed.
         Returns a list of dicts, one per (keyword, platform, brand_mention).
         """
         queries = get_geo_queries(sector, sector_label or sector, brand_names)
         results: list[dict[str, Any]] = []
 
-        # Determine active platforms
-        platforms: list[tuple[str, Any]] = [
-            ("claude", self._query_claude),
-            ("gemini", self._query_gemini),
-            ("chatgpt", self._query_chatgpt),
-        ]
+        # Process queries in batches of 3 for speed (parallel within each batch)
+        batch_size = 3
+        for i in range(0, len(queries), batch_size):
+            batch = queries[i:i + batch_size]
+            batch_tasks = [
+                self._process_single_query(q["keyword"], q["query"], brand_names)
+                for q in batch
+            ]
+            batch_results = await asyncio.gather(*batch_tasks)
+            for batch_result in batch_results:
+                results.extend(batch_result)
 
-        for i, q in enumerate(queries):
-            keyword = q["keyword"]
-            query = q["query"]
+            done = min(i + batch_size, len(queries))
+            logger.info(f"GEO [{done}/{len(queries)}] done")
 
-            # Query all engines
-            answers: dict[str, str] = {}
-            for platform_name, query_fn in platforms:
-                answer = await query_fn(query)
-                if answer:
-                    answers[platform_name] = answer
-                await asyncio.sleep(0.3)
-
-            # Analyse all responses
-            for platform, answer in answers.items():
-                analysis = await self._analyze_response(query, answer, brand_names)
-                await asyncio.sleep(0.3)
-
-                if not analysis:
-                    continue
-
-                primary_rec = analysis.get("primary_recommendation", "")
-                brands_mentioned = analysis.get("brands_mentioned", [])
-
-                for mention in brands_mentioned:
-                    results.append({
-                        "keyword": keyword,
-                        "query": query,
-                        "platform": platform,
-                        "raw_answer": answer,
-                        "analysis": json.dumps(analysis, ensure_ascii=False),
-                        "brand_name": mention.get("name", ""),
-                        "position_in_answer": mention.get("position"),
-                        "recommended": mention.get("recommended", False),
-                        "sentiment": mention.get("sentiment", "neutre"),
-                        "context_snippet": mention.get("context", ""),
-                        "primary_recommendation": primary_rec,
-                        "key_criteria": analysis.get("key_criteria", []),
-                    })
-
-            logger.info(f"GEO [{i+1}/{len(queries)}] done: {keyword}")
+            # Small delay between batches to avoid rate limits
+            if done < len(queries):
+                await asyncio.sleep(0.5)
 
         return results
 
