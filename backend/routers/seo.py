@@ -1,6 +1,7 @@
 """
 SEO / SERP Tracking — Track Google organic positions for competitors.
 Uses ScrapeCreators /v1/google/search endpoint.
+Only matches against the current user's own competitors.
 """
 import asyncio
 import logging
@@ -12,8 +13,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from database import get_db, Competitor, SerpResult, Advertiser
+from database import get_db, Competitor, SerpResult, Advertiser, User
 from services.scrapecreators import scrapecreators
+from core.auth import get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +63,16 @@ def _extract_domain(url: str) -> str:
         return ""
 
 
+def _get_user_competitors(db: Session, user: User | None) -> list[Competitor]:
+    """Get active competitors scoped to user."""
+    query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    return query.all()
+
+
 def _build_domain_map(competitors: list[Competitor]) -> dict[str, int]:
-    """Build domain -> competitor_id mapping from DB competitors."""
+    """Build domain -> competitor_id mapping from user's competitors only."""
     domain_map = {}
     for c in competitors:
         if c.website:
@@ -80,10 +90,8 @@ def _match_competitor(domain: str, domain_map: dict[str, int]) -> int | None:
     """Match a result domain to a competitor_id."""
     if not domain:
         return None
-    # Direct match
     if domain in domain_map:
         return domain_map[domain]
-    # Partial match (e.g. promo.carrefour.fr -> carrefour.fr)
     for known_domain, cid in domain_map.items():
         if domain.endswith("." + known_domain):
             return cid
@@ -91,16 +99,23 @@ def _match_competitor(domain: str, domain_map: dict[str, int]) -> int | None:
 
 
 @router.post("/track")
-async def track_serp(db: Session = Depends(get_db)):
-    """Run SERP tracking for all default keywords. Stores top 10 results per keyword."""
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+async def track_serp(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Run SERP tracking for default keywords. Only matches user's own competitors."""
+    competitors = _get_user_competitors(db, user)
+    if not competitors:
+        return {"error": "No competitors configured", "tracked_keywords": 0, "total_results": 0}
+
     domain_map = _build_domain_map(competitors)
-    comp_names = {c.id: c.name for c in competitors}
+    valid_ids = {c.id for c in competitors}
 
     now = datetime.utcnow()
     total_results = 0
     matched_count = 0
     errors = []
+    credits = None
 
     for i, keyword in enumerate(DEFAULT_KEYWORDS):
         try:
@@ -109,11 +124,17 @@ async def track_serp(db: Session = Depends(get_db)):
                 errors.append({"keyword": keyword, "error": data.get("error", "Unknown")})
                 continue
 
+            credits = data.get("credits_remaining")
+
             results = data.get("results", [])
             for pos_idx, result in enumerate(results[:10], start=1):
                 url = result.get("url", "")
                 domain = _extract_domain(url)
                 cid = _match_competitor(domain, domain_map)
+
+                # Only assign competitor_id if it belongs to this user
+                if cid and cid not in valid_ids:
+                    cid = None
 
                 serp = SerpResult(
                     keyword=keyword,
@@ -134,7 +155,6 @@ async def track_serp(db: Session = Depends(get_db)):
             logger.error(f"SERP track error for '{keyword}': {e}")
             errors.append({"keyword": keyword, "error": str(e)})
 
-        # Rate limiting between keywords
         if i < len(DEFAULT_KEYWORDS) - 1:
             await asyncio.sleep(0.3)
 
@@ -145,14 +165,20 @@ async def track_serp(db: Session = Depends(get_db)):
         "total_results": total_results,
         "matched_competitors": matched_count,
         "errors": errors if errors else None,
-        "credits_remaining": data.get("credits_remaining") if 'data' in dir() else None,
+        "credits_remaining": credits,
     }
 
 
 @router.get("/rankings")
-async def get_rankings(db: Session = Depends(get_db)):
-    """Get latest SERP rankings per keyword."""
-    # Find the latest run timestamp
+async def get_rankings(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Get latest SERP rankings. Only shows user's own competitors."""
+    competitors = _get_user_competitors(db, user)
+    valid_ids = {c.id for c in competitors}
+    comp_names = {c.id: c.name for c in competitors}
+
     latest = db.query(func.max(SerpResult.recorded_at)).scalar()
     if not latest:
         return {"keywords": [], "last_tracked": None}
@@ -164,20 +190,14 @@ async def get_rankings(db: Session = Depends(get_db)):
         .all()
     )
 
-    # Build competitor name map
-    comp_ids = {r.competitor_id for r in results if r.competitor_id}
-    comp_names = {}
-    if comp_ids:
-        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all()
-        comp_names = {c.id: c.name for c in comps}
-
-    # Group by keyword
     keywords_data = defaultdict(list)
     for r in results:
+        # Only label as competitor if it's one of the user's
+        cid = r.competitor_id if r.competitor_id and r.competitor_id in valid_ids else None
         keywords_data[r.keyword].append({
             "position": r.position,
-            "competitor_name": comp_names.get(r.competitor_id) if r.competitor_id else None,
-            "competitor_id": r.competitor_id,
+            "competitor_name": comp_names.get(cid) if cid else None,
+            "competitor_id": cid,
             "domain": r.domain,
             "title": r.title,
             "url": r.url,
@@ -195,20 +215,26 @@ async def get_rankings(db: Session = Depends(get_db)):
 
 
 @router.get("/insights")
-async def get_insights(db: Session = Depends(get_db)):
-    """Aggregated SEO insights from latest SERP run."""
-    # Find latest run
+async def get_insights(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Aggregated SEO insights. Scoped to user's own competitors."""
+    competitors = _get_user_competitors(db, user)
+    valid_ids = {c.id for c in competitors}
+    comp_names = {c.id: c.name for c in competitors}
+
+    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand_comp = None
+    if brand:
+        brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
+
     latest = db.query(func.max(SerpResult.recorded_at)).scalar()
     if not latest:
         return {
-            "total_keywords": 0,
-            "last_tracked": None,
-            "share_of_voice": [],
-            "avg_position": [],
-            "best_keywords": [],
-            "missing_keywords": [],
-            "top_domains": [],
-            "recommendations": [],
+            "total_keywords": 0, "last_tracked": None,
+            "share_of_voice": [], "avg_position": [], "best_keywords": [],
+            "missing_keywords": [], "top_domains": [], "recommendations": [],
         }
 
     results = (
@@ -217,28 +243,16 @@ async def get_insights(db: Session = Depends(get_db)):
         .all()
     )
 
-    # Competitor names
-    comp_ids = {r.competitor_id for r in results if r.competitor_id}
-    comp_names = {}
-    if comp_ids:
-        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all()
-        comp_names = {c.id: c.name for c in comps}
-
-    # Get brand info for recommendations
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
-    brand_comp = None
-    if brand:
-        brand_comp = db.query(Competitor).filter(Competitor.name == brand.company_name).first()
-
     all_keywords = sorted(set(r.keyword for r in results))
     total_keywords = len(all_keywords)
-    total_slots = len(results)  # total result slots (keywords × ~10)
+    total_slots = len(results)
 
-    # --- Share of Voice ---
+    # --- Share of Voice (user's competitors only) ---
     appearances = defaultdict(int)
     for r in results:
-        if r.competitor_id and r.competitor_id in comp_names:
-            appearances[r.competitor_id] += 1
+        cid = r.competitor_id
+        if cid and cid in valid_ids:
+            appearances[cid] += 1
 
     share_of_voice = sorted([
         {
@@ -253,7 +267,7 @@ async def get_insights(db: Session = Depends(get_db)):
     # --- Average Position ---
     positions_by_comp = defaultdict(list)
     for r in results:
-        if r.competitor_id and r.competitor_id in comp_names:
+        if r.competitor_id and r.competitor_id in valid_ids:
             positions_by_comp[r.competitor_id].append(r.position)
 
     avg_position = sorted([
@@ -269,7 +283,7 @@ async def get_insights(db: Session = Depends(get_db)):
     # --- Best Keywords (position 1-3) ---
     best_keywords = []
     for r in results:
-        if r.competitor_id and r.competitor_id in comp_names and r.position <= 3:
+        if r.competitor_id and r.competitor_id in valid_ids and r.position <= 3:
             best_keywords.append({
                 "competitor": comp_names[r.competitor_id],
                 "competitor_id": r.competitor_id,
@@ -281,7 +295,7 @@ async def get_insights(db: Session = Depends(get_db)):
     # --- Missing Keywords ---
     present_keywords = defaultdict(set)
     for r in results:
-        if r.competitor_id and r.competitor_id in comp_names:
+        if r.competitor_id and r.competitor_id in valid_ids:
             present_keywords[r.competitor_id].add(r.keyword)
 
     missing_keywords = []
@@ -332,7 +346,6 @@ def _generate_recommendations(
     brand_name = brand_comp.name if brand_comp else "Auchan"
     brand_id = brand_comp.id if brand_comp else None
 
-    # Find brand in share of voice
     brand_sov = next((s for s in sov if s["competitor_id"] == brand_id), None)
     leader_sov = sov[0] if sov else None
 
