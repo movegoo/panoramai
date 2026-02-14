@@ -18,6 +18,15 @@ COPY . .
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv
 
+# Railway passes env vars as build args for Docker builds
+# Capture them so they're available at runtime
+ARG ANTHROPIC_API_KEY
+ARG CLAUDE_KEY
+ARG GEMINI_API_KEY
+ENV ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+ENV CLAUDE_KEY=${CLAUDE_KEY}
+ENV GEMINI_API_KEY=${GEMINI_API_KEY}
+
 # Expose port (Railway sets PORT dynamically)
 EXPOSE ${PORT:-8000}
 
