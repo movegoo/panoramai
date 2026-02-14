@@ -8,7 +8,9 @@ import {
   tiktokAPI,
   youtubeAPI,
   brandAPI,
+  socialContentAPI,
   CompetitorListItem,
+  ContentInsights,
 } from "@/lib/api";
 import { formatNumber } from "@/lib/utils";
 import {
@@ -25,6 +27,11 @@ import {
   Target,
   Heart,
   Crown,
+  Brain,
+  Sparkles,
+  Hash,
+  Play,
+  Eye,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
@@ -104,23 +111,28 @@ export default function SocialPage() {
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
 
+  const [contentInsights, setContentInsights] = useState<ContentInsights | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentStatus, setContentStatus] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
 
   useEffect(() => {
     async function loadAll() {
       try {
-        const [comp, ig, tt, yt, brand] = await Promise.allSettled([
+        const [comp, ig, tt, yt, brand, ci] = await Promise.allSettled([
           competitorsAPI.list(),
           instagramAPI.getComparison(periodDays),
           tiktokAPI.getComparison(periodDays),
           youtubeAPI.getComparison(periodDays),
           brandAPI.getProfile(),
+          socialContentAPI.getInsights(),
         ]);
         if (comp.status === "fulfilled") setCompetitors(comp.value);
         if (ig.status === "fulfilled") setIgComparison(ig.value);
         if (tt.status === "fulfilled") setTtComparison(tt.value);
         if (yt.status === "fulfilled") setYtComparison(yt.value);
         if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
+        if (ci.status === "fulfilled") setContentInsights(ci.value);
       } catch (err) {
         console.error("Failed to load:", err);
       } finally {
@@ -158,6 +170,32 @@ export default function SocialPage() {
       console.error("Refresh failed:", err);
     } finally {
       setFetching(false);
+    }
+  }
+
+  async function handleAnalyzeContent() {
+    setContentLoading(true);
+    setContentStatus(null);
+    try {
+      // Step 1: Collect
+      setContentStatus("Collecte des posts...");
+      const collectResult = await socialContentAPI.collectAll();
+      setContentStatus(`${collectResult.new} nouveaux posts collectes. Analyse en cours...`);
+
+      // Step 2: Analyze
+      const analyzeResult = await socialContentAPI.analyzeAll(20);
+      setContentStatus(
+        `${analyzeResult.analyzed} posts analyses, ${analyzeResult.errors} erreurs, ${analyzeResult.remaining} restants`
+      );
+
+      // Step 3: Refresh insights
+      const insights = await socialContentAPI.getInsights();
+      setContentInsights(insights);
+    } catch (err) {
+      console.error("Content analysis failed:", err);
+      setContentStatus("Erreur lors de l'analyse");
+    } finally {
+      setContentLoading(false);
     }
   }
 
@@ -622,6 +660,239 @@ export default function SocialPage() {
           })()}
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* Intelligence Contenu (AI-powered social content analysis)            */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      <div className="space-y-5 pt-4 border-t border-border">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 border border-emerald-200/50">
+              <Brain className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold tracking-tight text-foreground">Intelligence Contenu</h2>
+              <p className="text-[13px] text-muted-foreground">Analyse IA des posts sociaux (themes, tons, hooks)</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAnalyzeContent}
+            disabled={contentLoading}
+            className="gap-2 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            <Brain className={`h-3.5 w-3.5 ${contentLoading ? "animate-pulse" : ""}`} />
+            {contentLoading ? "Analyse..." : "Analyser le contenu"}
+          </Button>
+        </div>
+
+        {/* Status */}
+        {contentStatus && (
+          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-2.5 text-sm text-emerald-800 dark:text-emerald-200">
+            {contentStatus}
+          </div>
+        )}
+
+        {contentInsights && contentInsights.total_analyzed > 0 && (
+          <div className="space-y-5">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Score moyen", value: `${contentInsights.avg_score}/100`, icon: <Target className="h-4 w-4" /> },
+                { label: "Posts analyses", value: String(contentInsights.total_analyzed), icon: <BarChart3 className="h-4 w-4" /> },
+                { label: "Themes", value: String(contentInsights.themes.length), icon: <Hash className="h-4 w-4" /> },
+                { label: "Plateformes", value: String(contentInsights.by_platform.length), icon: <Play className="h-4 w-4" /> },
+              ].map((kpi) => (
+                <div key={kpi.label} className="rounded-xl border bg-card p-4">
+                  <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                    {kpi.icon}
+                    <span className="text-[10px] uppercase tracking-widest font-semibold">{kpi.label}</span>
+                  </div>
+                  <div className="text-2xl font-bold text-foreground">{kpi.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Insights Grid */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Themes dominants */}
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-emerald-500" />
+                  Themes dominants
+                </h3>
+                <div className="space-y-2">
+                  {contentInsights.themes.slice(0, 6).map((t) => (
+                    <div key={t.theme} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-24 truncate">{t.theme}</span>
+                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                          style={{ width: `${t.pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums w-10 text-right">{t.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tons utilises */}
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-teal-500" />
+                  Tons utilises
+                </h3>
+                <div className="space-y-2">
+                  {contentInsights.tones.slice(0, 6).map((t) => (
+                    <div key={t.tone} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-24 truncate">{t.tone}</span>
+                      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-500"
+                          style={{ width: `${t.pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums w-10 text-right">{t.pct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top Hashtags */}
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-emerald-500" />
+                  Top hashtags
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {contentInsights.top_hashtags.slice(0, 15).map((h) => (
+                    <span
+                      key={h.hashtag}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    >
+                      #{h.hashtag}
+                      <span className="text-emerald-400 text-[10px]">{h.count}</span>
+                    </span>
+                  ))}
+                  {contentInsights.top_hashtags.length === 0 && (
+                    <span className="text-xs text-muted-foreground">Aucun hashtag detecte</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Score par concurrent */}
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-amber-500" />
+                  Score par concurrent
+                </h3>
+                <div className="space-y-2">
+                  {contentInsights.by_competitor.map((c, i) => (
+                    <div key={c.competitor} className={`flex items-center gap-3 rounded-lg px-2 py-1.5 ${isBrand(c.competitor) ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
+                      <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold shrink-0 ${
+                        i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <span className="text-sm font-medium flex-1 truncate">{c.competitor}</span>
+                      <span className="text-xs text-muted-foreground">{c.count} posts</span>
+                      <span className="text-sm font-bold tabular-nums">{c.avg_score}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Top Performers */}
+            {contentInsights.top_performers.length > 0 && (
+              <div className="rounded-xl border bg-card p-5">
+                <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-emerald-500" />
+                  Top performers
+                </h3>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {contentInsights.top_performers.slice(0, 6).map((p) => (
+                    <div key={p.post_id} className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground">{p.competitor_name}</span>
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                          {p.score}/100
+                        </span>
+                      </div>
+                      {p.thumbnail_url && (
+                        <div className="aspect-video rounded-md overflow-hidden bg-muted">
+                          <img src={p.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <p className="text-xs text-foreground line-clamp-2">{p.title || p.description}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {p.platform}
+                        </span>
+                        {p.theme && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600">
+                            {p.theme}
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground ml-auto">
+                          <Eye className="h-3 w-3" />{formatNumber(p.views)}
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                          <Heart className="h-3 w-3" />{formatNumber(p.likes)}
+                        </span>
+                      </div>
+                      {p.url && (
+                        <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-emerald-600 hover:underline flex items-center gap-0.5">
+                          Voir <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {contentInsights.recommendations.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-emerald-500" />
+                  Recommandations strategiques
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {contentInsights.recommendations.map((rec, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-start gap-3"
+                    >
+                      <Sparkles className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <p className="text-sm text-emerald-900 dark:text-emerald-100">{rec}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (
+          <div className="rounded-2xl border-2 border-dashed border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/10 p-8 text-center">
+            <div className="flex justify-center mb-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
+                <Brain className="h-6 w-6 text-emerald-500" />
+              </div>
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1">Aucune analyse de contenu</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
+              Cliquez sur &quot;Analyser le contenu&quot; pour collecter les posts sociaux et les analyser avec l&apos;IA.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

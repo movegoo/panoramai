@@ -808,3 +808,62 @@ export const creativeAPI = {
 
   getInsights: () => fetchAPI<CreativeInsights>("/creative/insights"),
 };
+
+// Social Content Analysis API
+export interface ContentInsights {
+  total_analyzed: number;
+  avg_score: number;
+  themes: { theme: string; count: number; pct: number }[];
+  tones: { tone: string; count: number; pct: number }[];
+  formats: { format: string; count: number; pct: number }[];
+  top_hooks: { hook: string; score: number; theme: string; competitor: string; platform: string }[];
+  top_hashtags: { hashtag: string; count: number }[];
+  top_performers: {
+    post_id: string;
+    competitor_name: string;
+    platform: string;
+    title: string;
+    description: string;
+    url: string;
+    thumbnail_url: string;
+    score: number;
+    theme: string;
+    tone: string;
+    hook: string;
+    summary: string;
+    views: number;
+    likes: number;
+  }[];
+  by_competitor: {
+    competitor: string;
+    count: number;
+    avg_score: number;
+    top_theme: string;
+    top_tone: string;
+    total_views: number;
+    total_likes: number;
+  }[];
+  by_platform: {
+    platform: string;
+    count: number;
+    avg_score: number;
+    total_views: number;
+  }[];
+  recommendations: string[];
+}
+
+export const socialContentAPI = {
+  collectAll: () =>
+    fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[] }>(
+      "/social-content/collect-all",
+      { method: "POST" }
+    ),
+
+  analyzeAll: (limit = 20) =>
+    fetchAPI<{ message: string; analyzed: number; errors: number; remaining: number }>(
+      `/social-content/analyze-all?limit=${limit}`,
+      { method: "POST" }
+    ),
+
+  getInsights: () => fetchAPI<ContentInsights>("/social-content/insights"),
+};

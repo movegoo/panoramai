@@ -373,6 +373,43 @@ class ZoneAnalysis(Base):
     calculated_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SocialPost(Base):
+    """Individual social media post/video with AI content analysis."""
+    __tablename__ = "social_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    platform = Column(String(20), index=True)  # tiktok, youtube, instagram
+    post_id = Column(String(200), unique=True)  # prefixed: tt_/yt_/ig_
+    title = Column(String(1000))
+    description = Column(Text)
+    url = Column(String(1000))
+    thumbnail_url = Column(String(1000))
+    published_at = Column(DateTime)
+    duration = Column(String(50))
+    views = Column(BigInteger, default=0)
+    likes = Column(BigInteger, default=0)
+    comments = Column(Integer, default=0)
+    shares = Column(Integer, default=0)
+    collected_at = Column(DateTime, default=datetime.utcnow)
+
+    # AI Content Analysis
+    content_analysis = Column(Text)  # JSON: full analysis result
+    content_theme = Column(String(100), index=True)
+    content_hook = Column(String(500))
+    content_tone = Column(String(100), index=True)
+    content_format = Column(String(100))
+    content_cta = Column(String(500))
+    content_hashtags = Column(Text)  # JSON array
+    content_mentions = Column(Text)  # JSON array
+    content_engagement_score = Column(Integer, index=True)  # 0-100
+    content_virality_factors = Column(Text)  # JSON array
+    content_summary = Column(Text)
+    content_analyzed_at = Column(DateTime)
+
+    competitor = relationship("Competitor", backref="social_posts")
+
+
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"
