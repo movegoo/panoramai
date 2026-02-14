@@ -1,6 +1,6 @@
 """
 GEO (Generative Engine Optimization) Tracking.
-Track brand visibility in AI engine responses (Claude, Gemini).
+Track brand visibility in AI engine responses (Claude, Gemini, ChatGPT).
 """
 import json
 import logging
@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db, Competitor, GeoResult, Advertiser, SerpResult, User
-from services.geo_analyzer import geo_analyzer, GEO_QUERIES
+from services.geo_analyzer import geo_analyzer, get_geo_queries
 from core.auth import get_optional_user
+from core.sectors import get_sector_label
 
 logger = logging.getLogger(__name__)
 
@@ -27,26 +28,41 @@ def _get_user_competitors(db: Session, user: User | None) -> list[Competitor]:
     return query.all()
 
 
+def _get_user_brand(db: Session, user: User | None) -> Advertiser | None:
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    return query.first()
+
+
 @router.post("/track")
 async def track_geo(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    """Run GEO tracking: query Claude + Gemini, analyse brand mentions."""
+    """Run GEO tracking: query Claude + Gemini + ChatGPT, analyse brand mentions."""
     competitors = _get_user_competitors(db, user)
     if not competitors:
         return {"error": "No competitors configured", "tracked_queries": 0}
 
+    brand = _get_user_brand(db, user)
+    sector = brand.sector if brand else "supermarche"
+    sector_label = get_sector_label(sector) if brand else "Grande Distribution"
+
     comp_map = {c.name.lower(): c for c in competitors}
     brand_names = [c.name for c in competitors]
 
-    results = await geo_analyzer.run_full_analysis(brand_names)
+    results = await geo_analyzer.run_full_analysis(brand_names, sector=sector, sector_label=sector_label)
 
     now = datetime.utcnow()
     total_mentions = 0
     matched = set()
 
+    # Determine active platforms
+    active_platforms = set()
+
     for r in results:
+        active_platforms.add(r["platform"])
         # Match brand name to competitor
         name_lower = r["brand_name"].lower()
         comp = comp_map.get(name_lower)
@@ -79,9 +95,11 @@ async def track_geo(
 
     db.commit()
 
+    queries = get_geo_queries(sector, sector_label, brand_names)
+
     return {
-        "tracked_queries": len(GEO_QUERIES),
-        "platforms": ["claude", "gemini"],
+        "tracked_queries": len(queries),
+        "platforms": sorted(active_platforms) if active_platforms else ["claude", "gemini", "chatgpt"],
         "total_mentions": total_mentions,
         "matched_competitors": len(matched),
     }
@@ -114,7 +132,7 @@ async def get_results(
             grouped[key] = {
                 "keyword": r.keyword,
                 "query": r.query,
-                "platforms": {"claude": [], "gemini": []},
+                "platforms": {"claude": [], "gemini": [], "chatgpt": []},
             }
 
         mention = {
@@ -145,7 +163,7 @@ async def get_insights(
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
+    brand = _get_user_brand(db, user)
     brand_comp = None
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
@@ -154,6 +172,8 @@ async def get_insights(
     if not latest:
         return {
             "total_queries": 0, "platforms": [], "last_tracked": None,
+            "brand_name": brand.company_name if brand else None,
+            "brand_competitor_id": brand_comp.id if brand_comp else None,
             "share_of_voice": [], "avg_position": [], "recommendation_rate": [],
             "sentiment": [], "platform_comparison": [], "key_criteria": [],
             "missing_keywords": [], "seo_vs_geo": [], "recommendations": [],
@@ -168,7 +188,9 @@ async def get_insights(
     # Unique keyword-platform combos = total possible slots
     all_keywords = sorted(set(r.keyword for r in rows))
     total_queries = len(all_keywords)
-    total_slots = total_queries * 2  # 2 platforms
+
+    # Detect active platforms
+    active_platforms = sorted(set(r.platform for r in rows))
 
     # --- Share of Voice ---
     mentions_by_comp = defaultdict(int)
@@ -221,7 +243,7 @@ async def get_insights(
     ], key=lambda x: -x["rate"])
 
     # --- Sentiment ---
-    sent_by_comp = defaultdict(lambda: {"positif": 0, "neutre": 0, "négatif": 0})
+    sent_by_comp = defaultdict(lambda: {"positif": 0, "neutre": 0, "negatif": 0})
     for r in rows:
         if r.competitor_id and r.competitor_id in valid_ids:
             s = r.sentiment or "neutre"
@@ -234,32 +256,32 @@ async def get_insights(
             "competitor_id": cid,
             "positive": d["positif"],
             "neutral": d["neutre"],
-            "negative": d["négatif"],
+            "negative": d["negatif"],
         }
         for cid, d in sent_by_comp.items()
     ]
 
     # --- Platform Comparison ---
-    plat_by_comp = defaultdict(lambda: {"claude": 0, "gemini": 0, "claude_total": 0, "gemini_total": 0})
+    plat_by_comp = defaultdict(lambda: defaultdict(int))
     for r in rows:
         if r.competitor_id and r.competitor_id in valid_ids:
             plat_by_comp[r.competitor_id][r.platform] += 1
 
     # Count total mentions per platform for percentage
-    claude_total = sum(1 for r in rows if r.platform == "claude")
-    gemini_total = sum(1 for r in rows if r.platform == "gemini")
+    platform_totals = defaultdict(int)
+    for r in rows:
+        platform_totals[r.platform] += 1
 
-    platform_comparison = [
-        {
+    platform_comparison = []
+    for cid, plats in plat_by_comp.items():
+        entry = {
             "competitor": comp_names[cid],
             "competitor_id": cid,
-            "claude_mentions": d["claude"],
-            "gemini_mentions": d["gemini"],
-            "claude_pct": round(d["claude"] / claude_total * 100, 1) if claude_total else 0,
-            "gemini_pct": round(d["gemini"] / gemini_total * 100, 1) if gemini_total else 0,
         }
-        for cid, d in plat_by_comp.items()
-    ]
+        for p in active_platforms:
+            entry[f"{p}_mentions"] = plats.get(p, 0)
+            entry[f"{p}_pct"] = round(plats.get(p, 0) / platform_totals[p] * 100, 1) if platform_totals.get(p) else 0
+        platform_comparison.append(entry)
 
     # --- Key Criteria ---
     criteria_counts = defaultdict(int)
@@ -327,8 +349,10 @@ async def get_insights(
 
     return {
         "total_queries": total_queries,
-        "platforms": ["claude", "gemini"],
+        "platforms": active_platforms or ["claude", "gemini", "chatgpt"],
         "last_tracked": latest.isoformat(),
+        "brand_name": brand.company_name if brand else None,
+        "brand_competitor_id": brand_comp.id if brand_comp else None,
         "share_of_voice": share_of_voice,
         "avg_position": avg_position,
         "recommendation_rate": recommendation_rate,
@@ -345,8 +369,11 @@ def _generate_recommendations(
     brand_comp, comp_names, sov, avg_pos, rec_rate, missing_kw, seo_geo
 ) -> list[str]:
     recs = []
-    brand_name = brand_comp.name if brand_comp else "Auchan"
+    brand_name = brand_comp.name if brand_comp else None
     brand_id = brand_comp.id if brand_comp else None
+
+    if not brand_name:
+        return []
 
     brand_sov = next((s for s in sov if s["competitor_id"] == brand_id), None)
     leader_sov = sov[0] if sov else None
@@ -356,8 +383,8 @@ def _generate_recommendations(
     if brand_missing and brand_missing["keywords"]:
         kws = ", ".join(brand_missing["keywords"][:3])
         recs.append(
-            f"{brand_name} n'est pas mentionné par les IA sur {len(brand_missing['keywords'])} requête(s) : {kws}. "
-            f"Créer du contenu de référence (guides, comparatifs) sur ces sujets pour influencer les réponses IA."
+            f"{brand_name} n'est pas mentionne par les IA sur {len(brand_missing['keywords'])} requete(s) : {kws}. "
+            f"Creer du contenu de reference (guides, comparatifs) sur ces sujets pour influencer les reponses IA."
         )
 
     # Share of voice gap
@@ -365,8 +392,8 @@ def _generate_recommendations(
         gap = leader_sov["pct"] - brand_sov["pct"]
         if gap > 5:
             recs.append(
-                f"{leader_sov['competitor']} domine la visibilité IA avec {leader_sov['pct']}% de part de voix "
-                f"contre {brand_sov['pct']}% pour {brand_name}. Renforcer la présence éditoriale et les mentions web."
+                f"{leader_sov['competitor']} domine la visibilite IA avec {leader_sov['pct']}% de part de voix "
+                f"contre {brand_sov['pct']}% pour {brand_name}. Renforcer la presence editoriale et les mentions web."
             )
 
     # Recommendation rate
@@ -375,7 +402,7 @@ def _generate_recommendations(
     if brand_rec and leader_rec and leader_rec["competitor_id"] != brand_id:
         if leader_rec["rate"] - brand_rec["rate"] > 10:
             recs.append(
-                f"{leader_rec['competitor']} est recommandé dans {leader_rec['rate']}% des réponses IA "
+                f"{leader_rec['competitor']} est recommande dans {leader_rec['rate']}% des reponses IA "
                 f"contre {brand_rec['rate']}% pour {brand_name}. Travailler le positionnement prix et service."
             )
 
@@ -383,22 +410,22 @@ def _generate_recommendations(
     brand_gap = next((g for g in seo_geo if g["competitor_id"] == brand_id), None)
     if brand_gap and brand_gap["gap"] < -10:
         recs.append(
-            f"Écart SEO/GEO pour {brand_name} : {brand_gap['seo_pct']}% en SEO vs {brand_gap['geo_pct']}% en GEO. "
-            f"La visibilité IA est en retard sur le SEO classique — optimiser le contenu pour les moteurs génératifs."
+            f"Ecart SEO/GEO pour {brand_name} : {brand_gap['seo_pct']}% en SEO vs {brand_gap['geo_pct']}% en GEO. "
+            f"La visibilite IA est en retard sur le SEO classique — optimiser le contenu pour les moteurs generatifs."
         )
 
     # Average position
     brand_avg = next((a for a in avg_pos if a["competitor_id"] == brand_id), None)
     if brand_avg and brand_avg["avg_pos"] > 2.5:
         recs.append(
-            f"Position moyenne de {brand_name} dans les réponses IA : {brand_avg['avg_pos']:.1f}. "
-            f"Viser la 1ère mention en renforçant l'autorité de marque et les sources citables."
+            f"Position moyenne de {brand_name} dans les reponses IA : {brand_avg['avg_pos']:.1f}. "
+            f"Viser la 1ere mention en renforcant l'autorite de marque et les sources citables."
         )
 
     if not brand_sov:
         recs.append(
-            f"{brand_name} n'est mentionné dans aucune réponse IA. "
-            f"Urgence GEO : créer une stratégie de contenu ciblée pour apparaître dans les réponses des moteurs génératifs."
+            f"{brand_name} n'est mentionne dans aucune reponse IA. "
+            f"Urgence GEO : creer une strategie de contenu ciblee pour apparaitre dans les reponses des moteurs generatifs."
         )
 
     return recs[:5]

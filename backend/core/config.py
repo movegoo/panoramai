@@ -30,6 +30,9 @@ class Settings:
     # Google Gemini API (for GEO tracking)
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    # OpenAI API (for GEO tracking - ChatGPT)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))

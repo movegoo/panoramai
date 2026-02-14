@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 
-const BRAND_ID = 5;
-
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
   const d = new Date(iso);
@@ -53,10 +51,16 @@ export default function GeoTrackingPage() {
     }
   }
 
+  // Dynamic brand info from insights
+  const brandId = insights?.brand_competitor_id;
+  const brandName = insights?.brand_name || "Ma marque";
+  const platforms = insights?.platforms || [];
+  const platformLabel = platforms.length > 0 ? platforms.map(p => p === "chatgpt" ? "ChatGPT" : p.charAt(0).toUpperCase() + p.slice(1)).join(", ") : "Claude, Gemini & ChatGPT";
+
   // Derived
-  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === BRAND_ID);
-  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === BRAND_ID);
-  const brandGap = insights?.seo_vs_geo.find(g => g.competitor_id === BRAND_ID);
+  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
+  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === brandId);
+  const brandGap = insights?.seo_vs_geo.find(g => g.competitor_id === brandId);
 
   // Hero cards
   const mostVisible = insights?.share_of_voice[0];
@@ -84,7 +88,7 @@ export default function GeoTrackingPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Visibilite IA (GEO)</h1>
-            <p className="text-sm text-muted-foreground">Suivi de la presence de marque dans les reponses Claude & Gemini</p>
+            <p className="text-sm text-muted-foreground">Suivi de la presence de marque dans les reponses {platformLabel}</p>
           </div>
         </div>
         <button
@@ -114,7 +118,7 @@ export default function GeoTrackingPage() {
           <Bot className="h-12 w-12 text-teal-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">Aucune donnee GEO</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Cliquez sur &quot;Analyser la visibilite&quot; pour interroger Claude et Gemini sur vos mots-cles strategiques.
+            Cliquez sur &quot;Analyser la visibilite&quot; pour interroger Claude, Gemini et ChatGPT sur vos mots-cles strategiques.
           </p>
         </div>
       ) : (
@@ -126,7 +130,7 @@ export default function GeoTrackingPage() {
                 <Eye className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wider">Marque la plus visible</span>
               </div>
-              <p className="text-2xl font-bold">{mostVisible?.competitor || "—"}</p>
+              <p className="text-2xl font-bold">{mostVisible?.competitor || "\u2014"}</p>
               <p className="text-sm opacity-80 mt-1">{mostVisible?.pct}% de part de voix IA ({mostVisible?.mentions} mentions)</p>
             </div>
             <div className="rounded-2xl bg-gradient-to-br from-cyan-500 to-cyan-600 p-5 text-white shadow-lg shadow-cyan-200/50">
@@ -134,7 +138,7 @@ export default function GeoTrackingPage() {
                 <Zap className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wider">Plus recommandee</span>
               </div>
-              <p className="text-2xl font-bold">{mostRecommended?.competitor || "—"}</p>
+              <p className="text-2xl font-bold">{mostRecommended?.competitor || "\u2014"}</p>
               <p className="text-sm opacity-80 mt-1">Recommandee dans {mostRecommended?.rate}% des reponses</p>
             </div>
             <div className={`rounded-2xl p-5 text-white shadow-lg ${
@@ -144,10 +148,10 @@ export default function GeoTrackingPage() {
             }`}>
               <div className="flex items-center gap-2 mb-2 opacity-90">
                 <TrendingUp className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wider">Ecart SEO/GEO Auchan</span>
+                <span className="text-xs font-medium uppercase tracking-wider">Ecart SEO/GEO {brandName}</span>
               </div>
               <p className="text-2xl font-bold">
-                {brandGap ? `${brandGap.gap > 0 ? "+" : ""}${brandGap.gap} pts` : "—"}
+                {brandGap ? `${brandGap.gap > 0 ? "+" : ""}${brandGap.gap} pts` : "\u2014"}
               </p>
               <p className="text-sm opacity-80 mt-1">
                 {brandGap ? `SEO ${brandGap.seo_pct}% vs GEO ${brandGap.geo_pct}%` : "Pas de donnees SEO"}
@@ -158,8 +162,8 @@ export default function GeoTrackingPage() {
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Requetes analysees" value={insights.total_queries.toString()} icon={Search} color="teal" />
-            <KpiCard label="Plateformes IA" value={insights.platforms.length.toString()} icon={Bot} color="cyan" subtitle="Claude + Gemini" />
-            <KpiCard label="Visibilite Auchan" value={brandSov ? `${brandSov.pct}%` : "0%"} icon={Eye} color="emerald" subtitle={brandSov ? `${brandSov.mentions} mentions` : undefined} />
+            <KpiCard label="Plateformes IA" value={platforms.length.toString()} icon={Bot} color="cyan" subtitle={platformLabel} />
+            <KpiCard label={`Visibilite ${brandName}`} value={brandSov ? `${brandSov.pct}%` : "0%"} icon={Eye} color="emerald" subtitle={brandSov ? `${brandSov.mentions} mentions` : undefined} />
             <KpiCard label="Derniere analyse" value={formatDate(lastTracked)} icon={Sparkles} color="sky" />
           </div>
 
@@ -171,7 +175,7 @@ export default function GeoTrackingPage() {
             </h2>
             <div className="space-y-3">
               {insights.share_of_voice.map((s) => {
-                const isBrand = s.competitor_id === BRAND_ID;
+                const isBrand = s.competitor_id === brandId;
                 return (
                   <div key={s.competitor_id} className="flex items-center gap-3">
                     <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>
@@ -199,35 +203,34 @@ export default function GeoTrackingPage() {
           <div className="rounded-2xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Bot className="h-4 w-4 text-cyan-500" />
-              Comparaison plateformes : Claude vs Gemini
+              Comparaison plateformes : {platformLabel}
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Concurrent</th>
-                    <th className="text-center py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Claude</th>
-                    <th className="text-center py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gemini</th>
+                    {platforms.map((p) => (
+                      <th key={p} className="text-center py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {p === "chatgpt" ? "ChatGPT" : p.charAt(0).toUpperCase() + p.slice(1)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {insights.platform_comparison.map((p) => {
-                    const isBrand = p.competitor_id === BRAND_ID;
+                  {insights.platform_comparison.map((row) => {
+                    const isBrand = row.competitor_id === brandId;
                     return (
-                      <tr key={p.competitor_id} className={`border-b border-border/50 ${isBrand ? "bg-teal-50/50" : "hover:bg-muted/30"}`}>
-                        <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{p.competitor}</td>
-                        <td className="text-center py-2.5 px-4">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-sm font-semibold">{p.claude_pct}%</span>
-                            <span className="text-xs text-muted-foreground">({p.claude_mentions})</span>
-                          </span>
-                        </td>
-                        <td className="text-center py-2.5 px-4">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-sm font-semibold">{p.gemini_pct}%</span>
-                            <span className="text-xs text-muted-foreground">({p.gemini_mentions})</span>
-                          </span>
-                        </td>
+                      <tr key={row.competitor_id} className={`border-b border-border/50 ${isBrand ? "bg-teal-50/50" : "hover:bg-muted/30"}`}>
+                        <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{row.competitor}</td>
+                        {platforms.map((p) => (
+                          <td key={p} className="text-center py-2.5 px-4">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="text-sm font-semibold">{row[`${p}_pct`] ?? 0}%</span>
+                              <span className="text-xs text-muted-foreground">({row[`${p}_mentions`] ?? 0})</span>
+                            </span>
+                          </td>
+                        ))}
                       </tr>
                     );
                   })}
@@ -244,7 +247,7 @@ export default function GeoTrackingPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {insights.recommendation_rate.map((r, i) => {
-                const isBrand = r.competitor_id === BRAND_ID;
+                const isBrand = r.competitor_id === brandId;
                 return (
                   <div key={r.competitor_id} className={`rounded-xl p-4 ${isBrand ? "bg-teal-50 border border-teal-200" : "bg-gray-50 border border-gray-200"}`}>
                     <div className="flex items-center justify-between mb-2">
@@ -284,11 +287,16 @@ export default function GeoTrackingPage() {
                 </thead>
                 <tbody>
                   {results.map((q) => {
-                    // Build mention status for each competitor across both platforms
+                    // Build mention status for each competitor across all platforms
                     const statusMap: Record<number, { mentioned: boolean; recommended: boolean }> = {};
                     competitorNames.forEach(c => { statusMap[c.id] = { mentioned: false, recommended: false }; });
 
-                    [...q.platforms.claude, ...q.platforms.gemini].forEach(m => {
+                    const allMentions = [
+                      ...(q.platforms.claude || []),
+                      ...(q.platforms.gemini || []),
+                      ...(q.platforms.chatgpt || []),
+                    ];
+                    allMentions.forEach(m => {
                       if (m.competitor_id && statusMap[m.competitor_id] !== undefined) {
                         statusMap[m.competitor_id].mentioned = true;
                         if (m.recommended) statusMap[m.competitor_id].recommended = true;
@@ -301,7 +309,7 @@ export default function GeoTrackingPage() {
                         {competitorNames.map((c) => {
                           const st = statusMap[c.id];
                           let cls = "bg-gray-100 border-gray-200";
-                          let label = "—";
+                          let label = "\u2014";
                           if (st.mentioned && st.recommended) {
                             cls = "bg-teal-200 border-teal-300 text-teal-800";
                             label = "\u2605";
@@ -337,7 +345,7 @@ export default function GeoTrackingPage() {
                 Mentionne
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-gray-100 border border-gray-200 text-gray-400 text-[10px] font-bold">—</span>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-gray-100 border border-gray-200 text-gray-400 text-[10px] font-bold">{"\u2014"}</span>
                 Absent
               </span>
             </div>
@@ -370,7 +378,7 @@ export default function GeoTrackingPage() {
               </h2>
               <div className="space-y-4">
                 {insights.seo_vs_geo.map((g) => {
-                  const isBrand = g.competitor_id === BRAND_ID;
+                  const isBrand = g.competitor_id === brandId;
                   const maxPct = Math.max(g.seo_pct, g.geo_pct, 1);
                   return (
                     <div key={g.competitor_id}>
@@ -406,10 +414,10 @@ export default function GeoTrackingPage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
               <h2 className="text-base font-semibold text-amber-800 mb-3 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
-                Mots-cles ou Auchan est absent des reponses IA
+                Mots-cles ou {brandName} est absent des reponses IA
               </h2>
               <p className="text-sm text-amber-700 mb-3">
-                Auchan n&apos;est mentionne par aucun moteur IA sur ces requetes :
+                {brandName} n&apos;est mentionne par aucun moteur IA sur ces requetes :
               </p>
               <div className="flex flex-wrap gap-2">
                 {brandMissing.keywords.map((kw) => (

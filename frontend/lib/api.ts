@@ -917,6 +917,7 @@ export interface GeoQueryResult {
   platforms: {
     claude: GeoMention[];
     gemini: GeoMention[];
+    chatgpt: GeoMention[];
   };
 }
 
@@ -924,15 +925,13 @@ export interface GeoInsights {
   total_queries: number;
   platforms: string[];
   last_tracked: string | null;
+  brand_name: string | null;
+  brand_competitor_id: number | null;
   share_of_voice: { competitor: string; competitor_id: number; mentions: number; pct: number }[];
   avg_position: { competitor: string; competitor_id: number; avg_pos: number }[];
   recommendation_rate: { competitor: string; competitor_id: number; rate: number; recommended_count: number }[];
   sentiment: { competitor: string; competitor_id: number; positive: number; neutral: number; negative: number }[];
-  platform_comparison: {
-    competitor: string; competitor_id: number;
-    claude_mentions: number; gemini_mentions: number;
-    claude_pct: number; gemini_pct: number;
-  }[];
+  platform_comparison: Record<string, any>[];
   key_criteria: { criterion: string; count: number }[];
   missing_keywords: { competitor: string; competitor_id: number; keywords: string[] }[];
   seo_vs_geo: { competitor: string; competitor_id: number; seo_pct: number; geo_pct: number; gap: number }[];
