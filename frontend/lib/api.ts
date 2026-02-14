@@ -800,7 +800,7 @@ export interface CreativeInsights {
 }
 
 export const creativeAPI = {
-  analyzeAll: (limit = 50) =>
+  analyzeAll: (limit = 10) =>
     fetchAPI<{ message: string; analyzed: number; errors: number; remaining: number }>(
       `/creative/analyze-all?limit=${limit}`,
       { method: "POST" }

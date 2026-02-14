@@ -2,7 +2,9 @@
 Creative Analyzer Service.
 Uses Google Gemini Flash API (free tier) to analyze ad creative images.
 Extracts: concept, hook, tone, colors, text overlay, score, tags.
+Free tier: 15 RPM, 1500 RPD.
 """
+import asyncio
 import base64
 import json
 import logging
@@ -86,56 +88,68 @@ class CreativeAnalyzer:
             ad_text=(ad_text or "")[:500],
         )
 
-        # Call Gemini API
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    f"{GEMINI_URL}?key={self.api_key}",
-                    headers={"content-type": "application/json"},
-                    json={
-                        "contents": [
-                            {
-                                "parts": [
-                                    {
-                                        "inline_data": {
-                                            "mime_type": media_type,
-                                            "data": b64_image,
-                                        }
-                                    },
-                                    {
-                                        "text": prompt,
-                                    },
-                                ]
+        # Call Gemini API with retry for rate limits
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": media_type,
+                                "data": b64_image,
                             }
-                        ],
-                        "generationConfig": {
-                            "temperature": 0.3,
-                            "maxOutputTokens": 1024,
-                            "responseMimeType": "application/json",
                         },
-                    },
-                )
+                        {
+                            "text": prompt,
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1024,
+                "responseMimeType": "application/json",
+            },
+        }
 
-            if response.status_code != 200:
-                logger.error(f"Gemini API error {response.status_code}: {response.text[:300]}")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"{GEMINI_URL}?key={self.api_key}",
+                        headers={"content-type": "application/json"},
+                        json=payload,
+                    )
+
+                if response.status_code == 429:
+                    wait = 10 * (attempt + 1)
+                    logger.warning(f"Gemini rate limit (429), waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait)
+                    continue
+
+                if response.status_code != 200:
+                    logger.error(f"Gemini API error {response.status_code}: {response.text[:300]}")
+                    return None
+
+                result = response.json()
+                candidates = result.get("candidates", [])
+                if not candidates:
+                    logger.error(f"Gemini: no candidates in response")
+                    return None
+
+                text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                return self._parse_analysis(text_content)
+
+            except httpx.TimeoutException:
+                logger.error(f"Gemini API timeout for {creative_url[:80]}")
+                return None
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
                 return None
 
-            result = response.json()
-            # Gemini response: candidates[0].content.parts[0].text
-            candidates = result.get("candidates", [])
-            if not candidates:
-                logger.error(f"Gemini: no candidates in response")
-                return None
-
-            text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            return self._parse_analysis(text_content)
-
-        except httpx.TimeoutException:
-            logger.error(f"Gemini API timeout for {creative_url[:80]}")
-            return None
-        except Exception as e:
-            logger.error(f"Gemini API error: {e}")
-            return None
+        logger.error(f"Gemini: max retries reached for {creative_url[:80]}")
+        return None
 
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
         """Download image from URL. Returns (bytes, media_type) or (None, '')."""

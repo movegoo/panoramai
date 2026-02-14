@@ -33,7 +33,7 @@ def _normalize_platform(platform: str | None) -> str:
 
 @router.post("/analyze-all")
 async def analyze_all_creatives(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(10, ge=1, le=200),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
@@ -99,8 +99,8 @@ async def analyze_all_creatives(
             ad.creative_score = 0
             errors += 1
 
-        # Rate limiting
-        await asyncio.sleep(0.5)
+        # Rate limiting — Gemini free tier = 15 RPM
+        await asyncio.sleep(4.5)
 
     db.commit()
 

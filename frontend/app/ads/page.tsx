@@ -1425,7 +1425,7 @@ export default function AdsPage() {
     setAnalyzingCreatives(true);
     setAnalyzeResult(null);
     try {
-      const result = await creativeAPI.analyzeAll(50);
+      const result = await creativeAPI.analyzeAll(10);
       setAnalyzeResult(result);
       // Refresh insights
       try { const ci = await creativeAPI.getInsights(); setCreativeInsights(ci); } catch {}
