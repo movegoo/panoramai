@@ -410,6 +410,23 @@ class SocialPost(Base):
     competitor = relationship("Competitor", backref="social_posts")
 
 
+class SerpResult(Base):
+    """Google SERP tracking result."""
+    __tablename__ = "serp_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    keyword = Column(String(255), nullable=False, index=True)
+    position = Column(Integer, nullable=False)  # 1-10
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=True, index=True)
+    title = Column(String(1000))
+    url = Column(String(1000))
+    snippet = Column(Text)
+    domain = Column(String(255), index=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", backref="serp_results")
+
+
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"

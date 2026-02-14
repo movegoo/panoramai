@@ -1,0 +1,342 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
+import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
+
+// Brand competitor id (Auchan)
+const BRAND_ID = 5;
+
+function formatDate(iso: string | null) {
+  if (!iso) return "Jamais";
+  const d = new Date(iso);
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function PositionBadge({ position }: { position: number | null }) {
+  if (!position) return <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 text-gray-400 text-xs font-medium">—</span>;
+  let cls = "bg-gray-100 text-gray-500";
+  if (position <= 3) cls = "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200";
+  else if (position <= 6) cls = "bg-amber-100 text-amber-700 ring-1 ring-amber-200";
+  else cls = "bg-red-100 text-red-600 ring-1 ring-red-200";
+  return <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold ${cls}`}>{position}</span>;
+}
+
+export default function SeoPage() {
+  const [insights, setInsights] = useState<SeoInsights | null>(null);
+  const [rankings, setRankings] = useState<SerpRanking[]>([]);
+  const [lastTracked, setLastTracked] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tracking, setTracking] = useState(false);
+  const [trackResult, setTrackResult] = useState<string | null>(null);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const [insData, rankData] = await Promise.all([
+        seoAPI.getInsights(),
+        seoAPI.getRankings(),
+      ]);
+      setInsights(insData);
+      setRankings(rankData.keywords);
+      setLastTracked(rankData.last_tracked || insData.last_tracked);
+    } catch (e) {
+      console.error("Failed to load SEO data:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  async function handleTrack() {
+    setTracking(true);
+    setTrackResult(null);
+    try {
+      const res = await seoAPI.track();
+      setTrackResult(`${res.tracked_keywords} mots-cles trackes, ${res.total_results} resultats, ${res.matched_competitors} matchs concurrents`);
+      await loadData();
+    } catch (e: any) {
+      setTrackResult(`Erreur: ${e.message}`);
+    } finally {
+      setTracking(false);
+    }
+  }
+
+  // Derived data
+  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === BRAND_ID);
+  const brandAvg = insights?.avg_position.find(a => a.competitor_id === BRAND_ID);
+  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === BRAND_ID);
+
+  // Build competitor list for ranking grid
+  const competitorNames: string[] = [];
+  if (insights) {
+    const nameSet = new Set<string>();
+    insights.share_of_voice.forEach(s => nameSet.add(s.competitor));
+    competitorNames.push(...nameSet);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-200/50">
+            <Globe className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Positionnement SEO</h1>
+            <p className="text-sm text-muted-foreground">Suivi des positions Google sur les mots-cles strategiques</p>
+          </div>
+        </div>
+        <button
+          onClick={handleTrack}
+          disabled={tracking}
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 transition-all disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`} />
+          {tracking ? "Tracking en cours..." : "Tracker les positions"}
+        </button>
+      </div>
+
+      {/* Track result banner */}
+      {trackResult && (
+        <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
+          {trackResult}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw className="h-6 w-6 animate-spin text-blue-500" />
+          <span className="ml-3 text-muted-foreground">Chargement des donnees SEO...</span>
+        </div>
+      ) : !insights || insights.total_keywords === 0 ? (
+        <div className="rounded-2xl border border-dashed border-blue-300 bg-blue-50/50 p-12 text-center">
+          <Search className="h-12 w-12 text-blue-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Aucune donnee SEO</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Cliquez sur &quot;Tracker les positions&quot; pour lancer le premier scan des resultats Google.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+              label="Mots-cles trackes"
+              value={insights.total_keywords.toString()}
+              icon={Search}
+              color="blue"
+            />
+            <KpiCard
+              label="Position moy. Auchan"
+              value={brandAvg ? brandAvg.avg_pos.toFixed(1) : "—"}
+              icon={TrendingUp}
+              color="indigo"
+              subtitle={brandAvg ? `${brandAvg.keywords_in_top10} mots-cles dans le top 10` : undefined}
+            />
+            <KpiCard
+              label="Part de voix Auchan"
+              value={brandSov ? `${brandSov.pct}%` : "0%"}
+              icon={BarChart3}
+              color="violet"
+              subtitle={brandSov ? `${brandSov.appearances} apparitions` : undefined}
+            />
+            <KpiCard
+              label="Derniere collecte"
+              value={formatDate(lastTracked)}
+              icon={Globe}
+              color="sky"
+            />
+          </div>
+
+          {/* Share of Voice */}
+          <div className="rounded-2xl border border-border bg-card p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              Part de voix SEO
+            </h2>
+            <div className="space-y-3">
+              {insights.share_of_voice.map((s) => {
+                const isBrand = s.competitor_id === BRAND_ID;
+                return (
+                  <div key={s.competitor_id} className="flex items-center gap-3">
+                    <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-blue-700 font-bold" : "text-foreground"}`}>
+                      {s.competitor}
+                    </span>
+                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${isBrand ? "bg-gradient-to-r from-blue-500 to-indigo-500" : "bg-gray-300"}`}
+                        style={{ width: `${Math.max(s.pct, 2)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-semibold w-16 text-right ${isBrand ? "text-blue-700" : "text-muted-foreground"}`}>
+                      {s.pct}%
+                    </span>
+                    <span className="text-xs text-muted-foreground w-20 text-right">
+                      {s.appearances} apparitions
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Average Position */}
+          <div className="rounded-2xl border border-border bg-card p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-indigo-500" />
+              Position moyenne
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {insights.avg_position.map((a, i) => {
+                const isBrand = a.competitor_id === BRAND_ID;
+                return (
+                  <div key={a.competitor_id} className={`rounded-xl p-4 ${isBrand ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200"}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-sm font-semibold ${isBrand ? "text-blue-700" : "text-foreground"}`}>
+                        #{i + 1} {a.competitor}
+                      </span>
+                    </div>
+                    <div className={`text-2xl font-bold ${isBrand ? "text-blue-600" : "text-foreground"}`}>
+                      {a.avg_pos.toFixed(1)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {a.keywords_in_top10} mots-cles en top 10
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Rankings Grid */}
+          <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
+            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Search className="h-4 w-4 text-blue-500" />
+              Positions par mot-cle
+            </h2>
+            {rankings.length > 0 && competitorNames.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mot-cle</th>
+                    {competitorNames.map((name) => (
+                      <th key={name} className="text-center py-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankings.map((kw) => {
+                    const posMap: Record<string, number | null> = {};
+                    competitorNames.forEach(n => { posMap[n] = null; });
+                    kw.results.forEach(r => {
+                      if (r.competitor_name) posMap[r.competitor_name] = r.position;
+                    });
+                    return (
+                      <tr key={kw.keyword} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-2.5 pr-4 font-medium text-foreground">{kw.keyword}</td>
+                        {competitorNames.map((name) => (
+                          <td key={name} className="text-center py-2.5 px-2">
+                            <PositionBadge position={posMap[name]} />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-muted-foreground">Aucun ranking disponible.</p>
+            )}
+          </div>
+
+          {/* Missing Keywords Alert */}
+          {brandMissing && brandMissing.keywords.length > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+              <h2 className="text-base font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Mots-cles manquants pour Auchan
+              </h2>
+              <p className="text-sm text-amber-700 mb-3">
+                Auchan n&apos;apparait pas dans le top 10 Google pour les requetes suivantes :
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {brandMissing.keywords.map((kw) => (
+                  <span key={kw} className="inline-flex items-center rounded-lg bg-amber-100 border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800">
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top Domains */}
+          <div className="rounded-2xl border border-border bg-card p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Globe className="h-4 w-4 text-blue-500" />
+              Top domaines
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {insights.top_domains.slice(0, 10).map((d) => (
+                <div key={d.domain} className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                  <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="text-xs font-medium text-foreground truncate">{d.domain}</span>
+                  <span className="ml-auto text-xs font-bold text-blue-600">{d.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recommendations */}
+          {insights.recommendations.length > 0 && (
+            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+              <h2 className="text-base font-semibold text-blue-800 mb-4 flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Recommandations SEO
+              </h2>
+              <div className="space-y-3">
+                {insights.recommendations.map((rec, i) => (
+                  <div key={i} className="rounded-xl bg-white/80 border border-blue-100 p-4 text-sm text-blue-900">
+                    {rec}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function KpiCard({ label, value, icon: Icon, color, subtitle }: {
+  label: string;
+  value: string;
+  icon: any;
+  color: string;
+  subtitle?: string;
+}) {
+  const colors: Record<string, string> = {
+    blue: "from-blue-500 to-blue-600 shadow-blue-200/50",
+    indigo: "from-indigo-500 to-indigo-600 shadow-indigo-200/50",
+    violet: "from-violet-500 to-violet-600 shadow-violet-200/50",
+    sky: "from-sky-500 to-sky-600 shadow-sky-200/50",
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${colors[color]} shadow-md`}>
+          <Icon className="h-3.5 w-3.5 text-white" />
+        </div>
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-lg font-bold text-foreground">{value}</p>
+      {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
+    </div>
+  );
+}

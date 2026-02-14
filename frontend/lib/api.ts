@@ -852,6 +852,45 @@ export interface ContentInsights {
   recommendations: string[];
 }
 
+// SEO / SERP Tracking API
+export interface SerpRankingResult {
+  position: number;
+  competitor_name: string | null;
+  competitor_id: number | null;
+  domain: string;
+  title: string;
+  url: string;
+}
+
+export interface SerpRanking {
+  keyword: string;
+  results: SerpRankingResult[];
+}
+
+export interface SeoInsights {
+  total_keywords: number;
+  last_tracked: string | null;
+  share_of_voice: { competitor: string; competitor_id: number; appearances: number; pct: number }[];
+  avg_position: { competitor: string; competitor_id: number; avg_pos: number; keywords_in_top10: number }[];
+  best_keywords: { competitor: string; competitor_id: number; keyword: string; position: number }[];
+  missing_keywords: { competitor: string; competitor_id: number; keywords: string[] }[];
+  top_domains: { domain: string; count: number }[];
+  recommendations: string[];
+}
+
+export const seoAPI = {
+  track: () =>
+    fetchAPI<{ tracked_keywords: number; total_results: number; matched_competitors: number; errors: any[] | null }>(
+      "/seo/track",
+      { method: "POST" }
+    ),
+
+  getRankings: () =>
+    fetchAPI<{ keywords: SerpRanking[]; last_tracked: string | null }>("/seo/rankings"),
+
+  getInsights: () => fetchAPI<SeoInsights>("/seo/insights"),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[] }>(

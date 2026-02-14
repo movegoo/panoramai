@@ -448,6 +448,31 @@ class ScrapeCreatorsAPI:
             return {"success": False, "error": str(e)}
 
     # =========================================================================
+    # Google Search (SERP)
+    # =========================================================================
+
+    async def search_google(self, query: str, country: str = "FR", limit: int = 10) -> Dict:
+        """
+        Search Google organic results via ScrapeCreators.
+        Returns top organic results with title, url, description.
+        """
+        data = await self._get("/v1/google/search", {
+            "query": query,
+            "country": country,
+            "limit": str(limit),
+        })
+
+        if not data.get("success"):
+            return data
+
+        return {
+            "success": True,
+            "results": data.get("results", []),
+            "count": len(data.get("results", [])),
+            "credits_remaining": data.get("credits_remaining"),
+        }
+
+    # =========================================================================
     # Credits
     # =========================================================================
 

@@ -46,6 +46,7 @@ const navigation = [
       { name: "Publicit\u00e9s", href: "/ads", icon: Megaphone },
       { name: "R\u00e9seaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
+      { name: "SEO", href: "/seo", icon: Globe },
     ],
   },
   {
