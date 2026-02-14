@@ -54,12 +54,23 @@ class CreativeAnalyzer:
 
     @property
     def api_key(self) -> str:
-        """Read API key at call time (not import time) to support late-loaded env vars."""
-        return (
+        """Read API key from env vars or database (Railway env var workaround)."""
+        key = (
             os.getenv("ANTHROPIC_API_KEY", "")
             or os.getenv("CLAUDE_KEY", "")
             or settings.ANTHROPIC_API_KEY
         )
+        if key:
+            return key
+        # Fallback: read from database
+        try:
+            from database import SessionLocal, SystemSetting
+            db = SessionLocal()
+            row = db.query(SystemSetting).filter(SystemSetting.key == "ANTHROPIC_API_KEY").first()
+            db.close()
+            return row.value if row else ""
+        except Exception:
+            return ""
 
     async def analyze_creative(
         self,

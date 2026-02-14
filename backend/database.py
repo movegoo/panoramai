@@ -373,6 +373,15 @@ class ZoneAnalysis(Base):
     calculated_at = Column(DateTime, default=datetime.utcnow)
 
 
+class SystemSetting(Base):
+    """Key-value store for system settings (API keys, etc.)."""
+    __tablename__ = "system_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def _run_migrations(engine):
     """Add missing columns and indexes to existing tables."""
     try:

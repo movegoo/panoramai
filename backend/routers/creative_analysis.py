@@ -11,10 +11,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, Ad, Competitor, User
+from database import get_db, Ad, Competitor, User, SystemSetting
 from services.creative_analyzer import creative_analyzer
 from core.auth import get_optional_user
-from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -139,63 +138,20 @@ async def analyze_all_creatives(
     }
 
 
-@router.get("/debug-next")
-async def debug_next_ad(
+@router.post("/set-key")
+async def set_api_key(
+    key: str = Query(..., min_length=10),
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
 ):
-    """Debug: show what the next ad to analyze looks like and test image download."""
-    import httpx as _httpx
-
-    query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
-        Ad.creative_analyzed_at.is_(None),
-        Ad.creative_url.isnot(None),
-        Ad.creative_url != "",
-    )
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-
-    ad = query.first()
-    if not ad:
-        return {"message": "No ads to analyze"}
-
-    # Test image download
-    img_status = "not_tested"
-    img_size = 0
-    img_content_type = ""
-    img_error = ""
-    try:
-        async with _httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(ad.creative_url)
-        img_status = f"HTTP {resp.status_code}"
-        img_size = len(resp.content)
-        img_content_type = resp.headers.get("content-type", "")
-    except Exception as e:
-        img_error = f"{type(e).__name__}: {e}"
-
-    # Test API key from multiple sources
-    import os as _os
-    key_from_env = _os.getenv("ANTHROPIC_API_KEY", "")
-    key_from_settings = settings.ANTHROPIC_API_KEY if hasattr(settings, "ANTHROPIC_API_KEY") else ""
-    key_from_analyzer = creative_analyzer.api_key
-
-    # List all env var NAMES to check what Railway injects
-    all_env_names = sorted(_os.environ.keys())
-
-    return {
-        "ad_id": ad.ad_id,
-        "platform": ad.platform,
-        "creative_url": ad.creative_url[:150] if ad.creative_url else None,
-        "display_format": ad.display_format,
-        "image_download": img_status,
-        "image_size": img_size,
-        "image_content_type": img_content_type,
-        "image_error": img_error,
-        "key_from_env": f"{key_from_env[:15]}..." if key_from_env else "EMPTY",
-        "key_from_settings": f"{key_from_settings[:15]}..." if key_from_settings else "EMPTY",
-        "key_from_analyzer": f"{key_from_analyzer[:15]}..." if key_from_analyzer else "EMPTY",
-        "all_env_names": all_env_names,
-    }
+    """Store the Anthropic API key in the database (Railway env var workaround)."""
+    row = db.query(SystemSetting).filter(SystemSetting.key == "ANTHROPIC_API_KEY").first()
+    if row:
+        row.value = key
+        row.updated_at = datetime.utcnow()
+    else:
+        db.add(SystemSetting(key="ANTHROPIC_API_KEY", value=key))
+    db.commit()
+    return {"message": "API key saved", "key_preview": f"{key[:12]}...{key[-4:]}"}
 
 
 @router.post("/reset-failed")
