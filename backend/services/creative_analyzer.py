@@ -55,7 +55,11 @@ class CreativeAnalyzer:
     @property
     def api_key(self) -> str:
         """Read API key at call time (not import time) to support late-loaded env vars."""
-        return os.getenv("ANTHROPIC_API_KEY", "") or settings.ANTHROPIC_API_KEY
+        return (
+            os.getenv("ANTHROPIC_API_KEY", "")
+            or os.getenv("CLAUDE_KEY", "")
+            or settings.ANTHROPIC_API_KEY
+        )
 
     async def analyze_creative(
         self,
