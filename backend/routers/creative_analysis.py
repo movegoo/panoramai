@@ -138,6 +138,57 @@ async def analyze_all_creatives(
     }
 
 
+@router.get("/debug-next")
+async def debug_next_ad(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Debug: show what the next ad to analyze looks like and test image download."""
+    import httpx as _httpx
+
+    query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
+        Ad.creative_analyzed_at.is_(None),
+        Ad.creative_url.isnot(None),
+        Ad.creative_url != "",
+    )
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+
+    ad = query.first()
+    if not ad:
+        return {"message": "No ads to analyze"}
+
+    # Test image download
+    img_status = "not_tested"
+    img_size = 0
+    img_content_type = ""
+    img_error = ""
+    try:
+        async with _httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(ad.creative_url)
+        img_status = f"HTTP {resp.status_code}"
+        img_size = len(resp.content)
+        img_content_type = resp.headers.get("content-type", "")
+    except Exception as e:
+        img_error = f"{type(e).__name__}: {e}"
+
+    # Test API key
+    api_key = creative_analyzer.api_key
+    key_status = f"set ({api_key[:12]}...{api_key[-4:]})" if api_key else "NOT SET"
+
+    return {
+        "ad_id": ad.ad_id,
+        "platform": ad.platform,
+        "creative_url": ad.creative_url[:150] if ad.creative_url else None,
+        "display_format": ad.display_format,
+        "image_download": img_status,
+        "image_size": img_size,
+        "image_content_type": img_content_type,
+        "image_error": img_error,
+        "api_key_status": key_status,
+    }
+
+
 @router.post("/reset-failed")
 async def reset_failed_analyses(
     db: Session = Depends(get_db),

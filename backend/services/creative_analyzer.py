@@ -157,7 +157,7 @@ class CreativeAnalyzer:
                 response = await client.get(url)
 
             if response.status_code != 200:
-                logger.warning(f"Image download failed ({response.status_code}): {url[:80]}")
+                logger.error(f"Image download HTTP {response.status_code}: {url[:100]}")
                 return None, ""
 
             content_type = response.headers.get("content-type", "")
@@ -177,17 +177,21 @@ class CreativeAnalyzer:
 
             data = response.content
             if len(data) > MAX_IMAGE_SIZE:
-                logger.warning(f"Image too large ({len(data)} bytes): {url[:80]}")
+                logger.error(f"Image too large ({len(data)} bytes): {url[:80]}")
                 return None, ""
 
             if len(data) < 1000:
-                logger.warning(f"Image too small ({len(data)} bytes), likely broken: {url[:80]}")
+                logger.error(f"Image too small ({len(data)} bytes), likely broken: {url[:80]}")
                 return None, ""
 
+            logger.info(f"Image OK: {len(data)} bytes, {media_type}: {url[:80]}")
             return data, media_type
 
+        except httpx.TimeoutException:
+            logger.error(f"Image download TIMEOUT: {url[:100]}")
+            return None, ""
         except Exception as e:
-            logger.warning(f"Image download error: {e}")
+            logger.error(f"Image download exception ({type(e).__name__}): {e} - {url[:100]}")
             return None, ""
 
     def _parse_analysis(self, text: str) -> Optional[dict]:
