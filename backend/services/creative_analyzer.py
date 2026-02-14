@@ -1,6 +1,6 @@
 """
 Creative Analyzer Service.
-Uses Anthropic Claude Vision API to analyze ad creative images.
+Uses Google Gemini Flash API (free tier) to analyze ad creative images.
 Extracts: concept, hook, tone, colors, text overlay, score, tags.
 """
 import base64
@@ -15,7 +15,7 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 ANALYSIS_PROMPT = """Tu es un expert en analyse créative publicitaire pour la grande distribution et le retail.
-Analyse ce visuel publicitaire et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire).
+Analyse ce visuel publicitaire et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire, pas de ```).
 
 Contexte : plateforme={platform}, texte de la pub="{ad_text}"
 
@@ -42,16 +42,18 @@ Critères de score :
 - Exécution professionnelle (25%) : qualité graphique, cohérence
 - Persuasion (20%) : incitation à l'action, urgence, désirabilité"""
 
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 class CreativeAnalyzer:
-    """Analyze ad creatives using Claude Vision API."""
+    """Analyze ad creatives using Google Gemini Flash Vision API."""
 
     def __init__(self):
-        self.api_key = settings.ANTHROPIC_API_KEY
+        self.api_key = settings.GEMINI_API_KEY
         if not self.api_key:
-            logger.warning("ANTHROPIC_API_KEY not configured. Creative analysis disabled.")
+            logger.warning("GEMINI_API_KEY not configured. Creative analysis disabled.")
 
     async def analyze_creative(
         self,
@@ -59,12 +61,12 @@ class CreativeAnalyzer:
         ad_text: str = "",
         platform: str = "meta",
     ) -> Optional[dict]:
-        """Analyze a single ad creative image with Claude Vision.
+        """Analyze a single ad creative image with Gemini Flash.
 
         Returns parsed analysis dict or None on failure.
         """
         if not self.api_key:
-            logger.error("Cannot analyze: ANTHROPIC_API_KEY not set")
+            logger.error("Cannot analyze: GEMINI_API_KEY not set")
             return None
 
         if not creative_url:
@@ -84,54 +86,55 @@ class CreativeAnalyzer:
             ad_text=(ad_text or "")[:500],
         )
 
-        # Call Claude API
+        # Call Gemini API
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
+                    f"{GEMINI_URL}?key={self.api_key}",
+                    headers={"content-type": "application/json"},
                     json={
-                        "model": "claude-sonnet-4-5-20250929",
-                        "max_tokens": 1024,
-                        "messages": [
+                        "contents": [
                             {
-                                "role": "user",
-                                "content": [
+                                "parts": [
                                     {
-                                        "type": "image",
-                                        "source": {
-                                            "type": "base64",
-                                            "media_type": media_type,
+                                        "inline_data": {
+                                            "mime_type": media_type,
                                             "data": b64_image,
-                                        },
+                                        }
                                     },
                                     {
-                                        "type": "text",
                                         "text": prompt,
                                     },
-                                ],
+                                ]
                             }
                         ],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 1024,
+                            "responseMimeType": "application/json",
+                        },
                     },
                 )
 
             if response.status_code != 200:
-                logger.error(f"Claude API error {response.status_code}: {response.text[:300]}")
+                logger.error(f"Gemini API error {response.status_code}: {response.text[:300]}")
                 return None
 
             result = response.json()
-            text_content = result.get("content", [{}])[0].get("text", "")
+            # Gemini response: candidates[0].content.parts[0].text
+            candidates = result.get("candidates", [])
+            if not candidates:
+                logger.error(f"Gemini: no candidates in response")
+                return None
+
+            text_content = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
             return self._parse_analysis(text_content)
 
         except httpx.TimeoutException:
-            logger.error(f"Claude API timeout for {creative_url[:80]}")
+            logger.error(f"Gemini API timeout for {creative_url[:80]}")
             return None
         except Exception as e:
-            logger.error(f"Claude API error: {e}")
+            logger.error(f"Gemini API error: {e}")
             return None
 
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
@@ -146,7 +149,6 @@ class CreativeAnalyzer:
 
             content_type = response.headers.get("content-type", "")
             if not content_type.startswith("image/"):
-                # Try to infer from URL
                 if ".png" in url.lower():
                     content_type = "image/png"
                 elif ".webp" in url.lower():
@@ -156,7 +158,6 @@ class CreativeAnalyzer:
                 else:
                     content_type = "image/jpeg"
 
-            # Normalize media type
             media_type = content_type.split(";")[0].strip()
             if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
                 media_type = "image/jpeg"
@@ -177,8 +178,7 @@ class CreativeAnalyzer:
             return None, ""
 
     def _parse_analysis(self, text: str) -> Optional[dict]:
-        """Parse Claude's JSON response into a validated dict."""
-        # Strip markdown code blocks if present
+        """Parse Gemini's JSON response into a validated dict."""
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]
@@ -189,7 +189,6 @@ class CreativeAnalyzer:
         try:
             data = json.loads(text)
         except json.JSONDecodeError:
-            # Try to find JSON in the response
             start = text.find("{")
             end = text.rfind("}") + 1
             if start >= 0 and end > start:

@@ -24,8 +24,8 @@ class Settings:
     # ScrapeCreators API
     SCRAPECREATORS_API_KEY: str = os.getenv("SCRAPECREATORS_API_KEY", "")
 
-    # Anthropic Claude API (for AI creative analysis)
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # Google Gemini API (for AI creative analysis - free tier)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"

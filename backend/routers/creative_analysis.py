@@ -1,6 +1,6 @@
 """
 Creative Analysis Router.
-AI-powered visual analysis of ad creatives using Claude Vision.
+AI-powered visual analysis of ad creatives using Google Gemini Flash.
 """
 import asyncio
 import json
@@ -115,6 +115,32 @@ async def analyze_all_creatives(
         "errors": errors,
         "remaining": remaining,
     }
+
+
+@router.post("/reset-failed")
+async def reset_failed_analyses(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Reset ads that were marked as analyzed but have score=0 (failed analyses)."""
+    query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
+        Ad.creative_analyzed_at.isnot(None),
+        Ad.creative_score == 0,
+    )
+
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+
+    ads = query.all()
+    count = 0
+    for ad in ads:
+        ad.creative_analyzed_at = None
+        ad.creative_score = None
+        ad.creative_analysis = None
+        count += 1
+
+    db.commit()
+    return {"reset": count, "message": f"{count} failed analyses reset, ready for re-analysis"}
 
 
 @router.get("/insights")
