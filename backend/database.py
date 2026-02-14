@@ -106,6 +106,23 @@ class Ad(Base):
     eu_total_reach = Column(BigInteger)          # Total EU reach (unique accounts)
     age_country_gender_reach = Column(Text)      # JSON: full breakdown by age/gender/country
 
+    # Creative Analysis (AI-powered visual intelligence via Claude Vision)
+    creative_analysis = Column(Text)               # JSON: full analysis result
+    creative_concept = Column(String(100))         # product-shot, lifestyle, ugc-style, promo...
+    creative_hook = Column(String(500))            # What grabs attention first
+    creative_tone = Column(String(100))            # urgency, aspiration, humor, trust, fomo...
+    creative_text_overlay = Column(Text)           # All visible text on creative
+    creative_dominant_colors = Column(String(100)) # JSON: ["#FF5733","#3498DB","#1ABC9C"]
+    creative_has_product = Column(Boolean)
+    creative_has_face = Column(Boolean)
+    creative_has_logo = Column(Boolean)
+    creative_layout = Column(String(50))           # single-image, split, text-heavy, minimal...
+    creative_cta_style = Column(String(50))        # button, text, arrow, badge, none
+    creative_score = Column(Integer)               # 0-100 quality/impact score
+    creative_tags = Column(Text)                   # JSON: ["promo","lifestyle","bold-text"]
+    creative_summary = Column(Text)                # 1-2 sentence AI description
+    creative_analyzed_at = Column(DateTime)
+
     competitor = relationship("Competitor", back_populates="ads")
 
 
@@ -369,6 +386,22 @@ def _run_migrations(engine):
             ("store_locations", "google_reviews_count", "INTEGER"),
             ("store_locations", "google_place_id", "VARCHAR(255)"),
             ("store_locations", "rating_fetched_at", "TIMESTAMP"),
+            # Creative Analysis columns
+            ("ads", "creative_analysis", "TEXT"),
+            ("ads", "creative_concept", "VARCHAR(100)"),
+            ("ads", "creative_hook", "VARCHAR(500)"),
+            ("ads", "creative_tone", "VARCHAR(100)"),
+            ("ads", "creative_text_overlay", "TEXT"),
+            ("ads", "creative_dominant_colors", "VARCHAR(100)"),
+            ("ads", "creative_has_product", "BOOLEAN"),
+            ("ads", "creative_has_face", "BOOLEAN"),
+            ("ads", "creative_has_logo", "BOOLEAN"),
+            ("ads", "creative_layout", "VARCHAR(50)"),
+            ("ads", "creative_cta_style", "VARCHAR(50)"),
+            ("ads", "creative_score", "INTEGER"),
+            ("ads", "creative_tags", "TEXT"),
+            ("ads", "creative_summary", "TEXT"),
+            ("ads", "creative_analyzed_at", "TIMESTAMP"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
@@ -389,6 +422,9 @@ def _run_migrations(engine):
             ("tiktok_data", "recorded_at"),
             ("youtube_data", "competitor_id"),
             ("youtube_data", "recorded_at"),
+            ("ads", "creative_concept"),
+            ("ads", "creative_tone"),
+            ("ads", "creative_score"),
         ]
         existing_indexes = {}
         for table in existing_tables:

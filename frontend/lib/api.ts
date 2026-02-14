@@ -111,6 +111,21 @@ export interface Ad {
       unknown: number;
     }[];
   }[];
+  // Creative Analysis (AI-powered)
+  creative_concept?: string;
+  creative_hook?: string;
+  creative_tone?: string;
+  creative_text_overlay?: string;
+  creative_dominant_colors?: string[];
+  creative_has_product?: boolean;
+  creative_has_face?: boolean;
+  creative_has_logo?: boolean;
+  creative_layout?: string;
+  creative_cta_style?: string;
+  creative_score?: number;
+  creative_tags?: string[];
+  creative_summary?: string;
+  creative_analyzed_at?: string;
 }
 
 export interface InstagramData {
@@ -754,4 +769,42 @@ export interface AdminUser {
 export const adminAPI = {
   getStats: () => fetchAPI<AdminStats>("/admin/stats"),
   getUsers: () => fetchAPI<AdminUser[]>("/admin/users"),
+};
+
+// Creative Analysis API
+export interface CreativeInsights {
+  total_analyzed: number;
+  avg_score: number;
+  concepts: { concept: string; count: number; pct: number }[];
+  tones: { tone: string; count: number; pct: number }[];
+  top_hooks: { hook: string; score: number; concept: string; competitor: string }[];
+  colors: { color: string; count: number }[];
+  top_performers: {
+    ad_id: string;
+    competitor_name: string;
+    creative_url: string;
+    score: number;
+    concept: string;
+    tone: string;
+    summary: string;
+    hook: string;
+  }[];
+  by_competitor: {
+    competitor: string;
+    count: number;
+    avg_score: number;
+    top_concept: string;
+    top_tone: string;
+  }[];
+  recommendations: string[];
+}
+
+export const creativeAPI = {
+  analyzeAll: (limit = 50) =>
+    fetchAPI<{ message: string; analyzed: number; errors: number; remaining: number }>(
+      `/creative/analyze-all?limit=${limit}`,
+      { method: "POST" }
+    ),
+
+  getInsights: () => fetchAPI<CreativeInsights>("/creative/insights"),
 };

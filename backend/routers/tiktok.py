@@ -450,6 +450,17 @@ async def fetch_all_tiktok_ads(db: Session = Depends(get_db)):
     }
 
 
+def _parse_json_safe(value):
+    if not value:
+        return None
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
 def _serialize_tiktok_ad(ad: Ad) -> dict:
     """Serialize a TikTok ad to JSON-friendly dict."""
     return {
@@ -471,4 +482,18 @@ def _serialize_tiktok_ad(ad: Ad) -> dict:
         "page_profile_picture_url": ad.page_profile_picture_url,
         "display_format": ad.display_format,
         "ad_library_url": ad.ad_library_url,
+        # Creative Analysis
+        "creative_concept": ad.creative_concept,
+        "creative_hook": ad.creative_hook,
+        "creative_tone": ad.creative_tone,
+        "creative_dominant_colors": _parse_json_safe(ad.creative_dominant_colors),
+        "creative_has_product": ad.creative_has_product,
+        "creative_has_face": ad.creative_has_face,
+        "creative_has_logo": ad.creative_has_logo,
+        "creative_layout": ad.creative_layout,
+        "creative_cta_style": ad.creative_cta_style,
+        "creative_score": ad.creative_score,
+        "creative_tags": _parse_json_safe(ad.creative_tags),
+        "creative_summary": ad.creative_summary,
+        "creative_analyzed_at": ad.creative_analyzed_at.isoformat() if ad.creative_analyzed_at else None,
     }

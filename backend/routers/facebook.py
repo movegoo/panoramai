@@ -114,6 +114,21 @@ def _serialize_ad(ad: Ad) -> dict:
         "location_audience": _parse_json(ad.location_audience),
         "eu_total_reach": ad.eu_total_reach,
         "age_country_gender_reach": _parse_json(ad.age_country_gender_reach),
+        # Creative Analysis
+        "creative_concept": ad.creative_concept,
+        "creative_hook": ad.creative_hook,
+        "creative_tone": ad.creative_tone,
+        "creative_text_overlay": ad.creative_text_overlay,
+        "creative_dominant_colors": _parse_json(ad.creative_dominant_colors),
+        "creative_has_product": ad.creative_has_product,
+        "creative_has_face": ad.creative_has_face,
+        "creative_has_logo": ad.creative_has_logo,
+        "creative_layout": ad.creative_layout,
+        "creative_cta_style": ad.creative_cta_style,
+        "creative_score": ad.creative_score,
+        "creative_tags": _parse_json(ad.creative_tags),
+        "creative_summary": ad.creative_summary,
+        "creative_analyzed_at": ad.creative_analyzed_at.isoformat() if ad.creative_analyzed_at else None,
     }
 
 

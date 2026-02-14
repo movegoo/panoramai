@@ -92,6 +92,20 @@ async def get_all_google_ads(
             "publisher_platforms": ["GOOGLE"],
             "impressions_min": ad.impressions_min,
             "impressions_max": ad.impressions_max,
+            # Creative Analysis
+            "creative_concept": ad.creative_concept,
+            "creative_hook": ad.creative_hook,
+            "creative_tone": ad.creative_tone,
+            "creative_dominant_colors": json.loads(ad.creative_dominant_colors) if ad.creative_dominant_colors else None,
+            "creative_has_product": ad.creative_has_product,
+            "creative_has_face": ad.creative_has_face,
+            "creative_has_logo": ad.creative_has_logo,
+            "creative_layout": ad.creative_layout,
+            "creative_cta_style": ad.creative_cta_style,
+            "creative_score": ad.creative_score,
+            "creative_tags": json.loads(ad.creative_tags) if ad.creative_tags else None,
+            "creative_summary": ad.creative_summary,
+            "creative_analyzed_at": ad.creative_analyzed_at.isoformat() if ad.creative_analyzed_at else None,
         })
 
     return results
