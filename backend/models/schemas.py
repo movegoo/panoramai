@@ -199,6 +199,73 @@ class Rankings(BaseModel):
 # Competitors
 # =============================================================================
 
+# =============================================================================
+# Advertiser
+# =============================================================================
+
+class AdvertiserCreate(BaseModel):
+    """Création d'un annonceur."""
+    company_name: str
+    sector: str
+    website: Optional[str] = None
+    playstore_app_id: Optional[str] = None
+    appstore_app_id: Optional[str] = None
+    instagram_username: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    youtube_channel_id: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class AdvertiserUpdate(BaseModel):
+    """Mise à jour d'un annonceur (tous les champs optionnels)."""
+    company_name: Optional[str] = None
+    sector: Optional[str] = None
+    website: Optional[str] = None
+    playstore_app_id: Optional[str] = None
+    appstore_app_id: Optional[str] = None
+    instagram_username: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    youtube_channel_id: Optional[str] = None
+    contact_email: Optional[str] = None
+
+
+class AdvertiserResponse(BaseModel):
+    """Réponse annonceur."""
+    id: int
+    company_name: str
+    sector: Optional[str] = None
+    website: Optional[str] = None
+    playstore_app_id: Optional[str] = None
+    appstore_app_id: Optional[str] = None
+    instagram_username: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    youtube_channel_id: Optional[str] = None
+    contact_email: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdvertiserOnboarding(BaseModel):
+    """Onboarding complet d'un annonceur."""
+    company_name: str
+    sector: str
+    website: Optional[str] = None
+    playstore_app_id: Optional[str] = None
+    appstore_app_id: Optional[str] = None
+    instagram_username: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    youtube_channel_id: Optional[str] = None
+    contact_email: Optional[str] = None
+    selected_competitors: Optional[List[str]] = None
+
+
+# =============================================================================
+# Competitors
+# =============================================================================
+
 class CompetitorCreate(BaseModel):
     """Création d'un concurrent."""
     name: str

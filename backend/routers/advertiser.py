@@ -382,7 +382,7 @@ async def get_competitor_suggestions(
     existing_names = {c.name.lower() for c in existing_query.all()}
 
     for comp in COMPETITORS_BY_SECTOR[sector]:
-        already_monitored = comp["name"].lower() in existing_names
+        already = comp["name"].lower() in existing_names
 
         suggestions.append(CompetitorSuggestion(
             name=comp["name"],
@@ -393,7 +393,7 @@ async def get_competitor_suggestions(
             instagram_username=comp.get("instagram_username"),
             tiktok_username=comp.get("tiktok_username"),
             youtube_channel_id=comp.get("youtube_channel_id"),
-            already_monitored=already_monitored,
+            already_tracked=already,
         ))
 
     return suggestions
