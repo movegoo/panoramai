@@ -26,6 +26,8 @@ import {
   MessageSquare,
   Clock,
   ChevronRight,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 
@@ -58,6 +60,15 @@ const RANKING_VIEWS: { key: RankingView; label: string; icon: React.ReactNode; s
 ];
 
 const MEDAL = ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-700", "bg-orange-300 text-orange-800"];
+
+function getRankColor(rank: number, total: number) {
+  if (total <= 1) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  const pct = rank / (total - 1);
+  if (pct === 0) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  if (pct <= 0.33) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
+  if (pct <= 0.66) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
+  return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
+}
 
 function StarRating({ rating, size = "md" }: { rating: number | null | undefined; size?: "sm" | "md" }) {
   if (!rating) return <span className="text-sm text-muted-foreground">&mdash;</span>;
@@ -332,8 +343,11 @@ export default function AppsPage() {
                 </tr>
               </thead>
               <tbody>
-                {crossStoreData.map((c, i) => (
-                  <tr key={c.id} className={`border-t border-white/10 ${isBrand(c.name) ? "bg-violet-500/15" : ""}`}>
+                {crossStoreData.map((c, i) => {
+                  const csRc = getRankColor(i, crossStoreData.length);
+                  const rowHighlight = i === 0 ? "bg-emerald-500/15" : i === crossStoreData.length - 1 ? "bg-red-500/10" : "";
+                  return (
+                  <tr key={c.id} className={`border-t border-white/10 ${isBrand(c.name) ? "bg-violet-500/15" : rowHighlight}`}>
                     <td className="py-2.5 pr-2">
                       {i < 3 ? (
                         <span className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${MEDAL[i]}`}>{i + 1}</span>
@@ -375,7 +389,8 @@ export default function AppsPage() {
                       <span className="text-sm font-bold tabular-nums">{formatNumber(c.totalReviews)}</span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -450,14 +465,14 @@ export default function AppsPage() {
               const trendData = trends[trendKey];
               const isSelected = selectedCompetitor === c.competitor_id;
 
+              const rc = getRankColor(i, sorted.length);
+
               return (
                 <button
                   key={c.competitor_id}
                   onClick={() => setSelectedCompetitor(c.competitor_id)}
-                  className={`rounded-xl border p-4 transition-all hover:shadow-md text-left ${
-                    brand ? "ring-2 ring-violet-500/40 bg-violet-50/30 dark:bg-violet-950/20" :
-                    isSelected ? `${config.lightBg} ${config.border}` :
-                    i === 0 ? `${config.lightBg} ${config.border}` : "bg-card"
+                  className={`rounded-xl border p-4 transition-all hover:shadow-md text-left ${rc.bg} ${rc.border} ${
+                    brand ? "ring-2 ring-violet-500/40" : ""
                   } ${isSelected ? "ring-2 ring-foreground/20" : ""}`}
                 >
                   {/* Header: rank + name */}
@@ -490,7 +505,9 @@ export default function AppsPage() {
                   </div>
                   {rankingView !== "rating" && (
                     <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
-                      <div className={`h-full rounded-full transition-all duration-700 ${i === 0 ? `bg-gradient-to-r ${config.gradient}` : "bg-slate-300 dark:bg-slate-600"}`}
+                      <div className={`h-full rounded-full transition-all duration-700 ${
+                        i === 0 ? "bg-emerald-500" : i === sorted.length - 1 ? "bg-red-400" : "bg-amber-400"
+                      }`}
                         style={{ width: `${pct}%` }} />
                     </div>
                   )}
@@ -558,8 +575,9 @@ export default function AppsPage() {
                     const brand = isBrand(c.competitor_name);
                     const trendKey = `${store === "playstore" ? "ps" : "as"}_${c.competitor_id}`;
                     const trendData = trends[trendKey];
+                    const rowRc = getRankColor(i, sorted.length);
                     return (
-                      <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
+                      <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${rowRc.bg} ${brand ? "ring-1 ring-inset ring-violet-300" : ""}`}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
@@ -626,6 +644,77 @@ export default function AppsPage() {
                 <p className="text-sm text-amber-800 dark:text-amber-200">
                   <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {sorted.length} en {getRankingLabel()}, {gap}% derriere le leader.
                 </p>
+              </div>
+            );
+          })()}
+
+          {/* Recommendations */}
+          {brandName && sorted.length > 1 && (() => {
+            const recs: string[] = [];
+            const brandItem = sorted.find(c => isBrand(c.competitor_name));
+            const brandIdx = sorted.findIndex(c => isBrand(c.competitor_name));
+            if (!brandItem) return null;
+
+            // Rating analysis
+            const ratingRank = [...currentComparison].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            const brandRatingIdx = ratingRank.findIndex(c => isBrand(c.competitor_name));
+            const leader = ratingRank[0];
+            if (brandRatingIdx > 0 && leader && leader.rating && brandItem.rating) {
+              const diff = (leader.rating - brandItem.rating).toFixed(1);
+              if (parseFloat(diff) >= 0.2) {
+                recs.push(`Note ${config.label} : ${brandName} (${brandItem.rating.toFixed(1)}) est a ${diff} pts de ${leader.competitor_name} (${leader.rating.toFixed(1)}). Ameliorer l'UX et repondre aux avis negatifs pour combler l'ecart.`);
+              }
+            }
+
+            // Reviews analysis
+            const reviewsRank = [...currentComparison].sort((a, b) => (b.reviews_count || 0) - (a.reviews_count || 0));
+            const brandReviewIdx = reviewsRank.findIndex(c => isBrand(c.competitor_name));
+            if (brandReviewIdx > 0 && reviewsRank[0] && brandItem.reviews_count) {
+              const ratio = reviewsRank[0].reviews_count / Math.max(brandItem.reviews_count, 1);
+              if (ratio > 2) {
+                recs.push(`${reviewsRank[0].competitor_name} a ${formatNumber(reviewsRank[0].reviews_count)} avis contre ${formatNumber(brandItem.reviews_count)} pour ${brandName} (${ratio.toFixed(0)}x plus). Encourager les utilisateurs a noter l'app via des in-app prompts.`);
+              }
+            }
+
+            // Downloads analysis (Play Store only)
+            if (store === "playstore") {
+              const dlRank = [...currentComparison].filter(c => c.downloads_numeric).sort((a, b) => (b.downloads_numeric || 0) - (a.downloads_numeric || 0));
+              const brandDlIdx = dlRank.findIndex(c => isBrand(c.competitor_name));
+              if (brandDlIdx > 0 && dlRank[0] && brandItem.downloads_numeric) {
+                recs.push(`${dlRank[0].competitor_name} domine les telechargements avec ${dlRank[0].downloads || "N/A"}. Renforcer l'ASO (App Store Optimization) et les campagnes d'acquisition.`);
+              }
+            }
+
+            // Version/update frequency
+            const withVersion = currentComparison.filter(c => c.version);
+            if (withVersion.length > 1 && brandItem.version) {
+              const trendKey = `${store === "playstore" ? "ps" : "as"}_${brandItem.competitor_id}`;
+              const brandTrend = trends[trendKey];
+              if (brandTrend?.trends?.rating === "down") {
+                recs.push(`La note de ${brandName} est en baisse. Analyser les derniers avis pour identifier les points de friction et prioriser les correctifs.`);
+              }
+            }
+
+            // Top performer highlight
+            if (brandRatingIdx === 0) {
+              recs.push(`${brandName} est leader en note ${config.label}. Maintenir cet avantage en continuant a repondre aux avis et a publier des mises a jour regulieres.`);
+            }
+
+            if (recs.length === 0) return null;
+
+            return (
+              <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
+                <h2 className="text-base font-semibold text-violet-800 mb-4 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Recommandations Applications
+                </h2>
+                <div className="space-y-3">
+                  {recs.map((rec, i) => (
+                    <div key={i} className="rounded-xl bg-white/80 border border-violet-100 p-4 text-sm text-violet-900">
+                      {rec}
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })()}
