@@ -1413,16 +1413,20 @@ export default function AdsPage() {
       if (compRes.status === "fulfilled") setCompetitors(comps);
       if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
 
-      // Auto-fetch if DB is empty but competitors exist
-      if (ads.length === 0 && comps.length > 0) {
+      // Auto-fetch missing platforms if competitors exist
+      const hasFb = fbAds.length > 0;
+      const hasTt = ttAds.length > 0;
+      const hasG = gAds.length > 0;
+      const missingPlatforms = comps.length > 0 && (!hasFb || !hasTt || !hasG);
+      if (missingPlatforms) {
         setFetching(true);
         try {
           for (const c of comps) {
-            try { await facebookAPI.fetchAds(c.id); } catch {}
-            try { await tiktokAPI.fetchAds(c.id); } catch {}
-            try { await googleAdsAPI.fetchAds(c.id); } catch {}
+            if (!hasFb) try { await facebookAPI.fetchAds(c.id); } catch {}
+            if (!hasTt) try { await tiktokAPI.fetchAds(c.id); } catch {}
+            if (!hasG) try { await googleAdsAPI.fetchAds(c.id); } catch {}
           }
-          try { await facebookAPI.enrichTransparency(); } catch {}
+          if (!hasFb) try { await facebookAPI.enrichTransparency(); } catch {}
           const [freshFb, freshTt, freshG] = await Promise.allSettled([
             facebookAPI.getAllAds(),
             tiktokAPI.getAllAds(),

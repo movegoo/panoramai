@@ -37,7 +37,10 @@ async def get_all_ads(
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     active_comps = {c.id: c.name for c in competitors}
 
-    query = db.query(Ad).filter(Ad.competitor_id.in_(active_comps.keys()))
+    query = db.query(Ad).filter(
+        Ad.competitor_id.in_(active_comps.keys()),
+        Ad.platform.in_(["facebook", "instagram"]),
+    )
     if active_only:
         query = query.filter(Ad.is_active == True)
     ads = query.order_by(desc(Ad.start_date)).all()
