@@ -191,6 +191,17 @@ function normalizeSource(platform: string | undefined | null): string {
   return "meta";
 }
 
+/** Get effective publisher platforms, falling back to platform field */
+function getPublisherPlatforms(ad: { publisher_platforms?: string[]; platform?: string }): string[] {
+  if (ad.publisher_platforms && ad.publisher_platforms.length > 0) return ad.publisher_platforms;
+  // Fallback: derive from platform field
+  if (ad.platform === "tiktok") return ["TIKTOK"];
+  if (ad.platform === "google") return ["GOOGLE"];
+  if (ad.platform === "instagram") return ["INSTAGRAM"];
+  if (ad.platform === "facebook") return ["FACEBOOK"];
+  return ["UNKNOWN"];
+}
+
 /* ─────────────── Gender normalization ─────────────── */
 
 function normalizeGender(raw: string | undefined | null): "all" | "male" | "female" | null {
@@ -438,9 +449,9 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               </span>
             </div>
             {/* Platform icons */}
-            {ad.publisher_platforms && ad.publisher_platforms.length > 0 && (
+            {getPublisherPlatforms(ad).length > 0 && (
               <div className="absolute bottom-3 right-3 flex items-center gap-1">
-                {ad.publisher_platforms.map(p => (
+                {getPublisherPlatforms(ad).map(p => (
                   <span key={p} className="h-6 w-6 rounded-full sm:backdrop-blur-md bg-white/50 sm:bg-white/30 flex items-center justify-center text-white">
                     <PlatformIcon name={p} className="h-3 w-3" />
                   </span>
@@ -692,11 +703,11 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               )}
 
               {/* Platforms */}
-              {ad.publisher_platforms && ad.publisher_platforms.length > 0 && (
+              {getPublisherPlatforms(ad).length > 0 && (
                 <div>
                   <div className="text-[10px] text-muted-foreground mb-1">Plateformes de diffusion</div>
                   <div className="flex flex-wrap gap-1">
-                    {ad.publisher_platforms.map((p) => <PlatformPill key={p} name={p} />)}
+                    {getPublisherPlatforms(ad).map((p) => <PlatformPill key={p} name={p} />)}
                   </div>
                 </div>
               )}
@@ -1246,7 +1257,7 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
         const ads = filteredAds.filter(a => a.competitor_name === name);
         const reach = ads.reduce((s, a) => s + (a.eu_total_reach || 0), 0);
         const fmts = Array.from(new Set(ads.map(a => a.display_format).filter(Boolean)));
-        const plats = Array.from(new Set(ads.flatMap(a => a.publisher_platforms || []))) as string[];
+        const plats = Array.from(new Set(ads.flatMap(a => getPublisherPlatforms(a)))) as string[];
         const durs = ads.filter(a => a.start_date).map(a => Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date!).getTime()) / 86400000)).filter(x => x > 0);
         const avgDur = durs.length > 0 ? Math.round(durs.reduce((s, x) => s + x, 0) / durs.length) : 0;
         const logo = ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
@@ -1642,7 +1653,7 @@ export default function AdsPage() {
 
   const availablePlatforms = useMemo(() => {
     const map = new Map<string, number>();
-    allAds.forEach(a => (a.publisher_platforms || []).forEach(p => map.set(p, (map.get(p) || 0) + 1)));
+    allAds.forEach(a => getPublisherPlatforms(a).forEach(p => map.set(p, (map.get(p) || 0) + 1)));
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
 
@@ -1699,7 +1710,7 @@ export default function AdsPage() {
     return allAds.filter(ad => {
       if (filterSource.size > 0 && !filterSource.has(normalizeSource(ad.platform))) return false;
       if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
-      if (filterPlatforms.size > 0 && !(ad.publisher_platforms || []).some(p => filterPlatforms.has(p))) return false;
+      if (filterPlatforms.size > 0 && !getPublisherPlatforms(ad).some(p => filterPlatforms.has(p))) return false;
       if (filterFormats.size > 0 && (!ad.display_format || !filterFormats.has(ad.display_format))) return false;
       if (filterAdvertisers.size > 0 && (!ad.page_name || !filterAdvertisers.has(ad.page_name))) return false;
       if (filterStatus === "active" && !ad.is_active) return false;
@@ -1793,12 +1804,12 @@ export default function AdsPage() {
       byFormat.set(fmt, (byFormat.get(fmt) || 0) + 1);
 
       // By platform
-      (a.publisher_platforms || []).forEach(p => byPlatform.set(p, (byPlatform.get(p) || 0) + 1));
+      getPublisherPlatforms(a).forEach(p => byPlatform.set(p, (byPlatform.get(p) || 0) + 1));
 
       // Competitor x platform matrix
       if (!competitorPlatforms.has(a.competitor_name)) competitorPlatforms.set(a.competitor_name, new Map());
       const cpMap = competitorPlatforms.get(a.competitor_name)!;
-      (a.publisher_platforms || []).forEach(p => cpMap.set(p, (cpMap.get(p) || 0) + 1));
+      getPublisherPlatforms(a).forEach(p => cpMap.set(p, (cpMap.get(p) || 0) + 1));
 
       // Impressions & reach
       if (a.impressions_min && a.impressions_min > 0) totalImpressions += a.impressions_min;
