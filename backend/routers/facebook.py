@@ -12,7 +12,8 @@ import asyncio
 import logging
 
 from database import get_db, Competitor, Ad, User
-from core.auth import get_optional_user, claim_orphans
+from core.auth import get_current_user
+from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids
 from services.scrapecreators import scrapecreators
 
 logger = logging.getLogger(__name__)
@@ -28,16 +29,11 @@ router = APIRouter()
 async def get_all_ads(
     active_only: bool = False,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Retourne TOUTES les publicités des concurrents actifs."""
-    if user:
-        claim_orphans(db, user)
-    # Only show ads for active competitors (filtered by user if logged in)
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    active_comps = {c.id: c.name for c in comp_query.all()}
+    competitors = get_user_competitors(db, user)
+    active_comps = {c.id: c.name for c in competitors}
 
     query = db.query(Ad).filter(Ad.competitor_id.in_(active_comps.keys()))
     if active_only:
@@ -57,13 +53,12 @@ async def get_competitor_ads(
     competitor_id: int,
     active_only: bool = True,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Retourne les publicités stockées pour un concurrent.
     """
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    verify_competitor_ownership(db, competitor_id, user)
 
     query = db.query(Ad).filter(Ad.competitor_id == competitor_id)
     if active_only:
@@ -137,14 +132,13 @@ async def fetch_competitor_ads(
     competitor_id: int,
     country: str = Query("FR", description="Pays de diffusion"),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Récupère les publicités d'un concurrent via ScrapeCreators Ad Library.
     Recherche par nom de l'entreprise.
     """
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     # Search by competitor name
     result = await scrapecreators.search_facebook_ads(
@@ -284,17 +278,22 @@ async def fetch_competitor_ads(
 @router.post("/enrich-transparency")
 async def enrich_ads_transparency(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Enrich all Meta ads that lack EU transparency data (age, gender, location, reach)
     by fetching individual ad details from the Ad Library.
     """
+    # Scope to user's competitors only
+    user_comp_ids = get_user_competitor_ids(db, user)
+
     # Only enrich Meta/Facebook ads (not TikTok/Google)
     meta_platforms = ["facebook", "instagram", "messenger", "audience_network", "meta",
                       "FACEBOOK", "INSTAGRAM", "MESSENGER", "AUDIENCE_NETWORK", "META"]
     ads_to_enrich = db.query(Ad).filter(
         Ad.eu_total_reach.is_(None),
         Ad.platform.in_(meta_platforms),
+        Ad.competitor_id.in_(user_comp_ids),
     ).all()
 
     if not ads_to_enrich:
@@ -352,11 +351,10 @@ async def enrich_ads_transparency(
 async def get_ads_stats(
     competitor_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Statistiques publicitaires d'un concurrent."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     ads = db.query(Ad).filter(Ad.competitor_id == competitor_id).all()
     active_ads = [a for a in ads if a.is_active]
@@ -396,13 +394,10 @@ async def get_ads_stats(
 @router.get("/comparison")
 async def compare_competitors_ads(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Compare les activités publicitaires des concurrents de l'utilisateur."""
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    competitors = comp_query.all()
+    competitors = get_user_competitors(db, user)
 
     items = []
     for comp in competitors:

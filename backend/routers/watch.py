@@ -18,7 +18,7 @@ from models.schemas import (
 )
 from core.trends import calculate_trend
 from core.sectors import get_sector_label
-from core.auth import get_optional_user
+from core.auth import get_current_user
 from core.utils import get_logo_url
 
 router = APIRouter()
@@ -97,7 +97,7 @@ def format_number(value: Optional[float], suffix: str = "") -> str:
     return f"{value:.0f}{suffix}"
 
 
-def get_brand(db: Session, user: User | None = None) -> Advertiser:
+def get_brand(db: Session, user: User) -> Advertiser:
     """Récupère l'enseigne courante, filtrée par user si authentifié."""
     if user:
         from core.auth import claim_orphans
@@ -146,7 +146,7 @@ def calculate_global_score(
 @router.get("/overview")
 async def get_watch_overview(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Vue d'ensemble de la veille concurrentielle.
@@ -348,7 +348,7 @@ async def get_watch_overview(
 async def get_dashboard_data(
     days: int = 7,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Endpoint agrégé pour le dashboard frontend.
@@ -1089,7 +1089,7 @@ async def get_alerts(
     limit: int = 20,
     unread_only: bool = False,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Liste les alertes de veille concurrentielle.
@@ -1179,7 +1179,7 @@ async def get_alerts(
 @router.get("/rankings")
 async def get_rankings(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """
     Classements par canal.

@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from database import get_db, Competitor, Ad, User
 from services.scrapecreators import scrapecreators
-from core.auth import get_optional_user
+from core.auth import get_current_user
+from core.permissions import verify_competitor_ownership, get_user_competitors
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +51,14 @@ def _parse_date(date_str: str | None) -> datetime | None:
 async def get_all_google_ads(
     active_only: bool = Query(False),
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Liste toutes les pubs Google avec le nom du concurrent."""
     query = db.query(Ad, Competitor.name).join(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(Ad.platform == "google")
 
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
+    query = query.filter(Competitor.user_id == user.id)
     if active_only:
         query = query.filter(Ad.is_active == True)
 
@@ -115,11 +115,10 @@ async def get_all_google_ads(
 async def get_google_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Liste les pubs Google collectees pour un concurrent."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     ads = db.query(Ad).filter(
         Ad.competitor_id == competitor_id,
@@ -151,14 +150,13 @@ async def fetch_google_ads(
     competitor_id: int,
     country: str = Query("FR", description="Pays cible"),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Collecte les pubs Google d'un concurrent via Google Ads Transparency Center.
     Utilise le domaine du site web du concurrent.
     """
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     domain = _extract_domain(competitor.website)
     if not domain:
@@ -276,9 +274,10 @@ async def _fetch_and_store_google_ads(
 async def fetch_all_google_ads(
     country: str = Query("FR"),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Collecte les pubs Google pour tous les concurrents."""
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = get_user_competitors(db, user)
     results = []
 
     for comp in competitors:

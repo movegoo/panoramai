@@ -56,6 +56,13 @@ import {
   Megaphone,
   Newspaper,
   Activity,
+  MapPin,
+  Brain,
+  Target,
+  FileText,
+  Sparkles,
+  ArrowUpRight,
+  Filter,
 } from "lucide-react";
 
 /* ─────────────── TikTok icon ─────────────── */
@@ -510,6 +517,20 @@ export default function CompetitorsPage() {
 
 /* ─────────────── Competitive Intelligence Sources ─────────────── */
 
+type SourceCategory = "seo" | "social" | "ads" | "apps" | "pricing" | "reputation" | "tech" | "geo" | "analytics";
+
+const CATEGORY_CONFIG: Record<SourceCategory, { label: string; icon: any }> = {
+  seo: { label: "SEO", icon: Globe },
+  social: { label: "Social", icon: Activity },
+  ads: { label: "Publicite", icon: Megaphone },
+  apps: { label: "Apps", icon: Smartphone },
+  pricing: { label: "Prix", icon: Tag },
+  reputation: { label: "Reputation", icon: Star },
+  tech: { label: "Tech", icon: ShieldCheck },
+  geo: { label: "GEO / IA", icon: Brain },
+  analytics: { label: "Analytics", icon: BarChart3 },
+};
+
 interface CISource {
   id: string;
   name: string;
@@ -519,6 +540,9 @@ interface CISource {
   bg: string;
   border: string;
   status: "active" | "available" | "coming_soon";
+  category: SourceCategory;
+  purpose: string;
+  url: string;
   badge?: string;
   syncLabel?: string;
 }
@@ -528,64 +552,130 @@ const CI_SOURCES: CISource[] = [
   {
     id: "similarweb", name: "SimilarWeb", description: "Trafic web, sources, audience des concurrents",
     icon: BarChart3, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200",
-    status: "active", badge: "4 domaines suivis", syncLabel: "Synchro hebdo",
+    status: "active", category: "analytics", purpose: "Vue d'ensemble → Trafic web & audience",
+    url: "https://www.similarweb.com", badge: "4 domaines suivis", syncLabel: "Synchro hebdo",
   },
   {
     id: "semrush", name: "Semrush", description: "Mots-cles, backlinks, positions SEO concurrents",
     icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200",
-    status: "active", badge: "1.2k keywords suivis", syncLabel: "Synchro il y a 6h",
+    status: "active", category: "seo", purpose: "SEO → Positions & mots-cles",
+    url: "https://www.semrush.com", badge: "1.2k keywords suivis", syncLabel: "Synchro il y a 6h",
   },
   {
     id: "mention", name: "Mention / Brand24", description: "Alertes medias, mentions web et reseaux sociaux",
     icon: Radar, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200",
-    status: "active", badge: "342 mentions/sem", syncLabel: "Temps reel",
+    status: "active", category: "reputation", purpose: "Concurrents → Alertes & mentions",
+    url: "https://mention.com", badge: "342 mentions/sem", syncLabel: "Temps reel",
   },
   {
-    id: "reviews_agg", name: "Avis clients agrégés", description: "Google, Trustpilot, App Store, Play Store",
+    id: "reviews_agg", name: "Avis clients agreges", description: "Google, Trustpilot, App Store, Play Store",
     icon: Star, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200",
-    status: "active", badge: "4.2 note moyenne secteur", syncLabel: "Synchro quotidienne",
+    status: "active", category: "reputation", purpose: "Applications → Notes & avis agrégés",
+    url: "https://www.trustpilot.com", badge: "4.2 note moyenne secteur", syncLabel: "Synchro quotidienne",
   },
   // --- Available ---
   {
     id: "prisync", name: "Prisync", description: "Suivi des prix concurrents en temps reel",
     icon: Tag, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200",
-    status: "available",
+    status: "available", category: "pricing", purpose: "Concurrents → Benchmark tarifaire",
+    url: "https://prisync.com",
   },
   {
     id: "dataai", name: "data.ai (App Annie)", description: "Classements, telechargements, revenus apps",
     icon: Smartphone, color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200",
-    status: "available",
+    status: "available", category: "apps", purpose: "Applications → Classements & downloads",
+    url: "https://www.data.ai",
   },
   {
     id: "sprout", name: "Sprout Social", description: "Benchmark reseaux sociaux, engagement concurrents",
     icon: Activity, color: "text-green-600", bg: "bg-green-50", border: "border-green-200",
-    status: "available",
+    status: "available", category: "social", purpose: "Reseaux sociaux → Engagement & benchmark",
+    url: "https://sproutsocial.com",
   },
   {
     id: "google_alerts", name: "Google Alerts", description: "Alertes actualites et presse sur les concurrents",
     icon: Newspaper, color: "text-red-500", bg: "bg-red-50", border: "border-red-200",
-    status: "available",
+    status: "available", category: "reputation", purpose: "Concurrents → Veille presse & actualites",
+    url: "https://www.google.com/alerts",
   },
   {
     id: "meta_adlib", name: "Meta Ad Library API", description: "Transparence publicitaire Facebook & Instagram",
     icon: Megaphone, color: "text-blue-500", bg: "bg-blue-50", border: "border-blue-200",
-    status: "available",
+    status: "available", category: "ads", purpose: "Publicites → Creatives Facebook & Instagram",
+    url: "https://www.facebook.com/ads/library",
   },
   {
     id: "wappalyzer", name: "Wappalyzer / BuiltWith", description: "Stack technique des sites concurrents",
     icon: ShieldCheck, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200",
-    status: "available",
+    status: "available", category: "tech", purpose: "Concurrents → Stack technique & outils",
+    url: "https://www.wappalyzer.com",
+  },
+  {
+    id: "ahrefs", name: "Ahrefs", description: "Backlinks, domaines referents, audit SEO concurrents",
+    icon: Globe, color: "text-orange-500", bg: "bg-orange-50", border: "border-orange-200",
+    status: "available", category: "seo", purpose: "SEO → Backlinks & autorite domaine",
+    url: "https://ahrefs.com",
+  },
+  {
+    id: "socialbakers", name: "Emplifi (Socialbakers)", description: "Analytics social cross-plateforme, benchmarks secteur",
+    icon: Activity, color: "text-pink-600", bg: "bg-pink-50", border: "border-pink-200",
+    status: "available", category: "social", purpose: "Reseaux sociaux → Analytics cross-plateforme",
+    url: "https://emplifi.io",
+  },
+  {
+    id: "google_ads_transparency", name: "Google Ads Transparency", description: "Creatives Google Ads concurrents, historique",
+    icon: Megaphone, color: "text-green-500", bg: "bg-green-50", border: "border-green-200",
+    status: "available", category: "ads", purpose: "Publicites → Creatives Google Ads",
+    url: "https://adstransparency.google.com",
+  },
+  {
+    id: "screaming_frog", name: "Screaming Frog", description: "Audit technique SEO, crawl de sites concurrents",
+    icon: Search, color: "text-lime-600", bg: "bg-lime-50", border: "border-lime-200",
+    status: "available", category: "seo", purpose: "SEO → Audit technique on-site",
+    url: "https://www.screamingfrog.co.uk",
+  },
+  {
+    id: "apptopia", name: "Apptopia", description: "Estimations telechargements, revenus, SDK concurrents",
+    icon: Smartphone, color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200",
+    status: "available", category: "apps", purpose: "Applications → Revenus & SDK",
+    url: "https://apptopia.com",
+  },
+  {
+    id: "google_maps", name: "Google Maps / GMB", description: "Fiches etablissements, avis locaux, photos",
+    icon: MapPin, color: "text-red-600", bg: "bg-red-50", border: "border-red-200",
+    status: "available", category: "geo", purpose: "Carte & Zones → Fiches GMB & avis locaux",
+    url: "https://business.google.com",
+  },
+  {
+    id: "chatgpt_api", name: "OpenAI / ChatGPT", description: "Visibilite de marque dans les reponses ChatGPT",
+    icon: Brain, color: "text-teal-600", bg: "bg-teal-50", border: "border-teal-200",
+    status: "available", category: "geo", purpose: "GEO → Part de voix IA ChatGPT",
+    url: "https://platform.openai.com",
   },
   // --- Coming soon ---
   {
     id: "adthena", name: "Adthena", description: "Intelligence Search Ads concurrents, share of voice",
     icon: Megaphone, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
-    status: "coming_soon",
+    status: "coming_soon", category: "ads", purpose: "Publicites → Share of voice Search Ads",
+    url: "https://www.adthena.com",
   },
   {
     id: "gartner", name: "Gartner Digital IQ", description: "Benchmark digital, scoring concurrentiel",
     icon: BarChart3, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
-    status: "coming_soon",
+    status: "coming_soon", category: "analytics", purpose: "Vue d'ensemble → Score digital global",
+    url: "https://www.gartner.com",
+  },
+  {
+    id: "brandwatch", name: "Brandwatch", description: "Social listening avance, analyse de sentiment",
+    icon: Radar, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon", category: "social", purpose: "Reseaux sociaux → Sentiment & tendances",
+    url: "https://www.brandwatch.com",
+  },
+  {
+    id: "price_observatory", name: "Price Observatory", description: "Comparateur prix grande distribution en temps reel",
+    icon: Tag, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon", category: "pricing", purpose: "Concurrents → Suivi prix grande distribution",
+    url: "https://priceobservatory.com",
   },
 ];
 
