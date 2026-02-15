@@ -1,0 +1,499 @@
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Windows 98 Mode - Activated by cheat code                                */
+/*  up up down down left right left right B A B A                            */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables override ── */
+.win98 {
+  --background: 0 0% 75%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 83%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 83%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 240 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 75%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 75%;
+  --muted-foreground: 0 0% 30%;
+  --accent: 240 100% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 53%;
+  --input: 0 0% 100%;
+  --ring: 240 100% 50%;
+  --radius: 0px;
+}
+
+/* ── Global resets ── */
+.win98,
+.win98 * {
+  border-radius: 0 !important;
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Geneva, "Segoe UI", Arial, sans-serif !important;
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: auto;
+}
+
+.win98 code,
+.win98 pre,
+.win98 .font-mono {
+  font-family: "Fixedsys", "Courier New", Courier, monospace !important;
+}
+
+/* ── Kill all gradients ── */
+.win98 [class*="bg-gradient"],
+.win98 [class*="from-"],
+.win98 [style*="gradient"] {
+  background: #c0c0c0 !important;
+  -webkit-text-fill-color: initial !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+}
+
+/* ── Win98 3D borders (outset = raised, inset = sunken) ── */
+.win98 {
+  background: #c0c0c0;
+}
+
+.win98 body {
+  background: #008080 !important;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M0 0L0 14L3 11L6 16L8 15L5 10L9 10Z' fill='white' stroke='black'/%3E%3C/svg%3E") 0 0, auto;
+}
+
+/* ── Cards = Win98 windows ── */
+.win98 [class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+.win98 .border,
+.win98 [class*="border-"] {
+  border-color: #808080 !important;
+}
+
+.win98 [class*="shadow"] {
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+}
+
+/* Main cards / windows */
+.win98 [class~="bg-card"],
+.win98 [class*="bg-card"] {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+}
+
+/* ── Sidebar = Win98 Explorer pane ── */
+.win98 aside {
+  background: #c0c0c0 !important;
+  border-right: 2px solid #808080 !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff !important;
+}
+
+/* Sidebar logo section = title bar */
+.win98 aside > div:first-child {
+  background: linear-gradient(90deg, #000080, #1084d0) !important;
+  color: white !important;
+  border-bottom: 2px solid #808080 !important;
+  padding: 2px 4px !important;
+}
+
+.win98 aside > div:first-child * {
+  color: white !important;
+  -webkit-text-fill-color: white !important;
+  background: transparent !important;
+}
+
+.win98 aside > div:first-child .rounded-lg {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Nav items */
+.win98 aside nav a {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px 8px !important;
+}
+
+.win98 aside nav a:hover {
+  background: #000080 !important;
+  color: white !important;
+}
+
+.win98 aside nav a:hover * {
+  color: white !important;
+}
+
+/* Active nav item */
+.win98 aside nav a[class*="from-violet"] {
+  background: #000080 !important;
+  color: white !important;
+  border: 1px dotted white !important;
+  box-shadow: none !important;
+}
+
+.win98 aside nav a[class*="from-violet"] * {
+  color: white !important;
+}
+
+/* Section headers in sidebar */
+.win98 aside nav button span {
+  color: #000 !important;
+}
+
+/* Sidebar footer */
+.win98 aside > div:last-child {
+  background: #c0c0c0 !important;
+  border-top: 2px solid #fff !important;
+}
+
+/* ── Breadcrumb = Win98 toolbar ── */
+.win98 .border-b.bg-card\/80 {
+  background: #c0c0c0 !important;
+  border-bottom: 2px solid #808080 !important;
+  box-shadow: inset 0 1px 0 #fff,
+    inset 0 -1px 0 #808080 !important;
+}
+
+/* ── Buttons = Win98 buttons ── */
+.win98 button,
+.win98 [role="button"],
+.win98 .btn,
+.win98 input[type="submit"] {
+  background: #c0c0c0 !important;
+  color: #000 !important;
+  border: none !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+  padding: 2px 12px !important;
+  min-height: 23px;
+  font-size: 11px !important;
+  text-shadow: none !important;
+}
+
+.win98 button:active,
+.win98 [role="button"]:active {
+  box-shadow: inset 1px 1px 0 #0a0a0a,
+    inset -1px -1px 0 #fff,
+    inset 2px 2px 0 #808080,
+    inset -2px -2px 0 #dfdfdf !important;
+  padding: 3px 11px 1px 13px !important;
+}
+
+/* Primary buttons = blue like Win98 default button */
+.win98 button[class*="bg-primary"],
+.win98 button[class*="bg-violet"],
+.win98 button[class*="bg-indigo"] {
+  background: #c0c0c0 !important;
+  color: #000 !important;
+  outline: 1px dotted #000 !important;
+  outline-offset: -4px;
+}
+
+/* ── Inputs = Win98 sunken fields ── */
+.win98 input,
+.win98 select,
+.win98 textarea {
+  background: #fff !important;
+  color: #000 !important;
+  border: none !important;
+  box-shadow: inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #dfdfdf,
+    inset 2px 2px 0 #0a0a0a,
+    inset -2px -2px 0 #fff !important;
+  padding: 2px 4px !important;
+  font-size: 11px !important;
+  outline: none !important;
+}
+
+.win98 input:focus,
+.win98 select:focus {
+  outline: none !important;
+  ring: none !important;
+}
+
+/* ── Scrollbars = Win98 scrollbars ── */
+.win98 ::-webkit-scrollbar {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.win98 ::-webkit-scrollbar-track {
+  background: #c0c0c0 url("data:image/svg+xml,%3Csvg width='2' height='2' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='0' y='0' width='1' height='1' fill='%23c0c0c0'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23c0c0c0'/%3E%3Crect x='0' y='1' width='1' height='1' fill='white'/%3E%3Crect x='1' y='0' width='1' height='1' fill='white'/%3E%3C/svg%3E") !important;
+  background-size: 2px 2px !important;
+}
+
+.win98 ::-webkit-scrollbar-thumb {
+  background: #c0c0c0 !important;
+  border-radius: 0 !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+}
+
+.win98 ::-webkit-scrollbar-button {
+  background: #c0c0c0;
+  display: block;
+  height: 16px;
+  width: 16px;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf;
+}
+
+/* ── Text styles ── */
+.win98 h1,
+.win98 h2,
+.win98 h3,
+.win98 h4 {
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: #000 !important;
+}
+
+.win98 h1 { font-size: 16px !important; }
+.win98 h2 { font-size: 14px !important; }
+.win98 h3 { font-size: 12px !important; }
+
+.win98 p,
+.win98 span,
+.win98 div {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+/* ── Links ── */
+.win98 a {
+  color: #0000ff !important;
+  text-decoration: underline !important;
+}
+
+.win98 a:visited {
+  color: #800080 !important;
+}
+
+.win98 a:hover {
+  color: #ff0000 !important;
+}
+
+/* ── Tables ── */
+.win98 table {
+  border-collapse: collapse !important;
+}
+
+.win98 th {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px -1px 0 #808080,
+    inset 1px 1px 0 #fff !important;
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+}
+
+.win98 td {
+  border: 1px solid #808080 !important;
+  font-size: 11px !important;
+  padding: 1px 4px !important;
+}
+
+/* ── Progress bars ── */
+.win98 [role="progressbar"],
+.win98 .h-2[class*="bg-"] {
+  background: #fff !important;
+  box-shadow: inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #dfdfdf !important;
+}
+
+/* ── Badges / Pills → flat rectangles ── */
+.win98 [class*="rounded-full"] {
+  border-radius: 0 !important;
+}
+
+/* ── Avatar circles → square ── */
+.win98 .rounded-full {
+  border-radius: 0 !important;
+}
+
+/* ── Icons in gradient containers ── */
+.win98 [class*="bg-gradient-to"] {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px -1px 0 #808080,
+    inset 1px 1px 0 #dfdfdf !important;
+}
+
+/* ── Colored bg overrides ── */
+.win98 [class*="bg-violet"],
+.win98 [class*="bg-indigo"],
+.win98 [class*="bg-purple"],
+.win98 [class*="bg-blue"],
+.win98 [class*="bg-emerald"],
+.win98 [class*="bg-green"],
+.win98 [class*="bg-red"],
+.win98 [class*="bg-orange"],
+.win98 [class*="bg-yellow"],
+.win98 [class*="bg-pink"],
+.win98 [class*="bg-sky"],
+.win98 [class*="bg-amber"],
+.win98 [class*="bg-teal"],
+.win98 [class*="bg-cyan"],
+.win98 [class*="bg-slate"] {
+  background: #c0c0c0 !important;
+}
+
+/* But keep some color indicators small */
+.win98 .h-1\.5.w-1\.5,
+.win98 .h-2.w-2,
+.win98 .h-2\.5.w-2\.5 {
+  border-radius: 0 !important;
+}
+
+/* ── The "loading" spinners → hourglass ── */
+.win98 .animate-spin {
+  animation: win98-blink 1s steps(2) infinite !important;
+}
+
+@keyframes win98-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.3; }
+}
+
+/* ── Tabs ── */
+.win98 [role="tablist"] {
+  background: #c0c0c0 !important;
+}
+
+.win98 [role="tab"] {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px 0 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px 0 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+}
+
+.win98 [role="tab"][data-state="active"],
+.win98 [role="tab"][aria-selected="true"] {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px 0 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px 0 0 #808080,
+    inset 2px 2px 0 #dfdfdf,
+    0 2px 0 #c0c0c0 !important;
+  font-weight: 700 !important;
+}
+
+/* ── Dropdown / Popover ── */
+.win98 [class*="z-50"][class*="border"] {
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf,
+    2px 2px 0 #000 !important;
+}
+
+/* ── Toast / Alert ── */
+.win98 [class*="animate-in"] {
+  animation: none !important;
+}
+
+/* ── PostHog-inspired playful touches ── */
+
+/* Pixelated hedgehog cursor on hoverable elements */
+.win98 a:hover,
+.win98 button:hover {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M6 0L10 0L10 2L12 2L12 4L14 4L14 6L16 6L16 10L14 10L14 12L12 12L12 10L10 10L10 12L8 12L8 14L6 14L6 16L4 16L4 14L2 14L2 12L0 12L0 8L2 8L2 6L4 6L4 4L6 4Z' fill='%230000aa'/%3E%3Crect x='8' y='4' width='2' height='2' fill='white'/%3E%3C/svg%3E") 6 0, pointer !important;
+}
+
+/* Taskbar at the bottom — added via the BSOD component */
+
+/* ── Map overrides ── */
+.win98 .leaflet-container {
+  border: none !important;
+  box-shadow: inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #dfdfdf,
+    inset 2px 2px 0 #0a0a0a,
+    inset -2px -2px 0 #fff !important;
+}
+
+.win98 .leaflet-control-zoom a {
+  background: #c0c0c0 !important;
+  color: #000 !important;
+  border: none !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff !important;
+  border-radius: 0 !important;
+  font-family: "MS Sans Serif", Arial, sans-serif !important;
+  width: 23px !important;
+  height: 23px !important;
+  line-height: 23px !important;
+  font-size: 14px !important;
+}
+
+/* ── Slider ── */
+.win98 input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  height: 20px !important;
+}
+
+.win98 input[type="range"]::-webkit-slider-track {
+  background: #fff !important;
+  height: 4px !important;
+  box-shadow: inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #fff !important;
+}
+
+.win98 input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 11px !important;
+  height: 20px !important;
+  background: #c0c0c0 !important;
+  box-shadow: inset -1px -1px 0 #0a0a0a,
+    inset 1px 1px 0 #fff,
+    inset -2px -2px 0 #808080,
+    inset 2px 2px 0 #dfdfdf !important;
+  border-radius: 0 !important;
+  margin-top: -8px;
+}
+
+/* ── Checkbox ── */
+.win98 input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 13px !important;
+  height: 13px !important;
+  background: #fff !important;
+  box-shadow: inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #dfdfdf,
+    inset 2px 2px 0 #0a0a0a !important;
+}
+
+.win98 input[type="checkbox"]:checked {
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9'%3E%3Cpath d='M1 4L3 6L7 2' stroke='black' stroke-width='2' fill='none'/%3E%3C/svg%3E") center no-repeat !important;
+}
+
+/* ── Status bar at bottom of main content ── */
+.win98 main > div:last-child {
+  border-top: 2px solid #808080;
+}

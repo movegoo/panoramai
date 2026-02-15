@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "./win98.css";
 import "leaflet/dist/leaflet.css";
 import { AuthProvider } from "@/lib/auth";
 import { AppShell } from "./app-shell";
