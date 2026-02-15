@@ -40,6 +40,22 @@ import {
   AlertCircle,
   UserPlus,
   Music,
+  Plug,
+  BarChart3,
+  Star,
+  TrendingUp,
+  Lock,
+  Clock,
+  Zap,
+  RefreshCw,
+  Info,
+  ShieldCheck,
+  Radar,
+  MessageSquare,
+  Tag,
+  Megaphone,
+  Newspaper,
+  Activity,
 } from "lucide-react";
 
 /* ─────────────── TikTok icon ─────────────── */
@@ -483,6 +499,233 @@ export default function CompetitorsPage() {
           })}
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Section : Sources de veille concurrentielle                       */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {competitors.length > 0 && <CompetitiveSourcesSection />}
     </div>
+  );
+}
+
+/* ─────────────── Competitive Intelligence Sources ─────────────── */
+
+interface CISource {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  color: string;
+  bg: string;
+  border: string;
+  status: "active" | "available" | "coming_soon";
+  badge?: string;
+  syncLabel?: string;
+}
+
+const CI_SOURCES: CISource[] = [
+  // --- Active (demo) ---
+  {
+    id: "similarweb", name: "SimilarWeb", description: "Trafic web, sources, audience des concurrents",
+    icon: BarChart3, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200",
+    status: "active", badge: "4 domaines suivis", syncLabel: "Synchro hebdo",
+  },
+  {
+    id: "semrush", name: "Semrush", description: "Mots-cles, backlinks, positions SEO concurrents",
+    icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200",
+    status: "active", badge: "1.2k keywords suivis", syncLabel: "Synchro il y a 6h",
+  },
+  {
+    id: "mention", name: "Mention / Brand24", description: "Alertes medias, mentions web et reseaux sociaux",
+    icon: Radar, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200",
+    status: "active", badge: "342 mentions/sem", syncLabel: "Temps reel",
+  },
+  {
+    id: "reviews_agg", name: "Avis clients agrégés", description: "Google, Trustpilot, App Store, Play Store",
+    icon: Star, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200",
+    status: "active", badge: "4.2 note moyenne secteur", syncLabel: "Synchro quotidienne",
+  },
+  // --- Available ---
+  {
+    id: "prisync", name: "Prisync", description: "Suivi des prix concurrents en temps reel",
+    icon: Tag, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200",
+    status: "available",
+  },
+  {
+    id: "dataai", name: "data.ai (App Annie)", description: "Classements, telechargements, revenus apps",
+    icon: Smartphone, color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200",
+    status: "available",
+  },
+  {
+    id: "sprout", name: "Sprout Social", description: "Benchmark reseaux sociaux, engagement concurrents",
+    icon: Activity, color: "text-green-600", bg: "bg-green-50", border: "border-green-200",
+    status: "available",
+  },
+  {
+    id: "google_alerts", name: "Google Alerts", description: "Alertes actualites et presse sur les concurrents",
+    icon: Newspaper, color: "text-red-500", bg: "bg-red-50", border: "border-red-200",
+    status: "available",
+  },
+  {
+    id: "meta_adlib", name: "Meta Ad Library API", description: "Transparence publicitaire Facebook & Instagram",
+    icon: Megaphone, color: "text-blue-500", bg: "bg-blue-50", border: "border-blue-200",
+    status: "available",
+  },
+  {
+    id: "wappalyzer", name: "Wappalyzer / BuiltWith", description: "Stack technique des sites concurrents",
+    icon: ShieldCheck, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200",
+    status: "available",
+  },
+  // --- Coming soon ---
+  {
+    id: "adthena", name: "Adthena", description: "Intelligence Search Ads concurrents, share of voice",
+    icon: Megaphone, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon",
+  },
+  {
+    id: "gartner", name: "Gartner Digital IQ", description: "Benchmark digital, scoring concurrentiel",
+    icon: BarChart3, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon",
+  },
+];
+
+function CompetitiveSourcesSection() {
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+  const activeCount = CI_SOURCES.filter(s => s.status === "active").length;
+
+  function handleConnect(id: string) {
+    setConnectingId(id);
+    setTimeout(() => setConnectingId(null), 2000);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-100 to-blue-100">
+              <Radar className="h-5 w-5 text-cyan-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Sources de veille</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {activeCount} source{activeCount > 1 ? "s" : ""} active{activeCount > 1 ? "s" : ""} sur {CI_SOURCES.length} disponibles
+              </p>
+            </div>
+          </div>
+          <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-cyan-600 bg-cyan-50 border border-cyan-200 px-2.5 py-1 rounded-full font-medium">
+            <Zap className="h-3 w-3" />
+            Enrichissement auto
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {CI_SOURCES.map(source => {
+            const Icon = source.icon;
+            const isConnecting = connectingId === source.id;
+            return (
+              <div
+                key={source.id}
+                className={`relative rounded-xl border p-4 transition-all ${
+                  source.status === "active"
+                    ? `${source.bg} ${source.border} border-2`
+                    : source.status === "coming_soon"
+                    ? "bg-gray-50/50 border-dashed border-gray-200 opacity-75"
+                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                }`}
+              >
+                {source.status === "active" && (
+                  <div className="absolute top-3 right-3">
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Actif
+                    </span>
+                  </div>
+                )}
+                {source.status === "coming_soon" && (
+                  <div className="absolute top-3 right-3">
+                    <span className="flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                      <Clock className="h-2.5 w-2.5" />
+                      Bientot
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${
+                    source.status === "active" ? "bg-white shadow-sm" : source.bg
+                  }`}>
+                    <Icon className={`h-5 w-5 ${source.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${
+                      source.status === "coming_soon" ? "text-gray-500" : "text-foreground"
+                    }`}>
+                      {source.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {source.description}
+                    </p>
+                  </div>
+                </div>
+
+                {source.status === "active" && (
+                  <div className="mt-3 pt-3 border-t border-current/10 space-y-1.5">
+                    {source.badge && (
+                      <span className={`text-xs font-bold ${source.color}`}>{source.badge}</span>
+                    )}
+                    {source.syncLabel && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        {source.syncLabel}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {source.status === "available" && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => handleConnect(source.id)}
+                      disabled={isConnecting}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Connexion...
+                        </>
+                      ) : (
+                        <>
+                          <Plug className="h-3 w-3" />
+                          Connecter
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {source.status === "coming_soon" && (
+                  <div className="mt-3">
+                    <div className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-400">
+                      <Lock className="h-3 w-3" />
+                      Disponible prochainement
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg px-4 py-3 border border-cyan-100">
+          <Info className="h-3.5 w-3.5 text-cyan-500 shrink-0" />
+          <span>
+            Les sources de veille alimentent automatiquement les analyses par concurrent : trafic, prix, avis, publicites, SEO et reseaux sociaux.
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
