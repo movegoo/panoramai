@@ -4,23 +4,21 @@ import React, { useState, useEffect } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 
-const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; emoji: string }> = {
-  mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", emoji: "M" },
-  claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", emoji: "C" },
-  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", emoji: "G" },
-  chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", emoji: "O" },
+const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
+  claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", icon: "https://claude.ai/favicon.ico" },
+  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", icon: "https://gemini.google.com/favicon.ico" },
+  chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", icon: "https://chatgpt.com/favicon.ico" },
 };
 
 function PlatformBadge({ platform, size = "md" }: { platform: string; size?: "sm" | "md" }) {
   const cfg = LLM_CONFIG[platform];
   if (!cfg) return <span className="text-xs">{platform}</span>;
-  const iconSize = size === "sm" ? "h-4 w-4 text-[8px]" : "h-5 w-5 text-[9px]";
+  const imgSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
   const textSize = size === "sm" ? "text-[10px]" : "text-xs";
   return (
-    <span className={`inline-flex items-center gap-1 ${textSize} font-semibold ${cfg.color}`}>
-      <span className={`${iconSize} rounded-md ${cfg.bg} ${cfg.color} flex items-center justify-center font-black shrink-0`}>
-        {cfg.emoji}
-      </span>
+    <span className={`inline-flex items-center gap-1.5 ${textSize} font-semibold ${cfg.color}`}>
+      <img src={cfg.icon} alt={cfg.label} className={`${imgSize} rounded-sm object-contain shrink-0`} />
       {cfg.label}
     </span>
   );
@@ -142,7 +140,7 @@ export default function GeoTrackingPage() {
               Presence de marque dans
               {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map((p, i, arr) => (
                 <span key={p} className="inline-flex items-center gap-1">
-                  {LLM_CONFIG[p] && <span className={`h-4 w-4 rounded text-[7px] font-black ${LLM_CONFIG[p].bg} ${LLM_CONFIG[p].color} flex items-center justify-center`}>{LLM_CONFIG[p].emoji}</span>}
+                  {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-4 w-4 rounded-sm object-contain" />}
                   <span className="font-medium text-foreground/70">{LLM_CONFIG[p]?.label || p}</span>
                   {i < arr.length - 1 && <span className="text-muted-foreground/50">,</span>}
                 </span>
@@ -240,7 +238,7 @@ export default function GeoTrackingPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map(p => (
                   <span key={p} className="inline-flex items-center gap-1">
-                    {LLM_CONFIG[p] && <span className={`h-5 w-5 rounded text-[8px] font-black ${LLM_CONFIG[p].bg} ${LLM_CONFIG[p].color} flex items-center justify-center`}>{LLM_CONFIG[p].emoji}</span>}
+                    {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-5 w-5 rounded-sm object-contain" />}
                   </span>
                 ))}
               </div>

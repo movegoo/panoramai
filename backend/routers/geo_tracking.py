@@ -13,7 +13,7 @@ from sqlalchemy import func
 
 from database import get_db, Competitor, GeoResult, Advertiser, SerpResult, User
 from services.geo_analyzer import geo_analyzer, get_geo_queries
-from core.auth import get_optional_user
+from core.auth import get_current_user, get_optional_user
 from core.sectors import get_sector_label
 
 logger = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ async def track_geo(
 @router.get("/results")
 async def get_results(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Get latest GEO tracking results grouped by keyword + platform."""
@@ -212,7 +212,7 @@ async def get_results(
 @router.get("/insights")
 async def get_insights(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated GEO insights: share of voice, recommendations, platform comparison."""

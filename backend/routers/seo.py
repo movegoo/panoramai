@@ -16,7 +16,7 @@ from sqlalchemy import func
 
 from database import get_db, Competitor, SerpResult, Advertiser, User
 from services.scrapecreators import scrapecreators
-from core.auth import get_optional_user
+from core.auth import get_current_user, get_optional_user
 from core.sectors import get_sector_label
 
 logger = logging.getLogger(__name__)
@@ -431,7 +431,7 @@ def _match_competitor(domain: str, domain_map: dict[str, int]) -> int | None:
 @router.post("/track")
 async def track_serp(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Run SERP tracking with sector-specific keywords. Only matches user's own competitors."""
@@ -510,7 +510,7 @@ async def track_serp(
 @router.get("/rankings")
 async def get_rankings(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Get latest SERP rankings. Only shows user's own sector keywords and competitors."""
@@ -576,7 +576,7 @@ async def get_rankings(
 @router.get("/insights")
 async def get_insights(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated SEO insights. Scoped to user's sector keywords and competitors."""
