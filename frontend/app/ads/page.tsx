@@ -353,7 +353,7 @@ function FilterChip({ label, active, onClick, count, icon }: { label: string; ac
 function AdvertiserAvatar({ ad, size = "sm", logoUrl }: { ad: AdWithCompetitor; size?: "sm" | "md" | "lg"; logoUrl?: string }) {
   const sizeClasses = { sm: "h-6 w-6", md: "h-8 w-8", lg: "h-10 w-10" };
   const textSizes = { sm: "text-[9px]", md: "text-[10px]", lg: "text-xs" };
-  const imgSrc = logoUrl || ad.page_profile_picture_url;
+  const imgSrc = logoUrl;
   if (imgSrc) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -1263,7 +1263,7 @@ function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds
         const plats = Array.from(new Set(ads.flatMap(a => getPublisherPlatforms(a)))) as string[];
         const durs = ads.filter(a => a.start_date).map(a => Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date!).getTime()) / 86400000)).filter(x => x > 0);
         const avgDur = durs.length > 0 ? Math.round(durs.reduce((s, x) => s + x, 0) / durs.length) : 0;
-        const logo = compLogoByName.get(name.toLowerCase()) || ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
+        const logo = compLogoByName.get(name.toLowerCase());
         return { name, total: d.total, active: d.active, reach, fmts, plats, avgDur, logo, spendMin: d.spendMin || 0, spendMax: d.spendMax || 0 };
       })
       .sort((a, b) => b.reach - a.reach);
@@ -1642,22 +1642,18 @@ export default function AdsPage() {
     setFilterLocations(new Set());
   }
 
-  // Build advertiser logos map: prefer competitor logo_url, fallback to page_profile_picture_url
+  // Build advertiser logos map: always use competitor logo_url
   const advertiserLogos = useMemo(() => {
     const map = new Map<string, string>();
-    // First: map competitor names to their logo_url
     const compLogoByName = new Map<string, string>();
     competitors.forEach(c => {
       if (c.logo_url) compLogoByName.set(c.name.toLowerCase(), c.logo_url);
     });
     allAds.forEach(a => {
       if (!a.page_name || map.has(a.page_name)) return;
-      // Prefer competitor logo
       const compLogo = compLogoByName.get(a.competitor_name?.toLowerCase() || "");
       if (compLogo) {
         map.set(a.page_name, compLogo);
-      } else if (a.page_profile_picture_url) {
-        map.set(a.page_name, a.page_profile_picture_url);
       }
     });
     return map;
@@ -1810,9 +1806,9 @@ export default function AdsPage() {
       aa.total++;
       if (a.is_active) aa.active++;
       if (a.page_like_count && a.page_like_count > (aa.likes || 0)) aa.likes = a.page_like_count;
-      // Prefer competitor logo_url over page_profile_picture_url
+      // Always use competitor logo_url
       const compLogo = competitors.find(c => c.name.toLowerCase() === (a.competitor_name || "").toLowerCase())?.logo_url;
-      if (!aa.logo) aa.logo = compLogo || a.page_profile_picture_url;
+      if (!aa.logo) aa.logo = compLogo;
       if (a.page_categories) {
         a.page_categories.forEach(c => { if (!aa.categories!.includes(c)) aa.categories!.push(c); });
       }
