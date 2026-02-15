@@ -37,12 +37,19 @@ class ScrapeCreatorsAPI:
                 response.raise_for_status()
                 data = response.json()
 
-                if not data.get("success"):
+                # Some endpoints return {success: true, ...} while others
+                # return raw data (e.g. TikTok videos: {aweme_list, ...}).
+                # Only treat as error if there's an explicit success=false.
+                if "success" in data and not data["success"]:
                     return {
                         "success": False,
                         "error": data.get("message", "Unknown API error"),
                         "credits_remaining": data.get("credits_remaining")
                     }
+
+                # Normalize: ensure success=True for valid responses
+                if "success" not in data:
+                    data["success"] = True
 
                 return data
 
@@ -159,16 +166,17 @@ class ScrapeCreatorsAPI:
             return {"success": False, "error": f"Parse error: {e}"}
 
     def _parse_tiktok_video_item(self, item: dict) -> dict:
-        """Parse a TikTok video item from any response format."""
-        stats = item.get("stats", {})
+        """Parse a TikTok video item from any response format (aweme_list or legacy)."""
+        # aweme_list format uses "statistics", legacy uses "stats"
+        stats = item.get("statistics", item.get("stats", {}))
         return {
-            "id": item.get("id", item.get("video_id", "")),
+            "id": item.get("aweme_id", item.get("id", item.get("video_id", ""))),
             "description": item.get("desc", item.get("description", "")),
-            "create_time": item.get("createTime", item.get("create_time")),
-            "views": stats.get("playCount", item.get("playCount", item.get("views", 0))) or 0,
-            "likes": stats.get("diggCount", item.get("diggCount", item.get("likes", 0))) or 0,
-            "comments": stats.get("commentCount", item.get("commentCount", item.get("comments", 0))) or 0,
-            "shares": stats.get("shareCount", item.get("shareCount", item.get("shares", 0))) or 0,
+            "create_time": item.get("create_time", item.get("createTime")),
+            "views": stats.get("play_count", stats.get("playCount", item.get("views", 0))) or 0,
+            "likes": stats.get("digg_count", stats.get("diggCount", item.get("likes", 0))) or 0,
+            "comments": stats.get("comment_count", stats.get("commentCount", item.get("comments", 0))) or 0,
+            "shares": stats.get("share_count", stats.get("shareCount", item.get("shares", 0))) or 0,
         }
 
     async def fetch_tiktok_videos(self, handle: str, limit: int = 10) -> Dict:
@@ -182,7 +190,7 @@ class ScrapeCreatorsAPI:
         })
 
         if data.get("success"):
-            items = data.get("videos", data.get("items", []))
+            items = data.get("aweme_list", data.get("videos", data.get("items", [])))
             if items:
                 try:
                     videos = [self._parse_tiktok_video_item(item) for item in items[:limit]]
