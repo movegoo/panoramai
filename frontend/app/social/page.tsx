@@ -149,14 +149,8 @@ export default function SocialPage() {
     loadAll();
   }, [periodDays, contentPlatform]);
 
-  // Auto-trigger content analysis once if no data
-  const autoAnalyzedRef = React.useRef(false);
-  useEffect(() => {
-    if (!loading && !autoAnalyzedRef.current && contentInsights && contentInsights.total_analyzed === 0) {
-      autoAnalyzedRef.current = true;
-      handleAnalyzeContent();
-    }
-  }, [loading, contentInsights]);
+  // Do NOT auto-trigger content analysis — it costs API credits (Claude Vision)
+  // User must click "Analyser" manually
 
   async function handleRefreshAll() {
     setFetching(true);
@@ -1146,26 +1140,23 @@ export default function SocialPage() {
           );
         })()}
 
-        {/* Empty state — skeleton */}
+        {/* Empty state */}
         {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (
-          <div className="space-y-4 animate-pulse">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[1,2,3,4].map(i => (
-                <div key={i} className="rounded-xl border bg-card p-4">
-                  <div className="h-3 w-20 bg-emerald-100 rounded mb-3" />
-                  <div className="h-7 w-14 bg-emerald-200 rounded" />
-                </div>
-              ))}
-            </div>
-            <div className="rounded-2xl border bg-card p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Brain className="h-5 w-5 animate-pulse text-emerald-500" />
-                <span className="text-sm text-muted-foreground">Premiere analyse de contenu en cours...</span>
+          <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
+            <div className="flex justify-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
+                <Brain className="h-6 w-6 text-emerald-600" />
               </div>
-              {[1,2,3].map(i => (
-                <div key={i} className="h-10 bg-emerald-50 rounded-lg mb-2" />
-              ))}
             </div>
+            <h3 className="text-sm font-semibold">Aucune analyse de contenu pour cette enseigne</h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Cliquez sur &laquo;&nbsp;Analyser le contenu&nbsp;&raquo; pour collecter et analyser les posts sociaux.
+            </p>
+            <button onClick={handleAnalyzeContent} disabled={contentLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+              <Brain className="h-4 w-4" />
+              Lancer l&apos;analyse
+            </button>
           </div>
         )}
       </div>

@@ -187,29 +187,21 @@ export default function GeoTrackingPage() {
           <span className="ml-3 text-muted-foreground">Chargement des donnees GEO...</span>
         </div>
       ) : !insights || insights.total_queries === 0 ? (
-        <div className="space-y-4 animate-pulse">
-          <div className="grid grid-cols-3 gap-4">
-            {[1,2,3].map(i => (
-              <div key={i} className="rounded-2xl bg-teal-100/60 p-5 h-20" />
-            ))}
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="rounded-2xl border bg-card p-5">
-                <div className="h-3 w-20 bg-teal-100 rounded mb-3" />
-                <div className="h-7 w-16 bg-teal-200 rounded" />
-              </div>
-            ))}
-          </div>
-          <div className="rounded-2xl border bg-card p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <RefreshCw className="h-5 w-5 animate-spin text-teal-500" />
-              <span className="text-sm text-muted-foreground">Premiere analyse GEO en cours...</span>
+        <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
+          <div className="flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100">
+              <Sparkles className="h-6 w-6 text-teal-600" />
             </div>
-            {[1,2,3].map(i => (
-              <div key={i} className="h-10 bg-teal-50 rounded-lg mb-2" />
-            ))}
           </div>
+          <h3 className="text-sm font-semibold">Aucune donnee GEO pour cette enseigne</h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Cliquez sur &laquo;&nbsp;Rafraichir la visibilite&nbsp;&raquo; pour lancer l&apos;analyse de visibilite IA sur Mistral, Claude, Gemini et ChatGPT.
+          </p>
+          <button onClick={handleTrack} disabled={tracking}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
+            {tracking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {tracking ? "Analyse en cours..." : "Lancer l'analyse GEO"}
+          </button>
         </div>
       ) : (
         <>

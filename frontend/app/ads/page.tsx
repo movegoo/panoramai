@@ -1437,20 +1437,10 @@ export default function AdsPage() {
           setFetching(false);
         }
       }
-      // Load creative insights + auto-analyze if never done
+      // Load creative insights (do NOT auto-analyze — costs Claude Vision credits)
       try {
         const ci = await creativeAPI.getInsights();
         setCreativeInsights(ci);
-        if (ci && ci.total_analyzed === 0 && ads.length > 0 && !autoAnalyzedRef.current) {
-          autoAnalyzedRef.current = true;
-          setAnalyzingCreatives(true);
-          try {
-            const result = await creativeAPI.analyzeAll(10);
-            setAnalyzeResult(result);
-            const freshCi = await creativeAPI.getInsights();
-            setCreativeInsights(freshCi);
-          } catch {} finally { setAnalyzingCreatives(false); }
-        }
       } catch {}
     } catch (err) {
       console.error(err);

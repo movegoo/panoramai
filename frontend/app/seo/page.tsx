@@ -140,24 +140,21 @@ export default function SeoPage() {
           <span className="ml-3 text-muted-foreground">Chargement des donnees SEO...</span>
         </div>
       ) : !insights || insights.total_keywords === 0 ? (
-        <div className="space-y-4 animate-pulse">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1,2,3,4].map(i => (
-              <div key={i} className="rounded-2xl border bg-card p-5">
-                <div className="h-3 w-20 bg-blue-100 rounded mb-3" />
-                <div className="h-7 w-16 bg-blue-200 rounded" />
-              </div>
-            ))}
-          </div>
-          <div className="rounded-2xl border bg-card p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
-              <span className="text-sm text-muted-foreground">Premiere analyse SEO en cours...</span>
+        <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
+          <div className="flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+              <Globe className="h-6 w-6 text-blue-600" />
             </div>
-            {[1,2,3].map(i => (
-              <div key={i} className="h-10 bg-blue-50 rounded-lg mb-2" />
-            ))}
           </div>
+          <h3 className="text-sm font-semibold">Aucune donnee SEO pour cette enseigne</h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Cliquez sur &laquo;&nbsp;Tracker le SEO&nbsp;&raquo; pour lancer le suivi des positions Google.
+          </p>
+          <button onClick={handleTrack} disabled={tracking}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            {tracking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            {tracking ? "Analyse en cours..." : "Lancer l'analyse SEO"}
+          </button>
         </div>
       ) : (
         <>
