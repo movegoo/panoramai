@@ -418,6 +418,7 @@ class SerpResult(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=True, index=True)
     keyword = Column(String(255), nullable=False, index=True)
     position = Column(Integer, nullable=False)  # 1-10
     competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=True, index=True)
@@ -436,6 +437,7 @@ class GeoResult(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=True, index=True)
     keyword = Column(String(255), nullable=False, index=True)
     query = Column(Text)
     platform = Column(String(50), index=True)  # "claude", "gemini"
@@ -498,6 +500,9 @@ def _run_migrations(engine):
             ("ads", "creative_summary", "TEXT"),
             ("ads", "creative_analyzed_at", "TIMESTAMP"),
             ("competitors", "is_brand", "BOOLEAN DEFAULT FALSE"),
+            # Advertiser scoping for GEO/SEO results
+            ("geo_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
+            ("serp_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

@@ -96,13 +96,8 @@ export default function GeoTrackingPage() {
     loadData();
   }, []);
 
-  // Auto-trigger tracking once if no data
-  useEffect(() => {
-    if (!loading && !autoTrackedRef.current && insights && insights.total_queries === 0) {
-      autoTrackedRef.current = true;
-      handleTrack();
-    }
-  }, [loading, insights]);
+  // Do NOT auto-trigger GEO tracking — it costs API credits (Claude, Gemini, ChatGPT, Mistral)
+  // User must click "Rafraichir la visibilite" manually
 
   async function handleTrack() {
     setTracking(true);

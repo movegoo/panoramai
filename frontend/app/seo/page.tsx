@@ -61,13 +61,8 @@ export default function SeoPage() {
     });
   }, []);
 
-  // Auto-trigger tracking once if no data
-  useEffect(() => {
-    if (!loading && !autoTrackedRef.current && insights && insights.total_keywords === 0) {
-      autoTrackedRef.current = true;
-      handleTrack();
-    }
-  }, [loading, insights]);
+  // Do NOT auto-trigger SEO tracking — it costs API credits
+  // User must click "Rafraichir les positions" manually
 
   async function handleTrack() {
     setTracking(true);

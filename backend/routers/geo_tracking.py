@@ -71,6 +71,7 @@ async def track_geo(
     brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
     sector_label = get_sector_label(sector) if brand else "Grande Distribution"
+    adv_id = int(x_advertiser_id) if x_advertiser_id else (brand.id if brand else None)
 
     comp_map = {c.name.lower(): c for c in competitors}
     brand_names = [c.name for c in competitors]
@@ -98,6 +99,7 @@ async def track_geo(
 
         geo = GeoResult(
             user_id=user.id if user else None,
+            advertiser_id=adv_id,
             keyword=r["keyword"],
             query=r["query"],
             platform=r["platform"],
@@ -152,13 +154,15 @@ async def get_results(
     comp_names = {c.id: c.name for c in competitors}
 
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
-    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter).scalar()
+    adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
+
+    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
     if not latest:
         return {"queries": [], "last_tracked": None}
 
     rows = (
         db.query(GeoResult)
-        .filter(GeoResult.recorded_at == latest, user_filter)
+        .filter(GeoResult.recorded_at == latest, user_filter, adv_filter)
         .order_by(GeoResult.keyword, GeoResult.platform, GeoResult.position_in_answer)
         .all()
     )
@@ -208,7 +212,8 @@ async def get_insights(
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
 
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
-    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter).scalar()
+    adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
+    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
     if not latest:
         return {
             "total_queries": 0, "platforms": [], "last_tracked": None,
@@ -221,7 +226,7 @@ async def get_insights(
 
     rows = (
         db.query(GeoResult)
-        .filter(GeoResult.recorded_at == latest, user_filter, GeoResult.mentioned == True)
+        .filter(GeoResult.recorded_at == latest, user_filter, adv_filter, GeoResult.mentioned == True)
         .all()
     )
 
@@ -362,7 +367,10 @@ async def get_insights(
     # --- SEO vs GEO comparison ---
     seo_vs_geo = []
     seo_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
-    seo_latest = db.query(func.max(SerpResult.recorded_at)).filter(seo_user_filter).scalar()
+    seo_adv_filter = SerpResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
+    seo_latest = db.query(func.max(SerpResult.recorded_at)).filter(seo_user_filter, seo_adv_filter).scalar()
+    if not seo_latest:
+        seo_latest = db.query(func.max(SerpResult.recorded_at)).filter(seo_user_filter, SerpResult.advertiser_id.is_(None)).scalar()
     if seo_latest:
         seo_rows = db.query(SerpResult).filter(SerpResult.recorded_at == seo_latest, seo_user_filter).all()
         seo_total = len(seo_rows) or 1

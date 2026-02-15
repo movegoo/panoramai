@@ -441,6 +441,7 @@ async def track_serp(
 
     brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
+    adv_id = int(x_advertiser_id) if x_advertiser_id else (brand.id if brand else None)
     keywords = _get_sector_keywords(sector)
 
     domain_map = _build_domain_map(competitors)
@@ -473,6 +474,7 @@ async def track_serp(
 
                 serp = SerpResult(
                     user_id=user.id if user else None,
+                    advertiser_id=adv_id,
                     keyword=keyword,
                     position=pos_idx,
                     competitor_id=cid,
@@ -521,13 +523,21 @@ async def get_rankings(
     sector = brand.sector if brand else "supermarche"
     sector_kws = _get_sector_keywords(sector)
 
-    # Get latest tracking time for THIS user's sector keywords only
+    # Get latest tracking time for THIS user/advertiser's sector keywords only
     serp_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
+    serp_adv_filter = SerpResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
     latest = (
         db.query(func.max(SerpResult.recorded_at))
-        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter)
+        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter, serp_adv_filter)
         .scalar()
     )
+    if not latest:
+        # Fallback: try without advertiser filter for backwards compat with old data
+        latest = (
+            db.query(func.max(SerpResult.recorded_at))
+            .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter, SerpResult.advertiser_id.is_(None))
+            .scalar()
+        )
     if not latest:
         return {"keywords": [], "last_tracked": None}
 
@@ -582,13 +592,21 @@ async def get_insights(
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
 
-    # Get latest tracking time for THIS user's sector keywords only
+    # Get latest tracking time for THIS user/advertiser's sector keywords only
     serp_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
+    serp_adv_filter = SerpResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
     latest = (
         db.query(func.max(SerpResult.recorded_at))
-        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter)
+        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter, serp_adv_filter)
         .scalar()
     )
+    if not latest:
+        # Fallback for old data without advertiser_id
+        latest = (
+            db.query(func.max(SerpResult.recorded_at))
+            .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter, SerpResult.advertiser_id.is_(None))
+            .scalar()
+        )
     if not latest:
         return {
             "total_keywords": 0, "last_tracked": None,
