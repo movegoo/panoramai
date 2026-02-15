@@ -10,6 +10,25 @@ function formatDate(iso: string | null) {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function getRankColor(rank: number, total: number) {
+  if (total <= 1) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  const pct = rank / (total - 1); // 0 = best, 1 = worst
+  if (pct === 0) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  if (pct <= 0.33) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
+  if (pct <= 0.66) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
+  return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
+}
+
+function getCellColor(value: number, allValues: number[]) {
+  if (value === 0) return "bg-gray-50 text-gray-400";
+  const sorted = Array.from(new Set(allValues)).sort((a, b) => b - a);
+  const rank = sorted.indexOf(value);
+  const total = sorted.filter(v => v > 0).length;
+  if (total <= 1) return "bg-emerald-100 text-emerald-700 font-bold";
+  const c = getRankColor(rank, total);
+  return `${c.bg} ${c.text} font-bold`;
+}
+
 export default function GeoTrackingPage() {
   const [insights, setInsights] = useState<GeoInsights | null>(null);
   const [results, setResults] = useState<GeoQueryResult[]>([]);
@@ -174,20 +193,28 @@ export default function GeoTrackingPage() {
               Part de voix IA
             </h2>
             <div className="space-y-3">
-              {insights.share_of_voice.map((s) => {
+              {insights.share_of_voice.map((s, i) => {
                 const isBrand = s.competitor_id === brandId;
+                const rc = getRankColor(i, insights.share_of_voice.length);
+                const barColors: Record<string, string> = {
+                  "text-emerald-700": "bg-emerald-500",
+                  "text-yellow-700": "bg-yellow-500",
+                  "text-orange-700": "bg-orange-500",
+                  "text-red-600": "bg-red-500",
+                };
+                const barColor = isBrand ? "bg-gradient-to-r from-teal-500 to-cyan-500" : (barColors[rc.text] || "bg-gray-300");
                 return (
                   <div key={s.competitor_id} className="flex items-center gap-3">
-                    <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>
+                    <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-teal-700 font-bold" : rc.text + " font-medium"}`}>
                       {s.competitor}
                     </span>
                     <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${isBrand ? "bg-gradient-to-r from-teal-500 to-cyan-500" : "bg-gray-300"}`}
+                        className={`h-full rounded-full transition-all ${barColor}`}
                         style={{ width: `${Math.max(s.pct, 2)}%` }}
                       />
                     </div>
-                    <span className={`text-sm font-semibold w-16 text-right ${isBrand ? "text-teal-700" : "text-muted-foreground"}`}>
+                    <span className={`text-sm font-semibold w-16 text-right ${isBrand ? "text-teal-700" : rc.text}`}>
                       {s.pct}%
                     </span>
                     <span className="text-xs text-muted-foreground w-24 text-right">
@@ -223,14 +250,20 @@ export default function GeoTrackingPage() {
                     return (
                       <tr key={row.competitor_id} className={`border-b border-border/50 ${isBrand ? "bg-teal-50/50" : "hover:bg-muted/30"}`}>
                         <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{row.competitor}</td>
-                        {platforms.map((p) => (
-                          <td key={p} className="text-center py-2.5 px-4">
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="text-sm font-semibold">{row[`${p}_pct`] ?? 0}%</span>
-                              <span className="text-xs text-muted-foreground">({row[`${p}_mentions`] ?? 0})</span>
-                            </span>
-                          </td>
-                        ))}
+                        {platforms.map((p) => {
+                          const pct = row[`${p}_pct`] ?? 0;
+                          const mentions = row[`${p}_mentions`] ?? 0;
+                          const allPcts = insights.platform_comparison.map(r => r[`${p}_pct`] ?? 0);
+                          const colorCls = getCellColor(pct, allPcts);
+                          return (
+                            <td key={p} className="text-center py-2.5 px-4">
+                              <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${colorCls}`}>
+                                <span className="text-sm">{pct}%</span>
+                                <span className="text-xs opacity-70">({mentions})</span>
+                              </span>
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}
@@ -248,14 +281,15 @@ export default function GeoTrackingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {insights.recommendation_rate.map((r, i) => {
                 const isBrand = r.competitor_id === brandId;
+                const rc = getRankColor(i, insights.recommendation_rate.length);
                 return (
-                  <div key={r.competitor_id} className={`rounded-xl p-4 ${isBrand ? "bg-teal-50 border border-teal-200" : "bg-gray-50 border border-gray-200"}`}>
+                  <div key={r.competitor_id} className={`rounded-xl p-4 border ${rc.bg} ${rc.border} ${isBrand ? "ring-2 ring-teal-400" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-sm font-semibold ${isBrand ? "text-teal-700" : "text-foreground"}`}>
+                      <span className={`text-sm font-semibold ${rc.text}`}>
                         #{i + 1} {r.competitor}
                       </span>
                     </div>
-                    <div className={`text-2xl font-bold ${isBrand ? "text-teal-600" : "text-foreground"}`}>
+                    <div className={`text-2xl font-bold ${rc.text}`}>
                       {r.rate}%
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
