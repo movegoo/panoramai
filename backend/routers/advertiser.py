@@ -279,15 +279,19 @@ async def get_available_sectors():
 @router.post("/onboard")
 async def onboard_advertiser(
     data: AdvertiserOnboarding,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Complete advertiser onboarding.
 
     Creates advertiser profile and automatically adds suggested competitors.
     """
-    # Check if advertiser already exists
-    existing = db.query(Advertiser).filter(Advertiser.company_name == data.company_name).first()
+    # Check if advertiser already exists for this user
+    existing = db.query(Advertiser).filter(
+        Advertiser.company_name == data.company_name,
+        Advertiser.user_id == user.id,
+    ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Advertiser already exists")
 
@@ -302,6 +306,7 @@ async def onboard_advertiser(
         tiktok_username=data.tiktok_username,
         youtube_channel_id=data.youtube_channel_id,
         contact_email=data.contact_email,
+        user_id=user.id,
     )
     db.add(advertiser)
     db.commit()
@@ -310,7 +315,7 @@ async def onboard_advertiser(
     # Auto-add selected competitors
     if data.selected_competitors:
         for comp_name in data.selected_competitors:
-            await _add_competitor_by_name(db, comp_name, data.sector)
+            await _add_competitor_by_name(db, comp_name, data.sector, user_id=user.id, advertiser_id=advertiser.id)
 
     return advertiser
 
@@ -360,11 +365,17 @@ async def get_competitor_suggestions(
 @router.post("/suggestions/{sector}/add-all")
 async def add_all_suggested_competitors(
     sector: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Add all suggested competitors for a sector."""
     if sector not in COMPETITORS_BY_SECTOR:
         raise HTTPException(status_code=400, detail=f"Unknown sector")
+
+    # Get user's advertiser
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.user_id == user.id, Advertiser.is_active == True
+    ).first()
 
     added = []
     skipped = []
@@ -372,6 +383,7 @@ async def add_all_suggested_competitors(
     for comp in COMPETITORS_BY_SECTOR[sector]:
         existing = db.query(Competitor).filter(
             Competitor.name == comp["name"],
+            Competitor.user_id == user.id,
             Competitor.is_active == True
         ).first()
 
@@ -387,6 +399,8 @@ async def add_all_suggested_competitors(
             instagram_username=comp.get("instagram_username"),
             tiktok_username=comp.get("tiktok_username"),
             youtube_channel_id=comp.get("youtube_channel_id"),
+            user_id=user.id,
+            advertiser_id=advertiser.id if advertiser else None,
         )
         db.add(new_competitor)
         added.append(comp["name"])
@@ -405,11 +419,17 @@ async def add_all_suggested_competitors(
 async def add_selected_competitors(
     competitor_names: List[str],
     sector: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Add selected competitors from suggestions."""
     if sector not in COMPETITORS_BY_SECTOR:
         raise HTTPException(status_code=400, detail=f"Unknown sector")
+
+    # Get user's advertiser
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.user_id == user.id, Advertiser.is_active == True
+    ).first()
 
     added = []
     not_found = []
@@ -426,6 +446,7 @@ async def add_selected_competitors(
 
         existing = db.query(Competitor).filter(
             Competitor.name == comp_data["name"],
+            Competitor.user_id == user.id,
             Competitor.is_active == True
         ).first()
 
@@ -441,6 +462,8 @@ async def add_selected_competitors(
             instagram_username=comp_data.get("instagram_username"),
             tiktok_username=comp_data.get("tiktok_username"),
             youtube_channel_id=comp_data.get("youtube_channel_id"),
+            user_id=user.id,
+            advertiser_id=advertiser.id if advertiser else None,
         )
         db.add(new_competitor)
         added.append(comp_data["name"])
@@ -465,9 +488,16 @@ async def list_advertisers(db: Session = Depends(get_db), user: User = Depends(g
 
 
 @router.get("/{advertiser_id}")
-async def get_advertiser(advertiser_id: int, db: Session = Depends(get_db)):
+async def get_advertiser(
+    advertiser_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Get advertiser by ID."""
-    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.id == advertiser_id,
+        Advertiser.user_id == user.id,
+    ).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
     return advertiser
@@ -481,10 +511,10 @@ async def update_advertiser(
     user: User = Depends(get_current_user),
 ):
     """Update advertiser profile."""
-    query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
-    advertiser = query.first()
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.id == advertiser_id,
+        Advertiser.user_id == user.id,
+    ).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
@@ -504,10 +534,10 @@ async def delete_advertiser(
     user: User = Depends(get_current_user),
 ):
     """Soft delete an advertiser."""
-    query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
-    advertiser = query.first()
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.id == advertiser_id,
+        Advertiser.user_id == user.id,
+    ).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
@@ -520,17 +550,20 @@ async def delete_advertiser(
 # Helpers
 # =============================================================================
 
-async def _add_competitor_by_name(db: Session, name: str, sector: str):
+async def _add_competitor_by_name(db: Session, name: str, sector: str, user_id: int = None, advertiser_id: int = None):
     """Add a competitor by name from the sector database."""
     if sector not in COMPETITORS_BY_SECTOR:
         return None
 
     for comp in COMPETITORS_BY_SECTOR[sector]:
         if comp["name"].lower() == name.lower():
-            existing = db.query(Competitor).filter(
+            query = db.query(Competitor).filter(
                 Competitor.name == comp["name"],
-                Competitor.is_active == True
-            ).first()
+                Competitor.is_active == True,
+            )
+            if user_id:
+                query = query.filter(Competitor.user_id == user_id)
+            existing = query.first()
 
             if existing:
                 return existing
@@ -543,6 +576,8 @@ async def _add_competitor_by_name(db: Session, name: str, sector: str):
                 instagram_username=comp.get("instagram_username"),
                 tiktok_username=comp.get("tiktok_username"),
                 youtube_channel_id=comp.get("youtube_channel_id"),
+                user_id=user_id,
+                advertiser_id=advertiser_id,
             )
             db.add(new_competitor)
             db.commit()

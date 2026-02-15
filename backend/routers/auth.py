@@ -72,9 +72,10 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         db.rollback()
+        import logging
+        logging.getLogger(__name__).error(f"Registration error: {traceback.format_exc()}")
         return JSONResponse(status_code=500, content={
-            "detail": f"{type(e).__name__}: {str(e)}",
-            "traceback": traceback.format_exc(),
+            "detail": "Une erreur est survenue lors de l'inscription",
         })
 
 
@@ -96,19 +97,22 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Login error: {traceback.format_exc()}")
         return JSONResponse(status_code=500, content={
-            "detail": f"{type(e).__name__}: {str(e)}",
-            "traceback": traceback.format_exc(),
+            "detail": "Une erreur est survenue lors de la connexion",
         })
 
 
 @router.delete("/reset-user")
-async def reset_user(email: str, db: Session = Depends(get_db)):
-    """Delete a user by email so they can re-register. Temporary endpoint."""
-    user = db.query(User).filter(User.email == email.lower().strip()).first()
-    if not user:
+async def reset_user(email: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Delete a user by email. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+    target = db.query(User).filter(User.email == email.lower().strip()).first()
+    if not target:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    db.delete(user)
+    db.delete(target)
     db.commit()
     return {"message": f"User {email} deleted"}
 

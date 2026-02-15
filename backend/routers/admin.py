@@ -3,7 +3,7 @@ Admin backoffice router.
 Platform stats accessible to all authenticated users (scoped to their data).
 User management restricted to admins.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -67,7 +67,9 @@ async def audit_data(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Show ownership of all brands and competitors for debugging."""
+    """Show ownership of all brands and competitors. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     brands = db.query(Advertiser).filter(Advertiser.is_active == True).all()
     competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
     users = {u.id: u.email for u in db.query(User).all()}
@@ -99,7 +101,9 @@ async def list_users(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all users with their brand/competitor info."""
+    """List all users with their brand/competitor info. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     users = db.query(User).order_by(User.created_at.desc()).all()
     result = []
     for u in users:

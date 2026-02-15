@@ -114,7 +114,7 @@ async def _fetch_playstore(competitor: Competitor, db: Session) -> dict:
             return {"platform": "playstore", "competitor": competitor.name, "status": "error", "reason": "no data returned"}
         record = AppData(
             competitor_id=competitor.id,
-            store_type="playstore",
+            store="playstore",
             app_id=competitor.playstore_app_id,
             app_name=data.get("title"),
             rating=data.get("score"),
@@ -146,7 +146,7 @@ async def _fetch_appstore(competitor: Competitor, db: Session) -> dict:
         app_info = results[0]
         record = AppData(
             competitor_id=competitor.id,
-            store_type="appstore",
+            store="appstore",
             app_id=competitor.appstore_app_id,
             app_name=app_info.get("trackName"),
             rating=app_info.get("averageUserRating"),
