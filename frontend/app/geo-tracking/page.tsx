@@ -277,8 +277,9 @@ export default function GeoTrackingPage() {
                 const barColor = isBrand ? "bg-gradient-to-r from-teal-500 to-cyan-500" : (barColors[rc.text] || "bg-gray-300");
                 return (
                   <div key={s.competitor_id} className="flex items-center gap-3">
-                    <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-teal-700 font-bold" : rc.text + " font-medium"}`}>
+                    <span className={`w-32 text-sm truncate flex items-center gap-1 ${isBrand ? "text-teal-700 font-bold" : rc.text + " font-medium"}`}>
                       {s.competitor}
+                      {isBrand && <span className="text-[9px] font-bold text-teal-600 bg-teal-100 rounded px-1 py-0.5 shrink-0">vous</span>}
                     </span>
                     <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -321,7 +322,10 @@ export default function GeoTrackingPage() {
                     const isBrand = row.competitor_id === brandId;
                     return (
                       <tr key={row.competitor_id} className={`border-b border-border/50 ${isBrand ? "bg-teal-50/50" : "hover:bg-muted/30"}`}>
-                        <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{row.competitor}</td>
+                        <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>
+                          {row.competitor}
+                          {isBrand && <span className="ml-1.5 text-[9px] font-bold text-teal-600 bg-teal-100 rounded px-1.5 py-0.5">vous</span>}
+                        </td>
                         {platforms.map((p) => {
                           const pct = row[`${p}_pct`] ?? 0;
                           const mentions = row[`${p}_mentions`] ?? 0;
@@ -387,11 +391,17 @@ export default function GeoTrackingPage() {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mot-cle</th>
-                    {competitorNames.map((c) => (
-                      <th key={c.id} className="text-center py-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {c.name}
-                      </th>
-                    ))}
+                    {competitorNames.map((c) => {
+                      const isBrand = c.id === brandId;
+                      return (
+                        <th key={c.id} className={`text-center py-2 px-2 text-xs font-semibold uppercase tracking-wider ${isBrand ? "text-teal-700 bg-teal-50/80" : "text-muted-foreground"}`}>
+                          <div className="flex flex-col items-center gap-0.5">
+                            {c.name}
+                            {isBrand && <span className="text-[9px] font-bold text-teal-600 bg-teal-100 rounded px-1.5 py-0.5 normal-case tracking-normal">vous</span>}
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -418,19 +428,26 @@ export default function GeoTrackingPage() {
                         <td className="py-2.5 pr-4 font-medium text-foreground text-xs">{q.keyword}</td>
                         {competitorNames.map((c) => {
                           const st = statusMap[c.id];
+                          const isBrand = c.id === brandId;
                           let cls = "bg-gray-100 border-gray-200";
                           let label = "\u2014";
                           if (st.mentioned && st.recommended) {
-                            cls = "bg-teal-200 border-teal-300 text-teal-800";
+                            cls = isBrand
+                              ? "bg-violet-300 border-violet-400 text-violet-900 ring-2 ring-violet-400/50"
+                              : "bg-teal-200 border-teal-300 text-teal-800";
                             label = "\u2605";
                           } else if (st.mentioned) {
-                            cls = "bg-teal-100 border-teal-200 text-teal-600";
+                            cls = isBrand
+                              ? "bg-violet-200 border-violet-300 text-violet-700 ring-2 ring-violet-300/50"
+                              : "bg-teal-100 border-teal-200 text-teal-600";
                             label = "\u2713";
                           } else {
-                            cls = "bg-gray-100 border-gray-200 text-gray-400";
+                            cls = isBrand
+                              ? "bg-red-100 border-red-200 text-red-400 ring-2 ring-red-200/50"
+                              : "bg-gray-100 border-gray-200 text-gray-400";
                           }
                           return (
-                            <td key={c.id} className="text-center py-2.5 px-2">
+                            <td key={c.id} className={`text-center py-2.5 px-2 ${isBrand ? "bg-teal-50/50" : ""}`}>
                               <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border text-xs font-bold ${cls}`}>
                                 {label}
                               </span>
