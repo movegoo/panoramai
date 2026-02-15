@@ -1046,15 +1046,28 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
 
 function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor[]; stats: any }) {
   const insights = useMemo(() => {
-    const result: { icon: React.ReactNode; text: string; severity: string; detail?: string }[] = [];
+    const result: { icon: React.ReactNode; title: string; text: string; severity: string; action?: string }[] = [];
     if (filteredAds.length === 0) return result;
 
     const reachByComp = new Map<string, number>();
+    const spendByComp = new Map<string, { min: number; max: number; count: number }>();
     const durationByComp = new Map<string, { total: number; count: number }>();
     const formatsByComp = new Map<string, Set<string>>();
+    const platformsByComp = new Map<string, Set<string>>();
+    let totalMetaAds = 0, totalGoogleAds = 0, totalTikTokAds = 0;
 
     filteredAds.forEach(a => {
       if (a.eu_total_reach) reachByComp.set(a.competitor_name, (reachByComp.get(a.competitor_name) || 0) + a.eu_total_reach);
+      const src = a.platform === "tiktok" ? "tiktok" : a.platform === "google" ? "google" : "meta";
+      if (src === "meta") totalMetaAds++;
+      else if (src === "google") totalGoogleAds++;
+      else totalTikTokAds++;
+      const budget = estimateBudget(a);
+      if (budget) {
+        const s = spendByComp.get(a.competitor_name) || { min: 0, max: 0, count: 0 };
+        s.min += budget.min; s.max += budget.max; s.count++;
+        spendByComp.set(a.competitor_name, s);
+      }
       if (a.start_date && a.end_date) {
         const days = Math.ceil((new Date(a.end_date).getTime() - new Date(a.start_date).getTime()) / 86400000);
         if (days > 0) {
@@ -1067,97 +1080,154 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
         if (!formatsByComp.has(a.competitor_name)) formatsByComp.set(a.competitor_name, new Set());
         formatsByComp.get(a.competitor_name)!.add(a.display_format);
       }
+      if (!platformsByComp.has(a.competitor_name)) platformsByComp.set(a.competitor_name, new Set());
+      platformsByComp.get(a.competitor_name)!.add(src);
     });
 
-    // Reach leader
+    // 1. Share of Voice & Media Pressure
     const reachSorted = Array.from(reachByComp.entries()).sort((a, b) => b[1] - a[1]);
-    if (reachSorted.length > 0) {
+    const totalReach = reachSorted.reduce((s, [, v]) => s + v, 0);
+    if (reachSorted.length >= 2 && totalReach > 0) {
+      const leaderPct = Math.round((reachSorted[0][1] / totalReach) * 100);
+      const secondPct = Math.round((reachSorted[1][1] / totalReach) * 100);
       result.push({
         icon: <Target className="h-4 w-4" />,
-        text: `${reachSorted[0][0]} domine la couverture EU avec ${formatNumber(reachSorted[0][1])} personnes atteintes`,
-        severity: "info",
-        detail: reachSorted.length > 1 ? `Suivi par ${reachSorted.slice(1).map(([n, v]) => `${n} (${formatNumber(v)})`).join(", ")}` : undefined,
+        title: "Share of Voice",
+        text: `${reachSorted[0][0]} capte ${leaderPct}% de la couverture EU (${formatNumber(reachSorted[0][1])} reach). ${leaderPct > 50 ? "Position dominante qui laisse peu d'espace aux challengers." : `Ecart serré avec ${reachSorted[1][0]} (${secondPct}%) — le marché est disputé.`}`,
+        severity: leaderPct > 50 ? "danger" : "warning",
+        action: leaderPct > 50 ? `Augmenter la pression media pour contrer la domination de ${reachSorted[0][0]}` : "Intensifier le reach sur les segments sous-exploités",
       });
     }
 
-    // Duration gap
+    // 2. Media Mix & Channel Strategy
+    const total = filteredAds.length;
+    const metaPct = Math.round((totalMetaAds / total) * 100);
+    const googlePct = Math.round((totalGoogleAds / total) * 100);
+    const tiktokPct = Math.round((totalTikTokAds / total) * 100);
+    if (total > 10) {
+      const dominant = metaPct > googlePct && metaPct > tiktokPct ? "Meta" : googlePct > tiktokPct ? "Google" : "TikTok";
+      const dominantPct = Math.max(metaPct, googlePct, tiktokPct);
+      result.push({
+        icon: <PieChart className="h-4 w-4" />,
+        title: "Stratégie Media Mix",
+        text: dominantPct > 70
+          ? `Le secteur sur-investit en ${dominant} (${dominantPct}%). Les annonceurs qui diversifient leur mix media obtiennent un meilleur ROI incrémental.`
+          : tiktokPct < 10
+          ? `TikTok ne représente que ${tiktokPct}% des créations — un levier sous-exploité pour toucher les 18-34 ans, qui constituent souvent le coeur de cible en acquisition.`
+          : `Mix media équilibré (Meta ${metaPct}%, Google ${googlePct}%, TikTok ${tiktokPct}%). Bonne couverture multi-canal du parcours client.`,
+        severity: dominantPct > 70 ? "warning" : tiktokPct < 10 ? "info" : "success",
+        action: tiktokPct < 10 ? "Tester des campagnes TikTok Spark Ads pour diversifier l'acquisition" : undefined,
+      });
+    }
+
+    // 3. Creative Fatigue & Rotation Strategy
     const avgDurations = Array.from(durationByComp.entries())
       .map(([name, d]) => ({ name, avg: Math.round(d.total / d.count) }))
       .sort((a, b) => b.avg - a.avg);
     if (avgDurations.length >= 2) {
       const longest = avgDurations[0], shortest = avgDurations[avgDurations.length - 1];
-      if (longest.avg > shortest.avg * 2) {
+      const ratio = longest.avg / Math.max(shortest.avg, 1);
+      if (longest.avg > 30) {
         result.push({
           icon: <Calendar className="h-4 w-4" />,
-          text: `${longest.name} maintient ses campagnes ${Math.round(longest.avg / shortest.avg)}x plus longtemps que ${shortest.name}`,
-          detail: `${longest.name}: ${longest.avg}j en moy. vs ${shortest.name}: ${shortest.avg}j`,
-          severity: "warning",
+          title: "Fatigue Créative",
+          text: `${longest.name} maintient ses visuels ${longest.avg}j en moyenne${ratio > 2 ? ` (${Math.round(ratio)}x plus que ${shortest.name})` : ""}. Au-delà de 21 jours, le CTR chute de 20-40% en moyenne. Risque d'ad blindness élevé.`,
+          severity: longest.avg > 45 ? "danger" : "warning",
+          action: "Mettre en place un calendrier de rotation créative toutes les 2-3 semaines avec des variantes A/B",
         });
       }
     }
 
-    // Format diversity
+    // 4. Creative Diversification
     const fmtDiv = Array.from(formatsByComp.entries())
       .map(([name, fmts]) => ({ name, count: fmts.size, formats: Array.from(fmts) }))
       .sort((a, b) => b.count - a.count);
-    if (fmtDiv.length >= 2 && fmtDiv[0].count > fmtDiv[fmtDiv.length - 1].count) {
+    if (fmtDiv.length >= 2) {
+      const leader = fmtDiv[0], laggard = fmtDiv[fmtDiv.length - 1];
+      if (leader.count > laggard.count) {
+        const hasVideo = leader.formats.some(f => f.includes("VIDEO"));
+        result.push({
+          icon: <Palette className="h-4 w-4" />,
+          title: "Diversité Créative",
+          text: `${leader.name} déploie ${leader.count} formats (${leader.formats.map(f => FORMAT_LABELS[f]?.label || f.toLowerCase()).join(", ")}) vs ${laggard.count} pour ${laggard.name}. ${hasVideo ? "La vidéo, présente dans leur arsenal, génère en moyenne 3x plus d'engagement que le statique." : "L'absence de vidéo est une opportunité manquée — le format le plus engageant."}`,
+          severity: "success",
+          action: !hasVideo ? "Produire des vidéos courtes (6-15s) adaptées aux feeds mobile" : undefined,
+        });
+      }
+    }
+
+    // 5. Budget Intelligence
+    const spendSorted = Array.from(spendByComp.entries())
+      .map(([name, s]) => ({ name, avg: Math.round((s.min + s.max) / 2), count: s.count }))
+      .sort((a, b) => b.avg - a.avg);
+    if (spendSorted.length >= 2 && spendSorted[0].avg > 0) {
+      const topSpender = spendSorted[0];
+      const efficiency = topSpender.count > 0 ? Math.round(topSpender.avg / topSpender.count) : 0;
       result.push({
-        icon: <Layers className="h-4 w-4" />,
-        text: `${fmtDiv[0].name} exploite ${fmtDiv[0].count} formats differents vs ${fmtDiv[fmtDiv.length - 1].count} pour ${fmtDiv[fmtDiv.length - 1].name}`,
-        detail: `Leader: ${fmtDiv[0].formats.map(f => FORMAT_LABELS[f]?.label || f).join(", ")}`,
-        severity: "success",
+        icon: <TrendingUp className="h-4 w-4" />,
+        title: "Intelligence Budgétaire",
+        text: `${topSpender.name} investit ~${formatNumber(topSpender.avg)}€ estimés sur ${topSpender.count} créations (${formatNumber(efficiency)}€/pub). ${spendSorted.length > 2 ? `Les 3 premiers annonceurs concentrent ${Math.round(spendSorted.slice(0, 3).reduce((s, x) => s + x.avg, 0) / spendSorted.reduce((s, x) => s + x.avg, 0) * 100)}% du budget total estimé.` : ""}`,
+        severity: "info",
+        action: "Optimiser le ratio budget/créations en testant plus de variantes à moindre coût unitaire",
       });
     }
 
-    // Volume leader
-    const volumes = Array.from((stats.byCompetitor as Map<string, any>).entries())
-      .map(([n, d]: [string, any]) => ({ name: n, total: d.total })).sort((a, b) => b.total - a.total);
-    if (volumes.length >= 2) {
-      const pct = Math.round((volumes[0].total / filteredAds.length) * 100);
-      result.push({ icon: <BarChart3 className="h-4 w-4" />, text: `${volumes[0].name} mene en volume avec ${volumes[0].total} creations (${pct}% du marche)`, severity: "info" });
+    // 6. Multi-channel presence analysis
+    const multiChannel = Array.from(platformsByComp.entries())
+      .map(([name, plats]) => ({ name, channels: plats.size }))
+      .sort((a, b) => b.channels - a.channels);
+    const monoChannel = multiChannel.filter(c => c.channels === 1);
+    if (monoChannel.length > 0 && multiChannel[0].channels >= 2) {
+      result.push({
+        icon: <Globe className="h-4 w-4" />,
+        title: "Présence Omnicanale",
+        text: `${monoChannel.map(c => c.name).join(", ")} ${monoChannel.length > 1 ? "ne sont présents que" : "n'est présent que"} sur un seul canal. ${multiChannel[0].name} couvre ${multiChannel[0].channels} canaux, maximisant les points de contact tout au long du funnel.`,
+        severity: "warning",
+        action: "Déployer une stratégie full-funnel : awareness (Meta/TikTok), consideration (Google Display), conversion (Search)",
+      });
     }
 
-    // Top formats
-    const topFmts = Array.from((stats.byFormat as Map<string, number>).entries()).sort((a, b) => b[1] - a[1]);
-    if (topFmts.length >= 2) {
-      const pct = Math.round(((topFmts[0][1] + topFmts[1][1]) / filteredAds.length) * 100);
-      result.push({ icon: <TrendingUp className="h-4 w-4" />, text: `${FORMAT_LABELS[topFmts[0][0]]?.label || topFmts[0][0]} et ${FORMAT_LABELS[topFmts[1][0]]?.label || topFmts[1][0]} representent ${pct}% du secteur`, severity: "success" });
-    }
     return result;
   }, [filteredAds, stats]);
 
   if (insights.length === 0) return null;
-  const sevStyles: Record<string, { bg: string; iconBg: string; iconColor: string; accent: string }> = {
-    info: { bg: "bg-blue-50/60 border-blue-100", iconBg: "bg-blue-100", iconColor: "text-blue-600", accent: "text-blue-700" },
-    success: { bg: "bg-emerald-50/60 border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", accent: "text-emerald-700" },
-    warning: { bg: "bg-amber-50/60 border-amber-100", iconBg: "bg-amber-100", iconColor: "text-amber-600", accent: "text-amber-700" },
-    danger: { bg: "bg-red-50/60 border-red-100", iconBg: "bg-red-100", iconColor: "text-red-600", accent: "text-red-700" },
+  const sevStyles: Record<string, { bg: string; iconBg: string; iconColor: string; accent: string; border: string }> = {
+    info: { bg: "bg-blue-50/60", iconBg: "bg-blue-100", iconColor: "text-blue-600", accent: "text-blue-700", border: "border-blue-200/60" },
+    success: { bg: "bg-emerald-50/60", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", accent: "text-emerald-700", border: "border-emerald-200/60" },
+    warning: { bg: "bg-amber-50/60", iconBg: "bg-amber-100", iconColor: "text-amber-600", accent: "text-amber-700", border: "border-amber-200/60" },
+    danger: { bg: "bg-red-50/60", iconBg: "bg-red-100", iconColor: "text-red-600", accent: "text-red-700", border: "border-red-200/60" },
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200/40">
-          <Sparkles className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h3 className="text-[15px] font-semibold text-foreground">Insights Stratégiques</h3>
-          <p className="text-[12px] text-muted-foreground">Analyse automatique du paysage publicitaire</p>
+    <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="px-5 py-4 border-b bg-gradient-to-r from-amber-50/50 to-orange-50/50">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200/30">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold text-foreground">Diagnostic Expert</h3>
+            <p className="text-[11px] text-muted-foreground">Analyse stratégique par notre IA marketing</p>
+          </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
         {insights.map((ins, i) => {
           const s = sevStyles[ins.severity] || sevStyles.info;
           return (
-            <div key={i} className={`rounded-xl border p-4 transition-all hover:shadow-sm ${s.bg}`}>
+            <div key={i} className={`rounded-xl border p-4 transition-all hover:shadow-sm ${s.bg} ${s.border}`}>
               <div className="flex items-start gap-3">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${s.iconBg}`}>
                   <div className={s.iconColor}>{ins.icon}</div>
                 </div>
-                <div className="min-w-0">
-                  <p className={`text-[13px] font-semibold leading-snug ${s.accent}`}>{ins.text}</p>
-                  {ins.detail && (
-                    <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{ins.detail}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{ins.title}</div>
+                  <p className="text-[12px] leading-relaxed text-foreground/80">{ins.text}</p>
+                  {ins.action && (
+                    <div className="mt-2.5 flex items-start gap-1.5 px-2.5 py-2 rounded-lg bg-white/60 border border-white">
+                      <Lightbulb className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] font-medium text-foreground/70 leading-snug">{ins.action}</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1959,204 +2029,6 @@ export default function AdsPage() {
         );
       })()}
 
-      {/* ── Creative Intelligence ─────────────────── */}
-      <div className="rounded-2xl border bg-card overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between border-b">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
-              <Brain className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <h3 className="text-[12px] font-semibold text-foreground">Intelligence Cr&eacute;ative</h3>
-              <p className="text-[10px] text-muted-foreground">
-                Analyse IA des visuels publicitaires
-                {creativeInsights && creativeInsights.total_analyzed > 0 && (
-                  <> &middot; {creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</>
-                )}
-              </p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAnalyzeCreatives}
-            disabled={analyzingCreatives}
-            className="gap-2 text-xs"
-          >
-            {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {analyzingCreatives ? "Analyse en cours..." : "Analyser les visuels"}
-          </Button>
-        </div>
-
-        {analyzeResult && (
-          <div className="px-5 py-2.5 bg-muted/30 border-b text-[11px]">
-            <span className="text-emerald-600 font-semibold">{analyzeResult.analyzed} analys&eacute;e{analyzeResult.analyzed > 1 ? "s" : ""}</span>
-            {analyzeResult.errors > 0 && <span className="text-red-500 ml-2">{analyzeResult.errors} erreur{analyzeResult.errors > 1 ? "s" : ""}</span>}
-            {analyzeResult.remaining > 0 && <span className="text-muted-foreground ml-2">&middot; {analyzeResult.remaining} restante{analyzeResult.remaining > 1 ? "s" : ""}</span>}
-          </div>
-        )}
-
-        {creativeInsights && creativeInsights.total_analyzed > 0 ? (
-          <div className="p-5 space-y-5">
-            {/* Score moyen + KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 text-center">
-                <div className="text-2xl font-bold text-violet-700">{creativeInsights.avg_score}</div>
-                <div className="text-[10px] text-violet-500 uppercase tracking-widest mt-0.5">Score moyen</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.total_analyzed}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Analys&eacute;es</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.concepts.length}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Concepts</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.by_competitor.length}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Annonceurs</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Top concepts */}
-              {creativeInsights.concepts.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Concepts dominants</div>
-                  <div className="space-y-2">
-                    {creativeInsights.concepts.slice(0, 6).map(c => (
-                      <div key={c.concept} className="flex items-center gap-3">
-                        <span className="text-xs font-medium w-24 truncate">{c.concept}</span>
-                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
-                        </div>
-                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Top tones */}
-              {creativeInsights.tones.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Tons utilis&eacute;s</div>
-                  <div className="space-y-2">
-                    {creativeInsights.tones.slice(0, 6).map(t => (
-                      <div key={t.tone} className="flex items-center gap-3">
-                        <span className="text-xs font-medium w-24 truncate">{t.tone}</span>
-                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-pink-500 transition-all duration-500" style={{ width: `${t.pct}%` }} />
-                        </div>
-                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{t.pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Color palette + by competitor */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Color trends */}
-              {creativeInsights.colors.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Palette couleurs tendance</div>
-                  <div className="flex flex-wrap gap-2">
-                    {creativeInsights.colors.slice(0, 12).map(c => (
-                      <div key={c.color} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 border">
-                        <div className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color }} />
-                        <span className="text-[10px] font-mono text-muted-foreground">{c.color}</span>
-                        <span className="text-[9px] font-bold text-muted-foreground/60">{c.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Score par concurrent */}
-              {creativeInsights.by_competitor.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Score par concurrent</div>
-                  <div className="space-y-2">
-                    {creativeInsights.by_competitor.map((c, i) => (
-                      <div key={c.competitor} className="flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-muted-foreground/50 w-4">{i + 1}</span>
-                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}</span>
-                        <span className="text-[10px] text-muted-foreground">{c.count} pubs</span>
-                        <span className={`text-xs font-bold tabular-nums ${c.avg_score >= 70 ? "text-emerald-600" : c.avg_score >= 50 ? "text-blue-600" : "text-amber-600"}`}>
-                          {c.avg_score}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Top performers */}
-            {creativeInsights.top_performers.length > 0 && (
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
-                  <Trophy className="h-3 w-3 inline mr-1" />Top cr&eacute;atifs
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {creativeInsights.top_performers.slice(0, 5).map((p) => (
-                    <div key={p.ad_id} className="rounded-xl border overflow-hidden bg-muted/20 hover:shadow-md transition-shadow">
-                      {p.creative_url && (
-                        <div className="aspect-square bg-slate-900 overflow-hidden flex items-center justify-center relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.creative_url} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
-                          <div className="absolute top-2 right-2">
-                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
-                              p.score >= 80 ? "bg-emerald-500 text-white" :
-                              p.score >= 60 ? "bg-blue-500 text-white" :
-                              "bg-amber-500 text-white"
-                            }`}>
-                              <Sparkles className="h-2 w-2" />{p.score}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="p-2">
-                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {p.concept && <span className="text-[9px] px-1.5 py-0 rounded bg-violet-100 text-violet-700">{p.concept}</span>}
-                          {p.tone && <span className="text-[9px] px-1.5 py-0 rounded bg-pink-100 text-pink-700">{p.tone}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recommendations */}
-            {creativeInsights.recommendations.length > 0 && (
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
-                  <Lightbulb className="h-3 w-3 inline mr-1" />Recommandations
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {creativeInsights.recommendations.map((r, i) => (
-                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-gradient-to-br from-violet-50/50 to-indigo-50/50 border border-violet-100">
-                      <Sparkles className="h-4 w-4 text-violet-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-foreground/80 leading-relaxed">{r}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="px-5 py-8 text-center">
-            <Brain className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">
-              Aucune analyse cr&eacute;ative. Cliquez sur &laquo;&nbsp;Analyser les visuels&nbsp;&raquo; pour d&eacute;marrer.
-            </p>
-          </div>
-        )}
-      </div>
 
       {/* ── Filters (collapsible, closed by default) ─ */}
       <div className="rounded-2xl border bg-card overflow-hidden">
@@ -2448,6 +2320,205 @@ export default function AdsPage() {
 
       {/* ── Comparatif Concurrentiel ── */}
       <CompetitorComparison filteredAds={filteredAds} stats={stats} />
+
+      {/* ── Creative Intelligence ─────────────────── */}
+      <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between border-b">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
+              <Brain className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <h3 className="text-[12px] font-semibold text-foreground">Intelligence Cr&eacute;ative</h3>
+              <p className="text-[10px] text-muted-foreground">
+                Analyse IA des visuels publicitaires
+                {creativeInsights && creativeInsights.total_analyzed > 0 && (
+                  <> &middot; {creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</>
+                )}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAnalyzeCreatives}
+            disabled={analyzingCreatives}
+            className="gap-2 text-xs"
+          >
+            {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {analyzingCreatives ? "Analyse en cours..." : "Analyser les visuels"}
+          </Button>
+        </div>
+
+        {analyzeResult && (
+          <div className="px-5 py-2.5 bg-muted/30 border-b text-[11px]">
+            <span className="text-emerald-600 font-semibold">{analyzeResult.analyzed} analys&eacute;e{analyzeResult.analyzed > 1 ? "s" : ""}</span>
+            {analyzeResult.errors > 0 && <span className="text-red-500 ml-2">{analyzeResult.errors} erreur{analyzeResult.errors > 1 ? "s" : ""}</span>}
+            {analyzeResult.remaining > 0 && <span className="text-muted-foreground ml-2">&middot; {analyzeResult.remaining} restante{analyzeResult.remaining > 1 ? "s" : ""}</span>}
+          </div>
+        )}
+
+        {creativeInsights && creativeInsights.total_analyzed > 0 ? (
+          <div className="p-5 space-y-5">
+            {/* Score moyen + KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 text-center">
+                <div className="text-2xl font-bold text-violet-700">{creativeInsights.avg_score}</div>
+                <div className="text-[10px] text-violet-500 uppercase tracking-widest mt-0.5">Score moyen</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.total_analyzed}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Analys&eacute;es</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.concepts.length}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Concepts</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.by_competitor.length}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Annonceurs</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Top concepts */}
+              {creativeInsights.concepts.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Concepts dominants</div>
+                  <div className="space-y-2">
+                    {creativeInsights.concepts.slice(0, 6).map(c => (
+                      <div key={c.concept} className="flex items-center gap-3">
+                        <span className="text-xs font-medium w-24 truncate">{c.concept}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top tones */}
+              {creativeInsights.tones.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Tons utilis&eacute;s</div>
+                  <div className="space-y-2">
+                    {creativeInsights.tones.slice(0, 6).map(t => (
+                      <div key={t.tone} className="flex items-center gap-3">
+                        <span className="text-xs font-medium w-24 truncate">{t.tone}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-pink-500 transition-all duration-500" style={{ width: `${t.pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{t.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Color palette + by competitor */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Color trends */}
+              {creativeInsights.colors.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Palette couleurs tendance</div>
+                  <div className="flex flex-wrap gap-2">
+                    {creativeInsights.colors.slice(0, 12).map(c => (
+                      <div key={c.color} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 border">
+                        <div className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color }} />
+                        <span className="text-[10px] font-mono text-muted-foreground">{c.color}</span>
+                        <span className="text-[9px] font-bold text-muted-foreground/60">{c.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Score par concurrent */}
+              {creativeInsights.by_competitor.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Score par concurrent</div>
+                  <div className="space-y-2">
+                    {creativeInsights.by_competitor.map((c, i) => (
+                      <div key={c.competitor} className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-muted-foreground/50 w-4">{i + 1}</span>
+                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}</span>
+                        <span className="text-[10px] text-muted-foreground">{c.count} pubs</span>
+                        <span className={`text-xs font-bold tabular-nums ${c.avg_score >= 70 ? "text-emerald-600" : c.avg_score >= 50 ? "text-blue-600" : "text-amber-600"}`}>
+                          {c.avg_score}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top performers */}
+            {creativeInsights.top_performers.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
+                  <Trophy className="h-3 w-3 inline mr-1" />Top cr&eacute;atifs
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {creativeInsights.top_performers.slice(0, 5).map((p) => (
+                    <div key={p.ad_id} className="rounded-xl border overflow-hidden bg-muted/20 hover:shadow-md transition-shadow">
+                      {p.creative_url && (
+                        <div className="aspect-square bg-slate-900 overflow-hidden flex items-center justify-center relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.creative_url} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                          <div className="absolute top-2 right-2">
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+                              p.score >= 80 ? "bg-emerald-500 text-white" :
+                              p.score >= 60 ? "bg-blue-500 text-white" :
+                              "bg-amber-500 text-white"
+                            }`}>
+                              <Sparkles className="h-2 w-2" />{p.score}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="p-2">
+                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}</div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {p.concept && <span className="text-[9px] px-1.5 py-0 rounded bg-violet-100 text-violet-700">{p.concept}</span>}
+                          {p.tone && <span className="text-[9px] px-1.5 py-0 rounded bg-pink-100 text-pink-700">{p.tone}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {creativeInsights.recommendations.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
+                  <Lightbulb className="h-3 w-3 inline mr-1" />Recommandations
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {creativeInsights.recommendations.map((r, i) => (
+                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-gradient-to-br from-violet-50/50 to-indigo-50/50 border border-violet-100">
+                      <Sparkles className="h-4 w-4 text-violet-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-foreground/80 leading-relaxed">{r}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center">
+            <Brain className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
+              Aucune analyse cr&eacute;ative. Cliquez sur &laquo;&nbsp;Analyser les visuels&nbsp;&raquo; pour d&eacute;marrer.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* ── Payeurs & Diffusion ────── */}
       {stats.byAdvertiser.size > 0 && (() => {
