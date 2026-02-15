@@ -16,7 +16,8 @@ from services.tiktok_scraper import tiktok_scraper
 from services.scrapecreators import scrapecreators
 from core.trends import calculate_trend
 from core.config import settings
-from core.auth import get_optional_user
+from core.auth import get_current_user
+from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids
 
 router = APIRouter()
 
@@ -45,9 +46,11 @@ def calculate_engagement_rate(data: TikTokData) -> float:
 async def get_tiktok_history(
     competitor_id: int,
     limit: int = 30,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get historical TikTok data for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     return (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -60,9 +63,11 @@ async def get_tiktok_history(
 @router.get("/latest/{competitor_id}")
 async def get_latest_tiktok_data(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get the latest TikTok data for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     data = (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -77,12 +82,11 @@ async def get_latest_tiktok_data(
 @router.post("/fetch/{competitor_id}")
 async def fetch_tiktok_data(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Fetch and store current TikTok data for a competitor."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     if not competitor.tiktok_username:
         raise HTTPException(status_code=400, detail="No TikTok username configured")
@@ -140,16 +144,11 @@ async def fetch_tiktok_data(
 async def compare_tiktok_accounts(
     days: int = 7,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Compare TikTok metrics across all tracked competitors."""
-    query = (
-        db.query(Competitor)
-        .filter(Competitor.tiktok_username.isnot(None), Competitor.is_active == True)
-    )
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-    competitors = query.all()
+    competitors = get_user_competitors(db, user)
+    competitors = [c for c in competitors if c.tiktok_username]
 
     comparison = []
     for competitor in competitors:
@@ -197,9 +196,11 @@ async def compare_tiktok_accounts(
 @router.get("/trends/{competitor_id}")
 async def get_tiktok_trends(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get TikTok trends and variations for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     recent_data = (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -246,12 +247,11 @@ async def get_tiktok_trends(
 async def get_recent_videos(
     competitor_id: int,
     limit: int = 10,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get recent TikTok videos for a competitor."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     if not competitor.tiktok_username:
         raise HTTPException(status_code=400, detail="No TikTok username configured")
@@ -271,13 +271,10 @@ async def get_recent_videos(
 @router.get("/ads/all")
 async def get_all_tiktok_ads(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Get all TikTok ads stored in the database."""
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    competitors = {c.id: c.name for c in comp_query.all()}
+    competitors = {c.id: c.name for c in get_user_competitors(db, user)}
     ads = (
         db.query(Ad)
         .filter(Ad.platform == "tiktok", Ad.competitor_id.in_(competitors.keys()))
@@ -294,8 +291,10 @@ async def get_all_tiktok_ads(
 async def get_tiktok_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get TikTok ads for a specific competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     ads = (
         db.query(Ad)
         .filter(Ad.competitor_id == competitor_id, Ad.platform == "tiktok")
@@ -309,14 +308,13 @@ async def get_tiktok_ads(
 async def fetch_tiktok_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Fetch TikTok ads/sponsored content for a competitor via ScrapeCreators.
     Searches by competitor name and stores detected ads.
     """
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     result = await scrapecreators.search_tiktok_ads(query=competitor.name, limit=30)
 
@@ -388,9 +386,12 @@ async def fetch_tiktok_ads(
 
 
 @router.post("/ads/fetch-all")
-async def fetch_all_tiktok_ads(db: Session = Depends(get_db)):
+async def fetch_all_tiktok_ads(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """Fetch TikTok ads for all active competitors."""
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = db.query(Competitor).filter(Competitor.is_active == True, Competitor.user_id == user.id).all()
     results = []
     for comp in competitors:
         try:
