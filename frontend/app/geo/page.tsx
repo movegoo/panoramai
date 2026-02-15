@@ -33,6 +33,8 @@ export default function GeoPage() {
       try {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const advId = typeof window !== "undefined" ? localStorage.getItem("current_advertiser_id") : null;
+        if (advId) headers["X-Advertiser-Id"] = advId;
 
         const [storeRes, brand] = await Promise.allSettled([
           fetch(`${API_BASE}/geo/competitor-stores`, { headers }).then(r => r.ok ? r.json() : null),
@@ -177,64 +179,18 @@ export default function GeoPage() {
             </div>
           </div>
 
-          {/* Store Distribution - Share of Voice style */}
-          <div className="rounded-2xl border border-border bg-card p-6">
-            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Store className="h-4 w-4 text-violet-500" />
-              Repartition des points de vente
-            </h2>
-            <div className="space-y-3">
-              {storeGroups.map((g, i) => {
-                const isBrand = brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase();
-                const rc = getRankColor(i, storeGroups.length);
-                const barColors: Record<string, string> = {
-                  "text-emerald-700": "bg-emerald-500",
-                  "text-yellow-700": "bg-yellow-500",
-                  "text-orange-700": "bg-orange-500",
-                  "text-red-600": "bg-red-500",
-                };
-                const barColor = isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : (barColors[rc.text] || "bg-gray-300");
-                const pct = totalStores > 0 ? (g.total / totalStores * 100) : 0;
-                return (
-                  <div key={g.competitor_id} className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 w-32">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
-                      <span className={`text-sm font-medium truncate ${isBrand ? "text-violet-700 font-bold" : rc.text + " font-medium"}`}>
-                        {g.competitor_name}
-                      </span>
-                    </div>
-                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${barColor}`}
-                        style={{ width: `${Math.max(pct, 2)}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm font-semibold w-14 text-right ${isBrand ? "text-violet-700" : rc.text}`}>
-                      {pct.toFixed(1)}%
-                    </span>
-                    <span className="text-xs text-muted-foreground w-24 text-right">
-                      {g.total.toLocaleString()} magasins
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Population Coverage */}
-          {catchmentData && catchmentData.competitors?.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Target className="h-4 w-4 text-purple-500" />
-                Couverture population
-                <span className="text-xs font-normal text-muted-foreground ml-auto">
-                  Rayon {catchmentData.radius_km} km
-                </span>
+          {/* Store Distribution + Population Coverage side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Store Distribution */}
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Store className="h-4 w-4 text-violet-500" />
+                Repartition des points de vente
               </h2>
-              <div className="space-y-3">
-                {catchmentData.competitors.map((comp: any, i: number) => {
-                  const isBrand = brandName && comp.competitor_name.toLowerCase() === brandName.toLowerCase();
-                  const rc = getRankColor(i, catchmentData.competitors.length);
+              <div className="space-y-2">
+                {storeGroups.map((g, i) => {
+                  const isBrand = brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase();
+                  const rc = getRankColor(i, storeGroups.length);
                   const barColors: Record<string, string> = {
                     "text-emerald-700": "bg-emerald-500",
                     "text-yellow-700": "bg-yellow-500",
@@ -242,50 +198,107 @@ export default function GeoPage() {
                     "text-red-600": "bg-red-500",
                   };
                   const barColor = isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : (barColors[rc.text] || "bg-gray-300");
+                  const pct = totalStores > 0 ? (g.total / totalStores * 100) : 0;
                   return (
-                    <div key={comp.competitor_id} className="flex items-center gap-3">
-                      <div className="flex items-center gap-2 w-32">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: comp.color }} />
-                        <span className={`text-sm font-medium truncate ${isBrand ? "text-violet-700 font-bold" : rc.text + " font-medium"}`}>
-                          {comp.competitor_name}
-                        </span>
+                    <div key={g.competitor_id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                          <span className={`text-xs font-medium truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
+                            {g.competitor_name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold ${isBrand ? "text-violet-700" : rc.text}`}>
+                            {pct.toFixed(1)}%
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {g.total.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${barColor}`}
-                          style={{ width: `${Math.max(comp.pct_population, 2)}%` }}
+                          style={{ width: `${Math.max(pct, 2)}%` }}
                         />
                       </div>
-                      <span className={`text-sm font-semibold w-14 text-right ${isBrand ? "text-violet-700" : rc.text}`}>
-                        {comp.pct_population}%
-                      </span>
-                      <span className="text-xs text-muted-foreground w-24 text-right">
-                        {(comp.population_covered / 1000000).toFixed(1)}M hab.
-                      </span>
                     </div>
                   );
                 })}
               </div>
-              {catchmentData.overlaps?.length > 0 && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    Zones de chevauchement
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {catchmentData.overlaps.slice(0, 4).map((o: any, i: number) => (
-                      <div key={i} className="rounded-lg bg-gray-50 px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs text-gray-600 truncate">{o.competitor_a_name} / {o.competitor_b_name}</span>
-                        <span className="text-xs font-semibold text-purple-700 ml-2 whitespace-nowrap">
-                          {(o.shared_population / 1000000).toFixed(1)}M hab.
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
+
+            {/* Population Coverage */}
+            {catchmentData && catchmentData.competitors?.length > 0 && (
+              <div className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Target className="h-4 w-4 text-purple-500" />
+                  Couverture population
+                  <span className="text-[11px] font-normal text-muted-foreground ml-auto">
+                    Rayon {catchmentData.radius_km} km
+                  </span>
+                </h2>
+                <div className="space-y-2">
+                  {catchmentData.competitors.map((comp: any, i: number) => {
+                    const isBrand = brandName && comp.competitor_name.toLowerCase() === brandName.toLowerCase();
+                    const rc = getRankColor(i, catchmentData.competitors.length);
+                    const barColors: Record<string, string> = {
+                      "text-emerald-700": "bg-emerald-500",
+                      "text-yellow-700": "bg-yellow-500",
+                      "text-orange-700": "bg-orange-500",
+                      "text-red-600": "bg-red-500",
+                    };
+                    const barColor = isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : (barColors[rc.text] || "bg-gray-300");
+                    return (
+                      <div key={comp.competitor_id}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: comp.color }} />
+                            <span className={`text-xs font-medium truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
+                              {comp.competitor_name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold ${isBrand ? "text-violet-700" : rc.text}`}>
+                              {comp.pct_population}%
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {(comp.population_covered / 1000000).toFixed(1)}M
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${barColor}`}
+                            style={{ width: `${Math.max(comp.pct_population, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {catchmentData.overlaps?.length > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="text-[11px] font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Users className="h-3 w-3" />
+                      Zones de chevauchement
+                    </div>
+                    <div className="space-y-1.5">
+                      {catchmentData.overlaps.slice(0, 4).map((o: any, i: number) => (
+                        <div key={i} className="rounded-lg bg-gray-50 px-2.5 py-1.5 flex items-center justify-between">
+                          <span className="text-[11px] text-gray-600 truncate">{o.competitor_a_name} / {o.competitor_b_name}</span>
+                          <span className="text-[11px] font-semibold text-purple-700 ml-2 whitespace-nowrap">
+                            {(o.shared_population / 1000000).toFixed(1)}M hab.
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Recommendations */}
           {recommendations.length > 0 && (
