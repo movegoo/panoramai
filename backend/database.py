@@ -452,23 +452,6 @@ class GeoResult(Base):
     competitor = relationship("Competitor", backref="geo_results")
 
 
-class GoogleOAuthToken(Base):
-    """Google OAuth tokens for Search Console integration."""
-    __tablename__ = "google_oauth_tokens"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, index=True)
-    access_token = Column(Text)
-    refresh_token = Column(Text)
-    token_expiry = Column(DateTime)
-    scopes = Column(String(500))
-    selected_site_url = Column(String(500))
-    connected_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
-
-    user = relationship("User", backref="google_oauth")
-
-
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"

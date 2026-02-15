@@ -1,20 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3, MousePointerClick, Eye, ArrowRight, PlugZap } from "lucide-react";
-import { seoAPI, gscAPI, SeoInsights, SerpRanking, GscStatus, GscPerformance, GscQueryRow, GscPageRow } from "@/lib/api";
-import Link from "next/link";
+import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
+import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
 
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
   const d = new Date(iso);
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString("fr-FR");
 }
 
 function PositionBadge({ position }: { position: number | null }) {
@@ -26,28 +19,13 @@ function PositionBadge({ position }: { position: number | null }) {
   return <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs font-bold ${cls}`}>{position}</span>;
 }
 
-const PERIOD_OPTIONS = [
-  { value: "7d", label: "7 jours" },
-  { value: "28d", label: "28 jours" },
-  { value: "3m", label: "3 mois" },
-];
-
 export default function SeoPage() {
-  // SERP data (existing)
   const [insights, setInsights] = useState<SeoInsights | null>(null);
   const [rankings, setRankings] = useState<SerpRanking[]>([]);
   const [lastTracked, setLastTracked] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState(false);
   const [trackResult, setTrackResult] = useState<string | null>(null);
-
-  // GSC data
-  const [gscStatus, setGscStatus] = useState<GscStatus | null>(null);
-  const [gscPerf, setGscPerf] = useState<GscPerformance | null>(null);
-  const [gscQueries, setGscQueries] = useState<GscQueryRow[]>([]);
-  const [gscPages, setGscPages] = useState<GscPageRow[]>([]);
-  const [gscPeriod, setGscPeriod] = useState("28d");
-  const [gscLoading, setGscLoading] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -66,39 +44,7 @@ export default function SeoPage() {
     }
   }
 
-  async function loadGsc(period: string) {
-    setGscLoading(true);
-    try {
-      const [perf, queries, pages] = await Promise.all([
-        gscAPI.getPerformance(period),
-        gscAPI.getQueries(period),
-        gscAPI.getPages(period),
-      ]);
-      setGscPerf(perf);
-      setGscQueries(queries.queries);
-      setGscPages(pages.pages);
-    } catch (e) {
-      console.error("Failed to load GSC data:", e);
-    } finally {
-      setGscLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-    // Check GSC status
-    gscAPI.getStatus().then((status) => {
-      setGscStatus(status);
-      if (status.connected && status.selected_site) {
-        loadGsc("28d");
-      }
-    }).catch(() => {});
-  }, []);
-
-  function handleGscPeriodChange(period: string) {
-    setGscPeriod(period);
-    loadGsc(period);
-  }
+  useEffect(() => { loadData(); }, []);
 
   async function handleTrack() {
     setTracking(true);
@@ -131,11 +77,6 @@ export default function SeoPage() {
     competitorNames.push(...Array.from(nameSet));
   }
 
-  const gscConnected = gscStatus?.connected && gscStatus?.selected_site;
-
-  // Sparkline-like simple bar chart for daily data
-  const maxClicks = gscPerf ? Math.max(...gscPerf.daily.map(d => d.clicks), 1) : 1;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -163,195 +104,6 @@ export default function SeoPage() {
       {trackResult && (
         <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
           {trackResult}
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* GSC Section: Mon site                                              */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {gscConnected ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <MousePointerClick className="h-5 w-5 text-emerald-500" />
-              Mon site (Google Search Console)
-            </h2>
-            <div className="flex items-center gap-2">
-              {PERIOD_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleGscPeriodChange(opt.value)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                    gscPeriod === opt.value
-                      ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {gscLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="h-5 w-5 animate-spin text-emerald-500" />
-              <span className="ml-3 text-sm text-muted-foreground">Chargement des donnees GSC...</span>
-            </div>
-          ) : gscPerf ? (
-            <>
-              {/* GSC KPIs */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Clics" value={formatNumber(gscPerf.total_clicks)} icon={MousePointerClick} color="emerald" />
-                <KpiCard label="Impressions" value={formatNumber(gscPerf.total_impressions)} icon={Eye} color="blue" />
-                <KpiCard label="CTR moyen" value={`${gscPerf.avg_ctr}%`} icon={TrendingUp} color="violet" />
-                <KpiCard label="Position moy." value={gscPerf.avg_position.toFixed(1)} icon={Search} color="amber" />
-              </div>
-
-              {/* Daily chart */}
-              <div className="rounded-2xl border border-border bg-card p-6">
-                <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-emerald-500" />
-                  Clics par jour
-                </h3>
-                <div className="flex items-end gap-[2px] h-32">
-                  {gscPerf.daily.map((d) => (
-                    <div key={d.date} className="flex-1 flex flex-col items-center group relative">
-                      <div
-                        className="w-full bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t-sm transition-all hover:from-emerald-600 hover:to-emerald-500 min-h-[2px]"
-                        style={{ height: `${(d.clicks / maxClicks) * 100}%` }}
-                      />
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 whitespace-nowrap rounded bg-gray-900 text-white text-[10px] px-2 py-1 shadow">
-                        {d.date}: {d.clicks} clics
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-muted-foreground">{gscPerf.daily[0]?.date}</span>
-                  <span className="text-[10px] text-muted-foreground">{gscPerf.daily[gscPerf.daily.length - 1]?.date}</span>
-                </div>
-              </div>
-
-              {/* Top queries table */}
-              {gscQueries.length > 0 && (
-                <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Search className="h-4 w-4 text-emerald-500" />
-                    Top requetes ({gscQueries.length})
-                  </h3>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Requete</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Clics</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Impr.</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">CTR</th>
-                        <th className="text-right py-2 pl-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Position</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {gscQueries.map((q, i) => (
-                        <tr key={q.query} className="border-b border-border/50 hover:bg-muted/30">
-                          <td className="py-2.5 pr-4">
-                            <span className="text-muted-foreground mr-2 text-xs">{i + 1}.</span>
-                            <span className="font-medium text-foreground">{q.query}</span>
-                          </td>
-                          <td className="text-right py-2.5 px-3 font-semibold text-emerald-600">{formatNumber(q.clicks)}</td>
-                          <td className="text-right py-2.5 px-3 text-muted-foreground">{formatNumber(q.impressions)}</td>
-                          <td className="text-right py-2.5 px-3 text-muted-foreground">{q.ctr}%</td>
-                          <td className="text-right py-2.5 pl-3">
-                            <PositionBadge position={Math.round(q.position)} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Top pages table */}
-              {gscPages.length > 0 && (
-                <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-emerald-500" />
-                    Top pages ({gscPages.length})
-                  </h3>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Page</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Clics</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Impr.</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">CTR</th>
-                        <th className="text-right py-2 pl-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Position</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {gscPages.map((p, i) => {
-                        let shortPage = p.page;
-                        try {
-                          const u = new URL(p.page);
-                          shortPage = u.pathname === "/" ? u.hostname : u.pathname;
-                        } catch {}
-                        return (
-                          <tr key={p.page} className="border-b border-border/50 hover:bg-muted/30">
-                            <td className="py-2.5 pr-4">
-                              <span className="text-muted-foreground mr-2 text-xs">{i + 1}.</span>
-                              <a href={p.page} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline truncate inline-block max-w-sm">
-                                {shortPage}
-                              </a>
-                            </td>
-                            <td className="text-right py-2.5 px-3 font-semibold text-emerald-600">{formatNumber(p.clicks)}</td>
-                            <td className="text-right py-2.5 px-3 text-muted-foreground">{formatNumber(p.impressions)}</td>
-                            <td className="text-right py-2.5 px-3 text-muted-foreground">{p.ctr}%</td>
-                            <td className="text-right py-2.5 pl-3">
-                              <PositionBadge position={Math.round(p.position)} />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          ) : null}
-        </div>
-      ) : (
-        /* GSC not connected banner */
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
-              <MousePointerClick className="h-5 w-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-emerald-800">Google Search Console</p>
-              <p className="text-xs text-emerald-600">
-                Connectez GSC pour voir les vrais clics, impressions et positions de votre site
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/account"
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
-          >
-            <PlugZap className="h-4 w-4" />
-            Connecter
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* SERP Section: Concurrents                                          */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {gscConnected && (
-        <div className="pt-2">
-          <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-4">
-            <Search className="h-5 w-5 text-blue-500" />
-            Concurrents (SERP)
-          </h2>
         </div>
       )}
 
@@ -574,14 +326,12 @@ function KpiCard({ label, value, icon: Icon, color, subtitle }: {
     indigo: "from-indigo-500 to-indigo-600 shadow-indigo-200/50",
     violet: "from-violet-500 to-violet-600 shadow-violet-200/50",
     sky: "from-sky-500 to-sky-600 shadow-sky-200/50",
-    emerald: "from-emerald-500 to-emerald-600 shadow-emerald-200/50",
-    amber: "from-amber-500 to-amber-600 shadow-amber-200/50",
   };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center gap-2 mb-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${colors[color] || colors.blue} shadow-md`}>
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${colors[color]} shadow-md`}>
           <Icon className="h-3.5 w-3.5 text-white" />
         </div>
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
