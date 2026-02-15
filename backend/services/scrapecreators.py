@@ -380,10 +380,10 @@ class ScrapeCreatorsAPI:
             "credits_remaining": data.get("credits_remaining"),
         }
 
-    async def fetch_facebook_company_ads(self, page_id: str, country: str = "FR", cursor: str = None) -> Dict:
+    async def fetch_facebook_company_ads(self, page_id: str, country: str = None, cursor: str = None) -> Dict:
         """
         Get all ads for a company by page_id via /v1/facebook/adLibrary/company/ads.
-        More reliable than keyword search.
+        More reliable than keyword search. Note: country filter may reduce results.
         """
         params = {"pageId": page_id}
         if country:
@@ -396,7 +396,7 @@ class ScrapeCreatorsAPI:
         if not data.get("success"):
             return data
 
-        ads = data.get("ads", data.get("searchResults", []))
+        ads = data.get("results", data.get("ads", data.get("searchResults", [])))
         return {
             "success": True,
             "ads": ads if isinstance(ads, list) else [],

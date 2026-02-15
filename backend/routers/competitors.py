@@ -612,15 +612,38 @@ async def refresh_competitor_stores(
     }
 
 
+@router.post("/{competitor_id}/enrich")
+async def enrich_competitor(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Force re-enrichment of a competitor's data (social, apps, ads).
+    Runs synchronously so the caller knows when it's done.
+    """
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
+
+    results = await _auto_enrich_competitor(comp.id, comp)
+    return {
+        "message": f"Enrichissement terminé pour '{comp.name}'",
+        "results": results,
+    }
+
+
 # =============================================================================
 # Background auto-enrichment
 # =============================================================================
 
-async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
-    """Background task: fetch all data for a newly created competitor."""
+async def _auto_enrich_competitor(competitor_id: int, comp: Competitor) -> dict:
+    """Fetch all data for a competitor. Returns a summary dict."""
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"Auto-enrichment started for '{comp.name}' (id={competitor_id})")
+    results = {}
 
     # BANCO stores
     try:
@@ -629,21 +652,52 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
         try:
             count = await banco_service.search_and_store(competitor_id, comp.name, db)
             logger.info(f"BANCO: {count} stores for '{comp.name}'")
+            results["stores"] = count
         finally:
             db.close()
     except Exception as e:
         logger.warning(f"BANCO failed for '{comp.name}': {e}")
+        results["stores_error"] = str(e)
 
-    # Facebook/Instagram Ads
+    # Facebook/Instagram Ads — use company/ads endpoint with page_id
     try:
         from services.scrapecreators import scrapecreators
         from routers.facebook import _name_matches, _parse_date
-        from database import Ad, SessionLocal
+        from database import Ad, SessionLocal, Competitor as CompModel
         import json
 
-        result = await scrapecreators.search_facebook_ads(
-            company_name=comp.name, country="FR", limit=50
-        )
+        # Auto-resolve facebook_page_id if missing
+        page_id = comp.facebook_page_id
+        if not page_id:
+            search_res = await scrapecreators.search_facebook_companies(comp.name)
+            if search_res.get("success") and search_res.get("companies"):
+                companies = search_res["companies"]
+                best = None
+                for c in companies:
+                    c_name = (c.get("page_name") or c.get("name") or "").lower()
+                    if comp.name.lower() in c_name or c_name in comp.name.lower():
+                        best = c
+                        break
+                if not best and companies:
+                    best = companies[0]
+                page_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "") if best else ""
+                if page_id:
+                    db = SessionLocal()
+                    try:
+                        db_comp = db.query(CompModel).filter(CompModel.id == competitor_id).first()
+                        if db_comp:
+                            db_comp.facebook_page_id = page_id
+                            db.commit()
+                            logger.info(f"Auto-resolved facebook_page_id={page_id} for '{comp.name}'")
+                    finally:
+                        db.close()
+
+        # Fetch ads via page_id or keyword search
+        if page_id:
+            result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id)
+        else:
+            result = await scrapecreators.search_facebook_ads(company_name=comp.name, country="FR", limit=50)
+
         if result.get("success"):
             db = SessionLocal()
             try:
@@ -654,7 +708,8 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                         continue
                     snapshot = ad.get("snapshot", {})
                     page_name = snapshot.get("page_name", "") or ad.get("page_name", "")
-                    if not _name_matches(comp.name, page_name):
+                    # When using page_id, all results belong to this competitor
+                    if not page_id and not _name_matches(comp.name, page_name):
                         continue
                     if db.query(Ad).filter(Ad.ad_id == ad_id).first():
                         continue
@@ -685,10 +740,12 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                 if new_count:
                     db.commit()
                 logger.info(f"Ads: {new_count} new for '{comp.name}'")
+                results["ads"] = new_count
             finally:
                 db.close()
     except Exception as e:
         logger.warning(f"Ads fetch failed for '{comp.name}': {e}")
+        results["ads_error"] = str(e)
 
     # Instagram
     if comp.instagram_username:
@@ -711,10 +768,16 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                     ))
                     db.commit()
                     logger.info(f"Instagram fetched for '{comp.name}'")
+                    results["instagram"] = result.get("followers", 0)
                 finally:
                     db.close()
+            else:
+                results["instagram_error"] = result.get("error", "Failed")
         except Exception as e:
             logger.warning(f"Instagram failed for '{comp.name}': {e}")
+            results["instagram_error"] = str(e)
+    else:
+        results["instagram"] = "no_username"
 
     # TikTok
     if comp.tiktok_username:
@@ -737,10 +800,16 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                     ))
                     db.commit()
                     logger.info(f"TikTok fetched for '{comp.name}'")
+                    results["tiktok"] = result.get("followers", 0)
                 finally:
                     db.close()
+            else:
+                results["tiktok_error"] = result.get("error", "Failed")
         except Exception as e:
             logger.warning(f"TikTok failed for '{comp.name}': {e}")
+            results["tiktok_error"] = str(e)
+    else:
+        results["tiktok"] = "no_username"
 
     # Play Store
     if comp.playstore_app_id:
@@ -768,10 +837,16 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                     ))
                     db.commit()
                     logger.info(f"Play Store fetched for '{comp.name}'")
+                    results["playstore"] = result["app_name"]
                 finally:
                     db.close()
+            else:
+                results["playstore_error"] = result.get("error", "Failed")
         except Exception as e:
             logger.warning(f"Play Store failed for '{comp.name}': {e}")
+            results["playstore_error"] = str(e)
+    else:
+        results["playstore"] = "no_app_id"
 
     # App Store
     if comp.appstore_app_id:
@@ -796,10 +871,16 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                     ))
                     db.commit()
                     logger.info(f"App Store fetched for '{comp.name}'")
+                    results["appstore"] = result["app_name"]
                 finally:
                     db.close()
+            else:
+                results["appstore_error"] = result.get("error", "Failed")
         except Exception as e:
             logger.warning(f"App Store failed for '{comp.name}': {e}")
+            results["appstore_error"] = str(e)
+    else:
+        results["appstore"] = "no_app_id"
 
     # YouTube
     if comp.youtube_channel_id:
@@ -826,10 +907,16 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                     ))
                     db.commit()
                     logger.info(f"YouTube fetched for '{comp.name}'")
+                    results["youtube"] = result.get("subscribers", 0)
                 finally:
                     db.close()
+            else:
+                results["youtube_error"] = result.get("error", "Failed")
         except Exception as e:
             logger.warning(f"YouTube failed for '{comp.name}': {e}")
+            results["youtube_error"] = str(e)
+    else:
+        results["youtube"] = "no_channel_id"
 
     # Google Ads (via domain)
     if comp.website:
@@ -844,9 +931,12 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor):
                         competitor_id=competitor_id, domain=domain, country="FR", db=db
                     )
                     logger.info(f"Google Ads: {new} new, {updated} updated for '{comp.name}'")
+                    results["google_ads"] = new
                 finally:
                     db.close()
         except Exception as e:
             logger.warning(f"Google Ads failed for '{comp.name}': {e}")
+            results["google_ads_error"] = str(e)
 
     logger.info(f"Auto-enrichment complete for '{comp.name}'")
+    return results

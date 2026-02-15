@@ -212,7 +212,6 @@ async def fetch_competitor_ads(
     if page_id_used:
         result = await scrapecreators.fetch_facebook_company_ads(
             page_id=page_id_used,
-            country=country,
         )
         if result.get("success"):
             use_page_id = True
@@ -241,7 +240,6 @@ async def fetch_competitor_ads(
 
                 result = await scrapecreators.fetch_facebook_company_ads(
                     page_id=resolved_id,
-                    country=country,
                 )
                 if result.get("success"):
                     use_page_id = True

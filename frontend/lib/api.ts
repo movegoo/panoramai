@@ -482,6 +482,11 @@ export const competitorsAPI = {
   lookup: (q: string) => fetchAPI<CompetitorCreate[]>(`/competitors/lookup?q=${encodeURIComponent(q)}`),
 
   getAnalysis: (id: number) => fetchAPI<any>(`/competitors/${id}/analysis`),
+
+  enrich: (id: number) =>
+    fetchAPI<{ message: string; results: Record<string, any> }>(`/competitors/${id}/enrich`, {
+      method: "POST",
+    }),
 };
 
 // Watch/Overview API

@@ -164,38 +164,95 @@ async def _fetch_appstore(competitor: Competitor, db: Session) -> dict:
 
 
 async def _fetch_facebook_ads(competitor: Competitor, db: Session) -> dict:
-    """Fetch Meta ads from Ad Library."""
-    search_term = competitor.name
-    if not search_term:
-        return {"platform": "facebook_ads", "competitor": competitor.name, "status": "skipped", "reason": "no name"}
+    """Fetch Meta ads from Ad Library using page_id (reliable) or keyword search (fallback)."""
+    from routers.facebook import _name_matches, _parse_date
+    import json
+
     try:
-        ads = await scrapecreators.search_facebook_ads(search_term, country="FR", limit=25)
-        if not ads:
-            return {"platform": "facebook_ads", "competitor": competitor.name, "status": "ok", "new_ads": 0}
+        page_id = competitor.facebook_page_id
+        use_page_id = False
+
+        # Auto-resolve page_id if missing
+        if not page_id:
+            search_res = await scrapecreators.search_facebook_companies(competitor.name)
+            if search_res.get("success") and search_res.get("companies"):
+                companies = search_res["companies"]
+                best = None
+                for c in companies:
+                    c_name = (c.get("page_name") or c.get("name") or "").lower()
+                    if competitor.name.lower() in c_name or c_name in competitor.name.lower():
+                        best = c
+                        break
+                if not best and companies:
+                    best = companies[0]
+                page_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "") if best else ""
+                if page_id:
+                    competitor.facebook_page_id = page_id
+                    db.commit()
+
+        # Fetch via page_id or keyword
+        if page_id:
+            result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id)
+            if result.get("success"):
+                use_page_id = True
+        if not use_page_id:
+            result = await scrapecreators.search_facebook_ads(competitor.name, country="FR", limit=50)
+
+        if not result.get("success"):
+            return {"platform": "facebook_ads", "competitor": competitor.name, "status": "error", "reason": result.get("error", "API failed")}
+
+        ads_data = result.get("ads", [])
         new_count = 0
-        for ad_data in ads:
-            ad_id = ad_data.get("adArchiveID") or ad_data.get("ad_archive_id") or ad_data.get("id")
+        for ad in ads_data:
+            ad_id = str(ad.get("ad_archive_id", ""))
             if not ad_id:
                 continue
-            existing = db.query(Ad).filter(Ad.platform_ad_id == str(ad_id)).first()
-            if existing:
+            snapshot = ad.get("snapshot", {})
+            page_name = snapshot.get("page_name", "") or ad.get("page_name", "")
+            if not use_page_id and not _name_matches(competitor.name, page_name):
                 continue
-            ad = Ad(
+            if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                continue
+
+            cards = snapshot.get("cards", [])
+            fc = cards[0] if cards else {}
+            start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+            end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+            pubs = ad.get("publisher_platform", [])
+            if not isinstance(pubs, list):
+                pubs = [pubs] if pubs else []
+            pubs_upper = [str(p).upper() for p in pubs]
+
+            new_ad = Ad(
                 competitor_id=competitor.id,
-                platform="meta",
-                platform_ad_id=str(ad_id),
-                title=ad_data.get("title") or ad_data.get("ad_creative_bodies", [None])[0] if isinstance(ad_data.get("ad_creative_bodies"), list) else ad_data.get("ad_creative_bodies"),
-                body=ad_data.get("body") or ad_data.get("ad_creative_bodies", [None])[0] if isinstance(ad_data.get("ad_creative_bodies"), list) else None,
-                image_url=ad_data.get("snapshot", {}).get("images", [{}])[0].get("url") if isinstance(ad_data.get("snapshot", {}).get("images"), list) and ad_data.get("snapshot", {}).get("images") else ad_data.get("image_url"),
-                landing_url=ad_data.get("ad_creative_link_captions", [None])[0] if isinstance(ad_data.get("ad_creative_link_captions"), list) else ad_data.get("landing_page_url"),
-                is_active=ad_data.get("isActive") or ad_data.get("is_active", True),
-                started_at=ad_data.get("startDate") or ad_data.get("ad_delivery_start_time"),
-                raw_data=ad_data,
+                ad_id=ad_id,
+                platform="instagram" if any("INSTAGRAM" in p for p in pubs_upper) else "facebook",
+                creative_url=fc.get("original_image_url") or fc.get("resized_image_url") or "",
+                ad_text=fc.get("body") or snapshot.get("body", {}).get("text", "") or "",
+                cta=fc.get("cta_text") or "",
+                start_date=start_date,
+                end_date=end_date,
+                is_active=ad.get("is_active", not bool(end_date)),
+                publisher_platforms=json.dumps(pubs_upper) if pubs_upper else None,
+                page_id=snapshot.get("page_id", "") or None,
+                page_name=page_name or None,
+                page_profile_uri=snapshot.get("page_profile_uri", "") or None,
+                page_profile_picture_url=snapshot.get("page_profile_picture_url", "") or None,
+                ad_library_url=ad.get("url", "") or None,
+                title=fc.get("title") or snapshot.get("title", "") or None,
+                link_url=fc.get("link_url") or snapshot.get("link_url", "") or None,
             )
-            db.add(ad)
+            db.add(new_ad)
             new_count += 1
-        db.commit()
-        return {"platform": "facebook_ads", "competitor": competitor.name, "status": "ok", "total_fetched": len(ads), "new_ads": new_count}
+
+        if new_count:
+            db.commit()
+        return {
+            "platform": "facebook_ads", "competitor": competitor.name, "status": "ok",
+            "total_fetched": len(ads_data), "new_ads": new_count,
+            "method": "page_id" if use_page_id else "keyword",
+            "facebook_page_id": page_id,
+        }
     except Exception as e:
         return {"platform": "facebook_ads", "competitor": competitor.name, "status": "error", "reason": str(e)}
 

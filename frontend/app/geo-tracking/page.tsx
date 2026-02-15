@@ -11,11 +11,11 @@ const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; ico
   chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", icon: "https://chatgpt.com/favicon.ico" },
 };
 
-function PlatformBadge({ platform, size = "md" }: { platform: string; size?: "sm" | "md" }) {
+function PlatformBadge({ platform, size = "md" }: { platform: string; size?: "sm" | "md" | "lg" }) {
   const cfg = LLM_CONFIG[platform];
   if (!cfg) return <span className="text-xs">{platform}</span>;
-  const imgSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
-  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+  const imgSize = size === "lg" ? "h-6 w-6" : size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  const textSize = size === "lg" ? "text-sm" : size === "sm" ? "text-[10px]" : "text-xs";
   return (
     <span className={`inline-flex items-center gap-1.5 ${textSize} font-semibold ${cfg.color}`}>
       <img src={cfg.icon} alt={cfg.label} className={`${imgSize} rounded-sm object-contain shrink-0`} />
@@ -312,7 +312,7 @@ export default function GeoTrackingPage() {
                     <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Concurrent</th>
                     {platforms.map((p) => (
                       <th key={p} className="text-center py-2 px-4">
-                        <PlatformBadge platform={p} size="sm" />
+                        <PlatformBadge platform={p} size="lg" />
                       </th>
                     ))}
                   </tr>

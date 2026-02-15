@@ -350,13 +350,14 @@ function FilterChip({ label, active, onClick, count, icon }: { label: string; ac
   );
 }
 
-function AdvertiserAvatar({ ad, size = "sm" }: { ad: AdWithCompetitor; size?: "sm" | "md" | "lg" }) {
+function AdvertiserAvatar({ ad, size = "sm", logoUrl }: { ad: AdWithCompetitor; size?: "sm" | "md" | "lg"; logoUrl?: string }) {
   const sizeClasses = { sm: "h-6 w-6", md: "h-8 w-8", lg: "h-10 w-10" };
   const textSizes = { sm: "text-[9px]", md: "text-[10px]", lg: "text-xs" };
-  if (ad.page_profile_picture_url) {
+  const imgSrc = logoUrl || ad.page_profile_picture_url;
+  if (imgSrc) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={ad.page_profile_picture_url} alt="" className={`${sizeClasses[size]} rounded-full object-cover border-2 border-background shrink-0`} />
+      <img src={imgSrc} alt="" className={`${sizeClasses[size]} rounded-full object-cover border-2 border-background shrink-0`} />
     );
   }
   const initials = (ad.page_name || ad.competitor_name || "?").slice(0, 2).toUpperCase();
@@ -584,7 +585,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             {/* Payer & Advertiser */}
             {ad.page_name && (
               <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50">
-                <AdvertiserAvatar ad={ad} size="lg" />
+                <AdvertiserAvatar ad={ad} size="lg" logoUrl={advertiserLogo} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold truncate">{ad.page_name}</span>
@@ -1250,8 +1251,10 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
   );
 }
 
-function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompetitor[]; stats: any }) {
+function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds: AdWithCompetitor[]; stats: any; competitors: any[] }) {
   const data = useMemo(() => {
+    const compLogoByName = new Map<string, string>();
+    competitors.forEach((c: any) => { if (c.logo_url) compLogoByName.set(c.name.toLowerCase(), c.logo_url); });
     return Array.from((stats.byCompetitor as Map<string, any>).entries())
       .map(([name, d]: [string, any]) => {
         const ads = filteredAds.filter(a => a.competitor_name === name);
@@ -1260,7 +1263,7 @@ function CompetitorComparison({ filteredAds, stats }: { filteredAds: AdWithCompe
         const plats = Array.from(new Set(ads.flatMap(a => getPublisherPlatforms(a)))) as string[];
         const durs = ads.filter(a => a.start_date).map(a => Math.ceil(((a.end_date ? new Date(a.end_date) : new Date()).getTime() - new Date(a.start_date!).getTime()) / 86400000)).filter(x => x > 0);
         const avgDur = durs.length > 0 ? Math.round(durs.reduce((s, x) => s + x, 0) / durs.length) : 0;
-        const logo = ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
+        const logo = compLogoByName.get(name.toLowerCase()) || ads.find(a => a.page_profile_picture_url)?.page_profile_picture_url;
         return { name, total: d.total, active: d.active, reach, fmts, plats, avgDur, logo, spendMin: d.spendMin || 0, spendMax: d.spendMax || 0 };
       })
       .sort((a, b) => b.reach - a.reach);
@@ -1639,16 +1642,26 @@ export default function AdsPage() {
     setFilterLocations(new Set());
   }
 
-  // Build advertiser logos map (first profile pic per page_name)
+  // Build advertiser logos map: prefer competitor logo_url, fallback to page_profile_picture_url
   const advertiserLogos = useMemo(() => {
     const map = new Map<string, string>();
+    // First: map competitor names to their logo_url
+    const compLogoByName = new Map<string, string>();
+    competitors.forEach(c => {
+      if (c.logo_url) compLogoByName.set(c.name.toLowerCase(), c.logo_url);
+    });
     allAds.forEach(a => {
-      if (a.page_name && a.page_profile_picture_url && !map.has(a.page_name)) {
+      if (!a.page_name || map.has(a.page_name)) return;
+      // Prefer competitor logo
+      const compLogo = compLogoByName.get(a.competitor_name?.toLowerCase() || "");
+      if (compLogo) {
+        map.set(a.page_name, compLogo);
+      } else if (a.page_profile_picture_url) {
         map.set(a.page_name, a.page_profile_picture_url);
       }
     });
     return map;
-  }, [allAds]);
+  }, [allAds, competitors]);
 
   // Derive available filter values from all ads
   const availableCompetitors = useMemo(() => {
@@ -1797,7 +1810,9 @@ export default function AdsPage() {
       aa.total++;
       if (a.is_active) aa.active++;
       if (a.page_like_count && a.page_like_count > (aa.likes || 0)) aa.likes = a.page_like_count;
-      if (a.page_profile_picture_url && !aa.logo) aa.logo = a.page_profile_picture_url;
+      // Prefer competitor logo_url over page_profile_picture_url
+      const compLogo = competitors.find(c => c.name.toLowerCase() === (a.competitor_name || "").toLowerCase())?.logo_url;
+      if (!aa.logo) aa.logo = compLogo || a.page_profile_picture_url;
       if (a.page_categories) {
         a.page_categories.forEach(c => { if (!aa.categories!.includes(c)) aa.categories!.push(c); });
       }
@@ -2336,7 +2351,7 @@ export default function AdsPage() {
       <InsightsSection filteredAds={filteredAds} stats={stats} />
 
       {/* ── Comparatif Concurrentiel ── */}
-      <CompetitorComparison filteredAds={filteredAds} stats={stats} />
+      <CompetitorComparison filteredAds={filteredAds} stats={stats} competitors={competitors} />
 
       {/* ── Creative Intelligence ─────────────────── */}
       <div className="rounded-2xl border bg-card overflow-hidden">
