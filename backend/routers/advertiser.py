@@ -50,13 +50,15 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.auchan.android",
             "appstore_app_id": "541227977",
             "instagram_username": "auchan_france",
+            "tiktok_username": "auchan",
         },
         {
             "name": "Intermarché",
             "website": "https://www.intermarche.com",
             "playstore_app_id": "com.intermarche.mobile",
             "appstore_app_id": "1447048498",
-            "instagram_username": "interaborateur",
+            "instagram_username": "intermarche",
+            "tiktok_username": "intermarche",
         },
         {
             "name": "Lidl",
@@ -72,6 +74,7 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.monoprix.app",
             "appstore_app_id": "966459890",
             "instagram_username": "monoprix",
+            "tiktok_username": "monoprix",
         },
         {
             "name": "Casino",
@@ -109,18 +112,21 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.kiabi.app",
             "appstore_app_id": "495571498",
             "instagram_username": "kiabi_official",
+            "tiktok_username": "kiabi_official",
         },
         {
             "name": "Celio",
             "website": "https://www.celio.com",
             "playstore_app_id": "com.celio.app",
             "instagram_username": "celio_official",
+            "tiktok_username": "celio_official",
         },
         {
             "name": "Jules",
             "website": "https://www.jules.com",
             "playstore_app_id": "com.jules.app",
             "instagram_username": "jules_officiel",
+            "tiktok_username": "jules_officiel",
         },
     ],
     "beaute": [
@@ -130,7 +136,7 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.sephora.android",
             "appstore_app_id": "393328150",
             "instagram_username": "sephorafrance",
-            "tiktok_username": "saboraboiture_france",
+            "tiktok_username": "sephorafrance",
         },
         {
             "name": "Nocibé",
@@ -138,18 +144,33 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.douglas.nocibe",
             "appstore_app_id": "1123649654",
             "instagram_username": "nocibe_france",
+            "tiktok_username": "nocibe_france",
         },
         {
             "name": "Marionnaud",
             "website": "https://www.marionnaud.fr",
             "playstore_app_id": "com.marionnaud.android",
             "instagram_username": "marionnaud_france",
+            "tiktok_username": "marionnaudfrance",
         },
         {
             "name": "Yves Rocher",
             "website": "https://www.yves-rocher.fr",
             "playstore_app_id": "com.ysl.yvesrocher",
-            "instagram_username": "yvesrocherusa",
+            "instagram_username": "yvesrocherfr",
+            "tiktok_username": "yvesrocher",
+        },
+        {
+            "name": "L'Occitane",
+            "website": "https://www.loccitane.com/fr-fr",
+            "instagram_username": "loccitane",
+            "tiktok_username": "loccitane_fr",
+        },
+        {
+            "name": "Lush",
+            "website": "https://www.lush.com/fr",
+            "instagram_username": "lushfrance",
+            "tiktok_username": "lush.france",
         },
     ],
     "electromenager": [
@@ -189,6 +210,7 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.leroymerlin.franceapp",
             "appstore_app_id": "522478918",
             "instagram_username": "leroymerlin",
+            "tiktok_username": "leroymerlin",
         },
         {
             "name": "Castorama",
@@ -196,6 +218,7 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.castorama.selfcare",
             "appstore_app_id": "1163490666",
             "instagram_username": "castoramafrance",
+            "tiktok_username": "castoramafrance",
         },
         {
             "name": "Brico Dépôt",
@@ -224,12 +247,14 @@ COMPETITORS_BY_SECTOR = {
             "website": "https://www.go-sport.com",
             "playstore_app_id": "com.gosport.android",
             "instagram_username": "go_sport",
+            "tiktok_username": "gosport",
         },
         {
             "name": "Intersport",
             "website": "https://www.intersport.fr",
             "playstore_app_id": "com.intersport.shop",
             "instagram_username": "intersportfrance",
+            "tiktok_username": "intersportfrance",
         },
     ],
     "alimentaire_bio": [
@@ -544,6 +569,50 @@ async def delete_advertiser(
     advertiser.is_active = False
     db.commit()
     return {"message": "Advertiser deactivated"}
+
+
+@router.post("/patch-social-handles")
+async def patch_social_handles(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Patch existing competitors with missing social handles from the sector database."""
+    # Build a lookup: lowercase name -> best data from all sectors
+    known = {}
+    for sector_comps in COMPETITORS_BY_SECTOR.values():
+        for comp in sector_comps:
+            known[comp["name"].lower()] = comp
+
+    competitors = db.query(Competitor).filter(
+        Competitor.user_id == user.id, Competitor.is_active == True
+    ).all()
+
+    patched = []
+    for comp in competitors:
+        ref = known.get(comp.name.lower())
+        if not ref:
+            continue
+
+        updated_fields = []
+        for field in ["tiktok_username", "instagram_username", "youtube_channel_id",
+                      "playstore_app_id", "appstore_app_id"]:
+            current = getattr(comp, field, None)
+            new_val = ref.get(field)
+            if new_val and (not current or current != new_val):
+                setattr(comp, field, new_val)
+                updated_fields.append(field)
+
+        if updated_fields:
+            patched.append({"name": comp.name, "updated": updated_fields})
+
+    if patched:
+        db.commit()
+
+    return {
+        "message": f"Patched {len(patched)} competitors",
+        "patched": patched,
+        "total_checked": len(competitors),
+    }
 
 
 # =============================================================================

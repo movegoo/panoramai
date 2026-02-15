@@ -79,6 +79,39 @@ def _refresh_logo_urls():
         db.close()
 
 
+def _patch_missing_social_handles():
+    """Auto-patch competitors with missing social handles from the sector database."""
+    from routers.advertiser import COMPETITORS_BY_SECTOR
+    known = {}
+    for sector_comps in COMPETITORS_BY_SECTOR.values():
+        for comp in sector_comps:
+            known[comp["name"].lower()] = comp
+
+    db = SessionLocal()
+    try:
+        competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+        patched = 0
+        for comp in competitors:
+            ref = known.get(comp.name.lower())
+            if not ref:
+                continue
+            changed = False
+            for field in ["tiktok_username", "instagram_username", "youtube_channel_id",
+                          "playstore_app_id", "appstore_app_id"]:
+                current = getattr(comp, field, None)
+                new_val = ref.get(field)
+                if new_val and (not current or current != new_val):
+                    setattr(comp, field, new_val)
+                    changed = True
+            if changed:
+                patched += 1
+        if patched:
+            db.commit()
+            logger.info(f"Patched {patched} competitors with missing social handles")
+    finally:
+        db.close()
+
+
 async def _deferred_startup():
     """Run slow startup tasks in background so healthcheck passes fast."""
     import asyncio
@@ -88,6 +121,11 @@ async def _deferred_startup():
         _refresh_logo_urls()
     except Exception as e:
         logger.error(f"Logo refresh failed (non-fatal): {e}")
+
+    try:
+        _patch_missing_social_handles()
+    except Exception as e:
+        logger.error(f"Social handles patch failed (non-fatal): {e}")
 
     try:
         await scheduler.start()
