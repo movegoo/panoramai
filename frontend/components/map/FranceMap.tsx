@@ -801,6 +801,8 @@ export default function FranceMap() {
   // Store all competitor data for viewport-based rendering
   const competitorStoreDataRef = useRef<CompetitorStoreGroup[]>([]);
 
+  const gmbAutoEnrichedRef = useRef(false);
+
   const loadCompetitorStoresLayer = async (map: any, L: any) => {
     const res = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`, { headers: authHeaders() });
     if (!res.ok) return;
@@ -821,27 +823,44 @@ export default function FranceMap() {
 
     // Store cleanup function
     (layerGroupsRef.current as any).__competitorMoveHandler = onMoveEnd;
+
+    // Auto-enrich GMB once if no ratings exist yet
+    const hasRatings = groups.some(g => g.avg_rating != null);
+    if (!hasRatings && groups.length > 0 && !gmbAutoEnrichedRef.current) {
+      gmbAutoEnrichedRef.current = true;
+      // Fire and forget — don't block the layer display
+      runGmbEnrichment(map, L);
+    }
   };
 
-  const handleEnrichGmb = async () => {
+  const runGmbEnrichment = async (map: any, L: any, force = false) => {
     setGmbEnriching(true);
     try {
-      const res = await fetch(`${API_BASE}/geo/stores/enrich-gmb-demo`, {
+      const res = await fetch(`${API_BASE}/geo/stores/enrich-gmb-demo?force=${force}`, {
         method: "POST",
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error("Enrichissement échoué");
-      // Reload competitor stores to get updated ratings
-      const map = mapInstanceRef.current;
-      const L = leafletRef.current;
-      if (map && L) {
-        await loadCompetitorStoresLayer(map, L);
-      }
+      // Reload to get updated ratings
+      const res2 = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`, { headers: authHeaders() });
+      if (!res2.ok) return;
+      const data = await res2.json();
+      const groups: CompetitorStoreGroup[] = data.competitors || [];
+      setCompetitorStoreGroups(groups);
+      competitorStoreDataRef.current = groups;
+      renderCompetitorStoresInView(map, L, groups);
     } catch (err) {
       console.error("GMB enrichment error:", err);
     } finally {
       setGmbEnriching(false);
     }
+  };
+
+  const handleEnrichGmb = async () => {
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+    if (!map || !L) return;
+    await runGmbEnrichment(map, L, true);
   };
 
   const getRatingColor = (rating: number | undefined, fallback: string): string => {
@@ -1229,9 +1248,9 @@ export default function FranceMap() {
               </div>
 
               {/* GMB Ratings by competitor - sorted by avg_rating */}
-              {competitorStoreGroups.some(g => g.avg_rating != null) ? (
-                <div className="space-y-1.5 mb-3">
-                  {[...competitorStoreGroups]
+              <div className="space-y-1.5 mb-3">
+                {competitorStoreGroups.some(g => g.avg_rating != null) ? (
+                  [...competitorStoreGroups]
                     .filter(g => g.avg_rating != null)
                     .sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
                     .map((group, idx, arr) => (
@@ -1250,39 +1269,33 @@ export default function FranceMap() {
                           {(group.total_reviews || 0) >= 1000 ? `${((group.total_reviews || 0) / 1000).toFixed(1)}K` : group.total_reviews} avis
                         </span>
                       </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-3 mb-3">
-                  {competitorStoreGroups.map((group) => (
-                    <div key={group.competitor_id} className="flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1.5 border">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
-                      <span className="text-xs font-medium text-gray-700">{group.competitor_name}</span>
-                      <span className="text-[10px] text-gray-400 font-mono">{group.total}</span>
+                    ))
+                ) : (
+                  // Skeleton / loading state while auto-enrichment runs
+                  competitorStoreGroups.map((group) => (
+                    <div key={group.competitor_id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border bg-white/80 animate-pulse">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                      <span className="text-xs font-medium text-gray-700 flex-1">{group.competitor_name}</span>
+                      <span className="text-xs text-gray-300">⭐ —</span>
+                      <span className="w-10 h-3 bg-gray-200 rounded" />
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
 
-              {/* Enrichir GMB button */}
-              {!competitorStoreGroups.some(g => g.avg_rating != null) && (
-                <button
-                  onClick={handleEnrichGmb}
-                  disabled={gmbEnriching}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50"
-                >
-                  {gmbEnriching ? (
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  {gmbEnriching ? "Enrichissement GMB en cours..." : "Enrichir les fiches Google My Business"}
-                </button>
-              )}
+              {/* Refresh GMB button — always visible */}
+              <button
+                onClick={handleEnrichGmb}
+                disabled={gmbEnriching}
+                className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-white/80 hover:bg-white border border-red-200 text-red-700 text-xs font-medium rounded-lg transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3 w-3 ${gmbEnriching ? "animate-spin" : ""}`} />
+                {gmbEnriching ? "Analyse GMB en cours..." : "Rafraîchir les notes Google"}
+              </button>
 
               {/* Rating legend */}
               {competitorStoreGroups.some(g => g.avg_rating != null) && (
-                <div className="flex items-center gap-3 text-[10px] text-gray-500 pt-2 border-t border-red-100">
+                <div className="flex items-center gap-3 text-[10px] text-gray-500 pt-2 border-t border-red-100 mt-2">
                   <span>Couleur marqueurs :</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> ≥4.0</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> 3.5-3.9</span>

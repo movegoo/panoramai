@@ -877,12 +877,14 @@ MEDIUM_CITIES = {"le mans", "aix-en-provence", "clermont-ferrand", "brest", "tou
 
 @router.post("/stores/enrich-gmb-demo")
 async def enrich_gmb_demo(
+    force: bool = False,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
     """
     Enrichit les store_locations avec des données Google My Business de démo.
     Génère des ratings réalistes par enseigne et des nombres d'avis proportionnels à la taille de la ville.
+    Passer force=true pour régénérer toutes les notes (rafraîchir).
     """
     # Filter stores by user's competitors
     user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
@@ -895,15 +897,17 @@ async def enrich_gmb_demo(
     if not comp_ids:
         return {"message": "Aucun concurrent trouvé", "enriched": 0}
 
-    # Get stores without rating
-    stores = db.query(StoreLocation).filter(
+    # Get stores to enrich (all if force, only missing otherwise)
+    base_filter = [
         StoreLocation.competitor_id.in_(comp_ids),
         StoreLocation.source == "BANCO",
-        StoreLocation.google_rating.is_(None),
-    ).all()
+    ]
+    if not force:
+        base_filter.append(StoreLocation.google_rating.is_(None))
+
+    stores = db.query(StoreLocation).filter(*base_filter).all()
 
     if not stores:
-        # Count already enriched
         already = db.query(StoreLocation).filter(
             StoreLocation.competitor_id.in_(comp_ids),
             StoreLocation.source == "BANCO",
