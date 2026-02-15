@@ -2,7 +2,7 @@
 Geo API router.
 Gestion des magasins et analyses de zones de chalandise.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -523,6 +523,7 @@ async def get_all_competitor_stores(
     include_stores: bool = False,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Retourne les magasins concurrents groupés par concurrent.
 
@@ -536,6 +537,8 @@ async def get_all_competitor_stores(
     user_comp_query = db.query(Competitor.id).filter(Competitor.is_active == True)
     if user:
         user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     user_comp_ids = [row[0] for row in user_comp_query.all()]
 
     if not user_comp_ids:
@@ -624,11 +627,14 @@ async def get_competitor_stores_geo(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Magasins d'un concurrent spécifique."""
     # Verify competitor belongs to this user
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     if user and comp and comp.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if x_advertiser_id and comp and comp.advertiser_id != int(x_advertiser_id):
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     stores = db.query(StoreLocation).filter(
@@ -663,6 +669,7 @@ async def get_catchment_zones(
     radius_km: float = 10,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Calcule les zones de chalandise de chaque concurrent.
@@ -687,6 +694,8 @@ async def get_catchment_zones(
     user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
     if user:
         user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors_list = user_comp_query.all()
 
     if not competitors_list:
@@ -881,6 +890,7 @@ async def enrich_gmb_demo(
     force: bool = False,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Enrichit les store_locations avec des données Google My Business de démo.
@@ -891,6 +901,8 @@ async def enrich_gmb_demo(
     user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
     if user:
         user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors_list = user_comp_query.all()
     comp_map = {c.id: c.name for c in competitors_list}
     comp_ids = list(comp_map.keys())

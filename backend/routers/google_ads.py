@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db, Competitor, Ad, User
@@ -52,6 +52,7 @@ async def get_all_google_ads(
     active_only: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Liste toutes les pubs Google avec le nom du concurrent."""
     query = db.query(Ad, Competitor.name).join(
@@ -59,6 +60,8 @@ async def get_all_google_ads(
     ).filter(Ad.platform == "google")
 
     query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     if active_only:
         query = query.filter(Ad.is_active == True)
 

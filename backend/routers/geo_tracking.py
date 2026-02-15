@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _get_user_competitors(db: Session, user: User | None) -> list[Competitor]:
+def _get_user_competitors(db: Session, user: User | None, x_advertiser_id: str | None = None) -> list[Competitor]:
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     return query.all()
 
 
@@ -39,9 +41,10 @@ def _get_user_brand(db: Session, user: User | None) -> Advertiser | None:
 async def track_geo(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Run GEO tracking: query Claude + Gemini + ChatGPT, analyse brand mentions."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     if not competitors:
         return {"error": "No competitors configured", "tracked_queries": 0}
 
@@ -122,9 +125,10 @@ async def track_geo(
 async def get_results(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get latest GEO tracking results grouped by keyword + platform."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     comp_names = {c.id: c.name for c in competitors}
 
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
@@ -171,9 +175,10 @@ async def get_results(
 async def get_insights(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated GEO insights: share of voice, recommendations, platform comparison."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 

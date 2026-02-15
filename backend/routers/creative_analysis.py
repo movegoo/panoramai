@@ -8,7 +8,7 @@ import logging
 from collections import Counter
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from database import get_db, Ad, Competitor, User, SystemSetting
@@ -36,6 +36,7 @@ async def analyze_all_creatives(
     limit: int = Query(10, ge=1, le=200),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze ad creatives that haven't been analyzed yet."""
     # Auto-reset previous failures (score=0) so they can be retried
@@ -45,6 +46,8 @@ async def analyze_all_creatives(
     )
     if user:
         reset_query = reset_query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     for ad in reset_query.all():
         ad.creative_analyzed_at = None
         ad.creative_score = None
@@ -59,6 +62,8 @@ async def analyze_all_creatives(
 
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     # Skip VIDEO format (no static image)
     ads_to_analyze = []
@@ -72,6 +77,8 @@ async def analyze_all_creatives(
     remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
     if user:
         remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     if not ads_to_analyze:
         return {"message": "No ads to analyze", "analyzed": 0, "errors": 0, "remaining": remaining_query.count()}
@@ -127,6 +134,8 @@ async def analyze_all_creatives(
     remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
     if user:
         remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     remaining = remaining_query.count()
 
     return {
@@ -158,6 +167,7 @@ async def set_api_key(
 async def reset_failed_analyses(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Reset ads that were marked as analyzed but have score=0 (failed analyses)."""
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
@@ -167,6 +177,8 @@ async def reset_failed_analyses(
 
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     ads = query.all()
     count = 0
@@ -184,6 +196,7 @@ async def reset_failed_analyses(
 async def get_creative_insights(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated creative intelligence across all analyzed ads."""
     query = db.query(Ad, Competitor.name).join(
@@ -195,6 +208,8 @@ async def get_creative_insights(
 
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     rows = query.all()
 

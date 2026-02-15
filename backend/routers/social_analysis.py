@@ -8,7 +8,7 @@ import logging
 from collections import Counter, defaultdict
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from database import get_db, Competitor, User, SocialPost, Advertiser
@@ -25,11 +25,14 @@ router = APIRouter()
 async def collect_all_social_posts(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Collect recent posts/videos from TikTok, YouTube, Instagram for all active competitors."""
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors = query.all()
 
     if not competitors:
@@ -185,7 +188,10 @@ async def collect_all_social_posts(
 
     total_posts = db.query(SocialPost).count()
     if user:
-        total_posts = db.query(SocialPost).join(Competitor).filter(Competitor.user_id == user.id).count()
+        total_posts_query = db.query(SocialPost).join(Competitor).filter(Competitor.user_id == user.id)
+        if x_advertiser_id:
+            total_posts_query = total_posts_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        total_posts = total_posts_query.count()
 
     return {
         "message": f"Collected {total_new} new posts, updated {total_updated}",
@@ -203,6 +209,7 @@ async def analyze_all_content(
     limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze social posts that haven't been analyzed yet."""
     # Auto-reset previous failures (score=0)
@@ -212,6 +219,8 @@ async def analyze_all_content(
     )
     if user:
         reset_query = reset_query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     for post in reset_query.all():
         post.content_analyzed_at = None
         post.content_engagement_score = None
@@ -224,12 +233,16 @@ async def analyze_all_content(
     )
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     posts_to_analyze = query.limit(limit).all()
 
     remaining_query = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None))
     if user:
         remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     if not posts_to_analyze:
         return {"message": "No posts to analyze", "analyzed": 0, "errors": 0, "remaining": remaining_query.count()}
@@ -289,6 +302,8 @@ async def analyze_all_content(
     remaining_query = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None))
     if user:
         remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
     return {
         "message": f"Analyzed {analyzed} social posts",
@@ -303,6 +318,7 @@ async def get_content_insights(
     platform: str | None = Query(None, description="Filter by platform: tiktok, youtube, instagram"),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated content intelligence across all analyzed social posts."""
     query = db.query(SocialPost, Competitor.name).join(
@@ -313,6 +329,8 @@ async def get_content_insights(
     )
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     if platform:
         query = query.filter(SocialPost.platform == platform.lower())
 

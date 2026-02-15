@@ -10,7 +10,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -371,11 +371,13 @@ def _extract_domain(url: str) -> str:
         return ""
 
 
-def _get_user_competitors(db: Session, user: User | None) -> list[Competitor]:
+def _get_user_competitors(db: Session, user: User | None, x_advertiser_id: str | None = None) -> list[Competitor]:
     """Get active competitors scoped to user."""
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     return query.all()
 
 
@@ -410,9 +412,10 @@ def _match_competitor(domain: str, domain_map: dict[str, int]) -> int | None:
 async def track_serp(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Run SERP tracking with sector-specific keywords. Only matches user's own competitors."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     if not competitors:
         return {"error": "No competitors configured", "tracked_keywords": 0, "total_results": 0}
 
@@ -486,9 +489,10 @@ async def track_serp(
 async def get_rankings(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get latest SERP rankings. Only shows user's own sector keywords and competitors."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 
@@ -543,9 +547,10 @@ async def get_rankings(
 async def get_insights(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated SEO insights. Scoped to user's sector keywords and competitors."""
-    competitors = _get_user_competitors(db, user)
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 

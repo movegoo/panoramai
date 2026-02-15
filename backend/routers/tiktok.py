@@ -2,7 +2,7 @@
 TikTok API router.
 Endpoints for fetching and analyzing TikTok profile data + TikTok Ads.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -389,9 +389,13 @@ async def fetch_tiktok_ads(
 async def fetch_all_tiktok_ads(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch TikTok ads for all active competitors."""
-    competitors = db.query(Competitor).filter(Competitor.is_active == True, Competitor.user_id == user.id).all()
+    comp_query = db.query(Competitor).filter(Competitor.is_active == True, Competitor.user_id == user.id)
+    if x_advertiser_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+    competitors = comp_query.all()
     results = []
     for comp in competitors:
         try:
