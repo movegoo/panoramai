@@ -520,6 +520,12 @@ export const facebookAPI = {
       "/facebook/enrich-transparency",
       { method: "POST" }
     ),
+
+  resolvePageIds: () =>
+    fetchAPI<{ message: string; resolved: any[]; errors: any[] }>(
+      "/facebook/resolve-page-ids",
+      { method: "POST" }
+    ),
 };
 
 // Instagram API

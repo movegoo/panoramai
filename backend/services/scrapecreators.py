@@ -361,6 +361,50 @@ class ScrapeCreatorsAPI:
             "credits_remaining": data.get("credits_remaining"),
         }
 
+    async def search_facebook_companies(self, query: str) -> Dict:
+        """
+        Search for companies in the Facebook Ad Library to get their page_id.
+        Uses /v1/facebook/adLibrary/search/companies?query=<name>
+        """
+        data = await self._get("/v1/facebook/adLibrary/search/companies", {
+            "query": query,
+        })
+
+        if not data.get("success"):
+            return data
+
+        results = data.get("searchResults", data.get("results", data.get("companies", [])))
+        return {
+            "success": True,
+            "companies": results if isinstance(results, list) else [],
+            "credits_remaining": data.get("credits_remaining"),
+        }
+
+    async def fetch_facebook_company_ads(self, page_id: str, country: str = "FR", cursor: str = None) -> Dict:
+        """
+        Get all ads for a company by page_id via /v1/facebook/adLibrary/company/ads.
+        More reliable than keyword search.
+        """
+        params = {"pageId": page_id}
+        if country:
+            params["country"] = country
+        if cursor:
+            params["cursor"] = cursor
+
+        data = await self._get("/v1/facebook/adLibrary/company/ads", params)
+
+        if not data.get("success"):
+            return data
+
+        ads = data.get("ads", data.get("searchResults", []))
+        return {
+            "success": True,
+            "ads": ads if isinstance(ads, list) else [],
+            "count": len(ads) if isinstance(ads, list) else 0,
+            "cursor": data.get("cursor"),
+            "credits_remaining": data.get("credits_remaining"),
+        }
+
     async def search_facebook_ads(self, company_name: str, country: str = "FR", limit: int = 30) -> Dict:
         """Search Facebook Ad Library for a company's ads via ScrapeCreators."""
         data = await self._get("/v1/facebook/adLibrary/search/ads", {

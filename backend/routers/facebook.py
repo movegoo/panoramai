@@ -134,6 +134,61 @@ def _serialize_ad(ad: Ad) -> dict:
     }
 
 
+@router.post("/resolve-page-ids")
+async def resolve_facebook_page_ids(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Auto-detect missing facebook_page_id for all competitors.
+    Uses ScrapeCreators search/companies endpoint.
+    """
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    resolved = []
+    errors = []
+
+    for comp in competitors:
+        if comp.facebook_page_id:
+            resolved.append({"id": comp.id, "name": comp.name, "page_id": comp.facebook_page_id, "status": "already_set"})
+            continue
+
+        result = await scrapecreators.search_facebook_companies(comp.name)
+        if not result.get("success") or not result.get("companies"):
+            errors.append({"id": comp.id, "name": comp.name, "error": "No company found"})
+            continue
+
+        # Pick the best match (first result or name match)
+        companies = result["companies"]
+        best = None
+        for c in companies:
+            c_name = (c.get("page_name") or c.get("name") or "").lower()
+            if comp.name.lower() in c_name or c_name in comp.name.lower():
+                best = c
+                break
+        if not best and companies:
+            best = companies[0]
+
+        page_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "")
+        page_name = best.get("page_name") or best.get("name") or ""
+
+        if page_id:
+            comp.facebook_page_id = page_id
+            resolved.append({"id": comp.id, "name": comp.name, "page_id": page_id, "page_name": page_name, "status": "resolved"})
+        else:
+            errors.append({"id": comp.id, "name": comp.name, "error": "No page_id in result"})
+
+    db.commit()
+
+    return {
+        "message": f"Resolved {sum(1 for r in resolved if r['status'] == 'resolved')} page IDs",
+        "resolved": resolved,
+        "errors": errors,
+    }
+
+
 @router.post("/fetch/{competitor_id}")
 async def fetch_competitor_ads(
     competitor_id: int,
@@ -144,17 +199,60 @@ async def fetch_competitor_ads(
 ):
     """
     Récupère les publicités d'un concurrent via ScrapeCreators Ad Library.
-    Recherche par nom de l'entreprise.
+    Utilise le facebook_page_id si disponible (company/ads endpoint),
+    sinon fait une recherche par nom puis auto-resolve le page_id.
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
-    # Search by competitor name
-    result = await scrapecreators.search_facebook_ads(
-        company_name=competitor.name,
-        country=country,
-        limit=50,
-    )
+    use_page_id = False
+    page_id_used = competitor.facebook_page_id
+
+    # Strategy 1: Use page_id if available (most reliable)
+    if page_id_used:
+        result = await scrapecreators.fetch_facebook_company_ads(
+            page_id=page_id_used,
+            country=country,
+        )
+        if result.get("success"):
+            use_page_id = True
+
+    # Strategy 2: Auto-resolve page_id via company search
+    if not use_page_id and not page_id_used:
+        search_result = await scrapecreators.search_facebook_companies(competitor.name)
+        if search_result.get("success") and search_result.get("companies"):
+            companies = search_result["companies"]
+            best = None
+            for c in companies:
+                c_name = (c.get("page_name") or c.get("name") or "").lower()
+                if competitor.name.lower() in c_name or c_name in competitor.name.lower():
+                    best = c
+                    break
+            if not best and companies:
+                best = companies[0]
+
+            resolved_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "") if best else ""
+            if resolved_id:
+                # Save the resolved page_id
+                competitor.facebook_page_id = resolved_id
+                page_id_used = resolved_id
+                db.commit()
+                logger.info(f"Auto-resolved facebook_page_id={resolved_id} for {competitor.name}")
+
+                result = await scrapecreators.fetch_facebook_company_ads(
+                    page_id=resolved_id,
+                    country=country,
+                )
+                if result.get("success"):
+                    use_page_id = True
+
+    # Strategy 3: Fallback to keyword search
+    if not use_page_id:
+        result = await scrapecreators.search_facebook_ads(
+            company_name=competitor.name,
+            country=country,
+            limit=50,
+        )
 
     if not result.get("success"):
         raise HTTPException(
@@ -174,8 +272,9 @@ async def fetch_competitor_ads(
         snapshot = ad.get("snapshot", {})
         page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
 
-        # Only store ads from this competitor's page (fuzzy match)
-        if not _name_matches(competitor.name, page_name_val):
+        # When using page_id, all ads belong to this competitor (no fuzzy match needed)
+        # When using keyword search, filter by name match
+        if not use_page_id and not _name_matches(competitor.name, page_name_val):
             continue
 
         existing = db.query(Ad).filter(Ad.ad_id == ad_id).first()
@@ -232,6 +331,11 @@ async def fetch_competitor_ads(
         byline_val = snapshot.get("byline") or None
         disclaimer_val = snapshot.get("disclaimer_label") or None
 
+        # Auto-fill competitor's facebook_page_id from first ad if missing
+        if page_id and not competitor.facebook_page_id:
+            competitor.facebook_page_id = page_id
+            logger.info(f"Auto-filled facebook_page_id={page_id} for {competitor.name} from ad data")
+
         # Common fields dict
         enriched = dict(
             platform=platform,
@@ -280,7 +384,9 @@ async def fetch_competitor_ads(
         "total_fetched": len(ads_data),
         "new_stored": new_count,
         "updated": updated_count,
-        "total_available": result.get("total_available", 0),
+        "total_available": result.get("total_available", len(ads_data)),
+        "method": "page_id" if use_page_id else "keyword_search",
+        "facebook_page_id": page_id_used,
     }
 
 

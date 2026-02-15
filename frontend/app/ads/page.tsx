@@ -1515,6 +1515,10 @@ export default function AdsPage() {
       if (missingPlatforms || needsEnrichment) {
         setFetching(true);
         try {
+          // Auto-resolve Facebook page IDs before fetching
+          if (!hasMeta) {
+            try { await facebookAPI.resolvePageIds(); } catch {}
+          }
           if (!hasMeta || !hasTiktok || !hasGoogle) {
             for (const c of comps) {
               if (!hasMeta) try { await facebookAPI.fetchAds(c.id); } catch {}
@@ -1584,6 +1588,8 @@ export default function AdsPage() {
   async function handleFetchAll() {
     setFetching(true);
     try {
+      // Resolve Facebook page IDs first
+      try { await facebookAPI.resolvePageIds(); } catch {}
       for (const c of competitors) {
         try { await facebookAPI.fetchAds(c.id); } catch {}
         try { await tiktokAPI.fetchAds(c.id); } catch {}
