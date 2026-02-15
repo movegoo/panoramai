@@ -11,6 +11,7 @@ import csv
 import io
 import json
 
+import random
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User
 from core.auth import get_optional_user
 from services.geodata import (
@@ -595,9 +596,18 @@ async def get_all_competitor_stores(
                     "postal_code": s.postal_code,
                     "latitude": s.latitude,
                     "longitude": s.longitude,
+                    "google_rating": s.google_rating,
+                    "google_reviews_count": s.google_reviews_count,
                 }
                 for s in stores
             ]
+
+            # GMB aggregates
+            rated = [s for s in stores if s.google_rating is not None]
+            if rated:
+                entry["avg_rating"] = round(sum(s.google_rating for s in rated) / len(rated), 2)
+                entry["total_reviews"] = sum(s.google_reviews_count or 0 for s in rated)
+                entry["stores_with_rating"] = len(rated)
 
         result.append(entry)
 
@@ -828,6 +838,127 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
         "message": f"{len(competitors)} concurrents enrichis",
         "total_stores": sum(counts.values()),
         "results": results,
+    }
+
+
+# =============================================================================
+# Endpoints - Enrichissement GMB demo
+# =============================================================================
+
+# Average ratings by enseigne (realistic variation)
+ENSEIGNE_RATING_CENTERS = {
+    "carrefour": 3.9,
+    "leclerc": 4.1,
+    "lidl": 4.0,
+    "auchan": 3.8,
+    "intermarché": 4.0,
+    "casino": 3.7,
+    "monoprix": 4.2,
+    "système u": 4.1,
+    "cora": 3.9,
+    "castorama": 3.8,
+    "leroy merlin": 4.3,
+    "brico dépôt": 3.6,
+    "bricomarché": 3.9,
+    "mr bricolage": 3.7,
+    "ikea": 4.1,
+    "conforama": 3.5,
+    "but": 3.6,
+    "decathlon": 4.4,
+    "intersport": 4.0,
+    "kiabi": 4.1,
+    "zara": 3.9,
+}
+
+# City population tiers for review count scaling
+BIG_CITIES = {"paris", "marseille", "lyon", "toulouse", "nice", "nantes", "strasbourg", "montpellier", "bordeaux", "lille", "rennes", "reims", "toulon", "grenoble", "dijon", "angers", "nîmes", "saint-étienne"}
+MEDIUM_CITIES = {"le mans", "aix-en-provence", "clermont-ferrand", "brest", "tours", "amiens", "limoges", "perpignan", "metz", "besançon", "orléans", "rouen", "mulhouse", "caen", "nancy", "argenteuil", "saint-denis", "montreuil", "avignon", "dunkerque", "poitiers", "pau", "calais", "la rochelle", "colmar", "lorient", "troyes", "bayonne"}
+
+
+@router.post("/stores/enrich-gmb-demo")
+async def enrich_gmb_demo(
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """
+    Enrichit les store_locations avec des données Google My Business de démo.
+    Génère des ratings réalistes par enseigne et des nombres d'avis proportionnels à la taille de la ville.
+    """
+    # Filter stores by user's competitors
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    if user:
+        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    competitors_list = user_comp_query.all()
+    comp_map = {c.id: c.name for c in competitors_list}
+    comp_ids = list(comp_map.keys())
+
+    if not comp_ids:
+        return {"message": "Aucun concurrent trouvé", "enriched": 0}
+
+    # Get stores without rating
+    stores = db.query(StoreLocation).filter(
+        StoreLocation.competitor_id.in_(comp_ids),
+        StoreLocation.source == "BANCO",
+        StoreLocation.google_rating.is_(None),
+    ).all()
+
+    if not stores:
+        # Count already enriched
+        already = db.query(StoreLocation).filter(
+            StoreLocation.competitor_id.in_(comp_ids),
+            StoreLocation.source == "BANCO",
+            StoreLocation.google_rating.isnot(None),
+        ).count()
+        return {"message": f"Tous les magasins sont déjà enrichis ({already})", "enriched": 0, "already_enriched": already}
+
+    now = datetime.utcnow()
+    enriched_count = 0
+    by_competitor: Dict[str, Dict] = {}
+
+    for store in stores:
+        comp_name = comp_map.get(store.competitor_id, "inconnu")
+        center = ENSEIGNE_RATING_CENTERS.get(comp_name.lower(), 4.0)
+
+        # Normal distribution centered on enseigne average, clipped to [2.5, 5.0]
+        rating = round(min(5.0, max(2.5, random.gauss(center, 0.35))), 1)
+
+        # Review count based on city size
+        city_lower = (store.city or "").lower().strip()
+        if city_lower in BIG_CITIES:
+            reviews = random.randint(400, 2500)
+        elif city_lower in MEDIUM_CITIES:
+            reviews = random.randint(150, 800)
+        else:
+            reviews = random.randint(50, 400)
+
+        store.google_rating = rating
+        store.google_reviews_count = reviews
+        store.google_place_id = f"ChIJ_demo_{store.id}"
+        store.rating_fetched_at = now
+        enriched_count += 1
+
+        # Track per-competitor stats
+        key = comp_name
+        if key not in by_competitor:
+            by_competitor[key] = {"enriched": 0, "ratings_sum": 0.0}
+        by_competitor[key]["enriched"] += 1
+        by_competitor[key]["ratings_sum"] += rating
+
+    db.commit()
+
+    summary = [
+        {
+            "competitor": name,
+            "enriched": stats["enriched"],
+            "avg_rating": round(stats["ratings_sum"] / stats["enriched"], 2),
+        }
+        for name, stats in by_competitor.items()
+    ]
+
+    return {
+        "message": f"{enriched_count} magasins enrichis avec données GMB demo",
+        "enriched": enriched_count,
+        "by_competitor": summary,
     }
 
 

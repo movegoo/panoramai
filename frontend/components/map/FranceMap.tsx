@@ -116,6 +116,9 @@ interface CompetitorStoreGroup {
   competitor_name: string;
   color: string;
   total: number;
+  avg_rating?: number;
+  total_reviews?: number;
+  stores_with_rating?: number;
   stores: Array<{
     id: number;
     name: string;
@@ -125,6 +128,8 @@ interface CompetitorStoreGroup {
     postal_code: string;
     latitude: number;
     longitude: number;
+    google_rating?: number;
+    google_reviews_count?: number;
   }>;
 }
 
@@ -205,6 +210,7 @@ export default function FranceMap() {
   const [pois, setPois] = useState<POI[]>([]);
   const [irveStats, setIrveStats] = useState<any>(null);
   const [competitorStoreGroups, setCompetitorStoreGroups] = useState<CompetitorStoreGroup[]>([]);
+  const [gmbEnriching, setGmbEnriching] = useState(false);
 
   // Catchment zones
   const [catchmentData, setCatchmentData] = useState<any>(null);
@@ -817,6 +823,35 @@ export default function FranceMap() {
     (layerGroupsRef.current as any).__competitorMoveHandler = onMoveEnd;
   };
 
+  const handleEnrichGmb = async () => {
+    setGmbEnriching(true);
+    try {
+      const res = await fetch(`${API_BASE}/geo/stores/enrich-gmb-demo`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error("Enrichissement échoué");
+      // Reload competitor stores to get updated ratings
+      const map = mapInstanceRef.current;
+      const L = leafletRef.current;
+      if (map && L) {
+        await loadCompetitorStoresLayer(map, L);
+      }
+    } catch (err) {
+      console.error("GMB enrichment error:", err);
+    } finally {
+      setGmbEnriching(false);
+    }
+  };
+
+  const getRatingColor = (rating: number | undefined, fallback: string): string => {
+    if (rating == null) return fallback;
+    if (rating >= 4.0) return "#22c55e"; // green
+    if (rating >= 3.5) return "#eab308"; // yellow
+    if (rating >= 3.0) return "#f97316"; // orange
+    return "#ef4444"; // red
+  };
+
   const renderCompetitorStoresInView = (map: any, L: any, groups: CompetitorStoreGroup[]) => {
     // Remove old layer
     const oldLayer = layerGroupsRef.current.get("competitor_stores");
@@ -831,19 +866,29 @@ export default function FranceMap() {
         if (!store.latitude || !store.longitude) return;
         if (!bounds.contains([store.latitude, store.longitude])) return;
 
+        const fillColor = getRatingColor(store.google_rating, group.color);
+
+        let popupHtml =
+          `<b>${store.name || store.brand_name}</b><br>` +
+          `<span style="color:${group.color};font-weight:600">${group.competitor_name}</span><br>` +
+          `${store.city}${store.postal_code ? ` (${store.postal_code})` : ""}`;
+
+        if (store.google_rating != null) {
+          popupHtml += `<br><span style="font-size:13px">⭐ <b>${store.google_rating}</b>/5</span>`;
+          if (store.google_reviews_count != null) {
+            popupHtml += ` <span style="color:#666;font-size:12px">(${store.google_reviews_count.toLocaleString()} avis)</span>`;
+          }
+        }
+
         L.circleMarker([store.latitude, store.longitude], {
           radius: 5,
-          fillColor: group.color,
+          fillColor,
           color: "#fff",
           weight: 1.5,
           fillOpacity: 0.85,
         })
           .addTo(layerGroup)
-          .bindPopup(
-            `<b>${store.name || store.brand_name}</b><br>` +
-            `<span style="color:${group.color};font-weight:600">${group.competitor_name}</span><br>` +
-            `${store.city}${store.postal_code ? ` (${store.postal_code})` : ""}`
-          );
+          .bindPopup(popupHtml);
         count++;
       });
     });
@@ -1182,15 +1227,69 @@ export default function FranceMap() {
                   {competitorStoreGroups.reduce((sum, g) => sum + g.total, 0).toLocaleString()} points
                 </span>
               </div>
-              <div className="flex flex-wrap gap-3">
-                {competitorStoreGroups.map((group) => (
-                  <div key={group.competitor_id} className="flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1.5 border">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
-                    <span className="text-xs font-medium text-gray-700">{group.competitor_name}</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{group.total}</span>
-                  </div>
-                ))}
-              </div>
+
+              {/* GMB Ratings by competitor - sorted by avg_rating */}
+              {competitorStoreGroups.some(g => g.avg_rating != null) ? (
+                <div className="space-y-1.5 mb-3">
+                  {[...competitorStoreGroups]
+                    .filter(g => g.avg_rating != null)
+                    .sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
+                    .map((group, idx, arr) => (
+                      <div
+                        key={group.competitor_id}
+                        className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
+                          idx === 0 ? "bg-green-50 border-green-200" : idx === arr.length - 1 ? "bg-red-50 border-red-200" : "bg-white/80"
+                        }`}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                        <span className="text-xs font-medium text-gray-700 flex-1">{group.competitor_name}</span>
+                        <span className="text-xs font-semibold" style={{ color: (group.avg_rating || 0) >= 4.0 ? "#16a34a" : (group.avg_rating || 0) >= 3.5 ? "#ca8a04" : "#dc2626" }}>
+                          ⭐ {group.avg_rating}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {(group.total_reviews || 0) >= 1000 ? `${((group.total_reviews || 0) / 1000).toFixed(1)}K` : group.total_reviews} avis
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3 mb-3">
+                  {competitorStoreGroups.map((group) => (
+                    <div key={group.competitor_id} className="flex items-center gap-1.5 bg-white/80 rounded-lg px-2.5 py-1.5 border">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: group.color }} />
+                      <span className="text-xs font-medium text-gray-700">{group.competitor_name}</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{group.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Enrichir GMB button */}
+              {!competitorStoreGroups.some(g => g.avg_rating != null) && (
+                <button
+                  onClick={handleEnrichGmb}
+                  disabled={gmbEnriching}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50"
+                >
+                  {gmbEnriching ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {gmbEnriching ? "Enrichissement GMB en cours..." : "Enrichir les fiches Google My Business"}
+                </button>
+              )}
+
+              {/* Rating legend */}
+              {competitorStoreGroups.some(g => g.avg_rating != null) && (
+                <div className="flex items-center gap-3 text-[10px] text-gray-500 pt-2 border-t border-red-100">
+                  <span>Couleur marqueurs :</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> ≥4.0</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> 3.5-3.9</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> 3.0-3.4</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> &lt;3.0</span>
+                </div>
+              )}
             </div>
           )}
 
