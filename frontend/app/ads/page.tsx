@@ -1382,6 +1382,7 @@ export default function AdsPage() {
   const [creativeInsights, setCreativeInsights] = useState<CreativeInsights | null>(null);
   const [analyzingCreatives, setAnalyzingCreatives] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<{ analyzed: number; errors: number; remaining: number } | null>(null);
+  const autoAnalyzedRef = useRef(false);
 
   function handlePeriodChange(days: PeriodDays) {
     setPeriodDays(days);
@@ -1436,8 +1437,21 @@ export default function AdsPage() {
           setFetching(false);
         }
       }
-      // Load creative insights
-      try { const ci = await creativeAPI.getInsights(); setCreativeInsights(ci); } catch {}
+      // Load creative insights + auto-analyze if never done
+      try {
+        const ci = await creativeAPI.getInsights();
+        setCreativeInsights(ci);
+        if (ci && ci.total_analyzed === 0 && ads.length > 0 && !autoAnalyzedRef.current) {
+          autoAnalyzedRef.current = true;
+          setAnalyzingCreatives(true);
+          try {
+            const result = await creativeAPI.analyzeAll(10);
+            setAnalyzeResult(result);
+            const freshCi = await creativeAPI.getInsights();
+            setCreativeInsights(freshCi);
+          } catch {} finally { setAnalyzingCreatives(false); }
+        }
+      } catch {}
     } catch (err) {
       console.error(err);
     } finally {

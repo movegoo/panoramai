@@ -14,8 +14,32 @@ from core.auth import get_optional_user
 from core.utils import get_logo_url
 
 
+def _fix_orphan_competitors(db, user):
+    """Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser."""
+    from database import Advertiser
+    orphans = db.query(Competitor).filter(
+        Competitor.is_active == True,
+        Competitor.user_id == user.id,
+        Competitor.advertiser_id == None,
+    ).count()
+    if orphans > 0:
+        first_adv = db.query(Advertiser).filter(
+            Advertiser.user_id == user.id,
+            Advertiser.is_active == True,
+        ).order_by(Advertiser.id).first()
+        if first_adv:
+            db.query(Competitor).filter(
+                Competitor.is_active == True,
+                Competitor.user_id == user.id,
+                Competitor.advertiser_id == None,
+            ).update({"advertiser_id": first_adv.id})
+            db.commit()
+
+
 def _scoped_competitor_query(db, user, x_advertiser_id=None, include_brand=False):
     """Build a competitor query scoped to user + advertiser."""
+    if user:
+        _fix_orphan_competitors(db, user)
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if not include_brand:
         query = query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))

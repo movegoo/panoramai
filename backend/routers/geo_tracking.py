@@ -21,7 +21,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _fix_orphan_competitors(db: Session, user: User):
+    """Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser."""
+    orphan_count = db.query(Competitor).filter(
+        Competitor.is_active == True, Competitor.user_id == user.id, Competitor.advertiser_id == None,
+    ).count()
+    if orphan_count > 0:
+        first_adv = db.query(Advertiser).filter(
+            Advertiser.user_id == user.id, Advertiser.is_active == True,
+        ).order_by(Advertiser.id).first()
+        if first_adv:
+            db.query(Competitor).filter(
+                Competitor.is_active == True, Competitor.user_id == user.id, Competitor.advertiser_id == None,
+            ).update({"advertiser_id": first_adv.id})
+            db.commit()
+
+
 def _get_user_competitors(db: Session, user: User | None, x_advertiser_id: str | None = None) -> list[Competitor]:
+    if user:
+        _fix_orphan_competitors(db, user)
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         query = query.filter(Competitor.user_id == user.id)

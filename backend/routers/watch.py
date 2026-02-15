@@ -363,6 +363,27 @@ async def get_dashboard_data(
     """
     adv_id = int(x_advertiser_id) if x_advertiser_id else None
     brand = get_brand(db, user, adv_id)
+
+    # Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser
+    if user:
+        orphan_count = db.query(Competitor).filter(
+            Competitor.is_active == True,
+            Competitor.user_id == user.id,
+            Competitor.advertiser_id == None,
+        ).count()
+        if orphan_count > 0:
+            first_adv = db.query(Advertiser).filter(
+                Advertiser.user_id == user.id,
+                Advertiser.is_active == True,
+            ).order_by(Advertiser.id).first()
+            if first_adv:
+                db.query(Competitor).filter(
+                    Competitor.is_active == True,
+                    Competitor.user_id == user.id,
+                    Competitor.advertiser_id == None,
+                ).update({"advertiser_id": first_adv.id})
+                db.commit()
+
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)

@@ -456,9 +456,12 @@ async def add_selected_competitors(
 
 
 @router.get("/")
-async def list_advertisers(db: Session = Depends(get_db)):
+async def list_advertisers(db: Session = Depends(get_db), user: User | None = Depends(get_optional_user)):
     """List all advertisers."""
-    return db.query(Advertiser).filter(Advertiser.is_active == True).all()
+    query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    return query.all()
 
 
 @router.get("/{advertiser_id}")
@@ -474,10 +477,14 @@ async def get_advertiser(advertiser_id: int, db: Session = Depends(get_db)):
 async def update_advertiser(
     advertiser_id: int,
     update: AdvertiserUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Update advertiser profile."""
-    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
+    query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    advertiser = query.first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
@@ -491,9 +498,16 @@ async def update_advertiser(
 
 
 @router.delete("/{advertiser_id}")
-async def delete_advertiser(advertiser_id: int, db: Session = Depends(get_db)):
+async def delete_advertiser(
+    advertiser_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Soft delete an advertiser."""
-    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
+    query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)
+    if user:
+        query = query.filter(Advertiser.user_id == user.id)
+    advertiser = query.first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
