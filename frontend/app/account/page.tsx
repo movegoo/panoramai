@@ -38,6 +38,23 @@ import {
   Sparkles,
   RefreshCw,
   Info,
+  Plug,
+  ShoppingCart,
+  BarChart3,
+  Mail,
+  CreditCard,
+  Star,
+  Database,
+  Megaphone,
+  Lock,
+  Clock,
+  Wallet,
+  MessageSquare,
+  Package,
+  MapPin,
+  TrendingUp,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -286,6 +303,306 @@ function SmartChannelInput({
         <p className="text-[11px] text-muted-foreground">{channel.hint}</p>
       )}
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* Connectors Section                                                        */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+interface Connector {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  color: string;
+  bg: string;
+  border: string;
+  status: "connected" | "available" | "coming_soon";
+  category: "analytics" | "ads" | "crm" | "ecommerce" | "data" | "reviews";
+  badge?: string;
+  syncLabel?: string;
+}
+
+const CONNECTORS: Connector[] = [
+  // --- Connected (demo) ---
+  {
+    id: "ga4", name: "Google Analytics 4", description: "Trafic, conversions, audiences",
+    icon: BarChart3, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200",
+    status: "connected", category: "analytics", badge: "12.4k sessions/j", syncLabel: "Synchro il y a 2h",
+  },
+  {
+    id: "meta_business", name: "Meta Business Suite", description: "Facebook & Instagram Ads, audiences",
+    icon: Megaphone, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200",
+    status: "connected", category: "ads", badge: "3 campagnes actives", syncLabel: "Synchro il y a 1h",
+  },
+  {
+    id: "gmb", name: "Google Business Profile", description: "Fiches etablissements, avis, visibilite locale",
+    icon: MapPin, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200",
+    status: "connected", category: "reviews", badge: "47 fiches", syncLabel: "Synchro il y a 4h",
+  },
+  {
+    id: "loyalty", name: "Programme fidelite", description: "Base clients, segmentation, panier moyen",
+    icon: Wallet, color: "text-violet-600", bg: "bg-violet-50", border: "border-violet-200",
+    status: "connected", category: "crm", badge: "2.3M membres", syncLabel: "Synchro quotidienne",
+  },
+  // --- Available ---
+  {
+    id: "google_ads", name: "Google Ads", description: "Campagnes Search, Display, Shopping",
+    icon: TrendingUp, color: "text-blue-500", bg: "bg-blue-50", border: "border-blue-200",
+    status: "available", category: "ads",
+  },
+  {
+    id: "shopify", name: "Shopify", description: "Commandes, produits, inventaire e-commerce",
+    icon: ShoppingCart, color: "text-green-600", bg: "bg-green-50", border: "border-green-200",
+    status: "available", category: "ecommerce",
+  },
+  {
+    id: "salesforce", name: "Salesforce CRM", description: "Contacts, pipeline, opportunites",
+    icon: Database, color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200",
+    status: "available", category: "crm",
+  },
+  {
+    id: "hubspot", name: "HubSpot", description: "CRM, marketing automation, leads",
+    icon: MessageSquare, color: "text-orange-500", bg: "bg-orange-50", border: "border-orange-200",
+    status: "available", category: "crm",
+  },
+  {
+    id: "mailchimp", name: "Mailchimp", description: "Campagnes email, taux d'ouverture, audiences",
+    icon: Mail, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200",
+    status: "available", category: "ads",
+  },
+  {
+    id: "pos_caisse", name: "Caisse / POS", description: "Donnees de vente en magasin, ticket moyen",
+    icon: CreditCard, color: "text-slate-600", bg: "bg-slate-50", border: "border-slate-200",
+    status: "available", category: "data",
+  },
+  {
+    id: "trustpilot", name: "Trustpilot", description: "Avis clients, NPS, reputation en ligne",
+    icon: Star, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200",
+    status: "available", category: "reviews",
+  },
+  {
+    id: "erp_sap", name: "SAP / ERP", description: "Stock, approvisionnement, logistique",
+    icon: Package, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200",
+    status: "available", category: "data",
+  },
+  {
+    id: "gsc", name: "Search Console", description: "Impressions, clics, positions SEO",
+    icon: Globe, color: "text-violet-500", bg: "bg-violet-50", border: "border-violet-200",
+    status: "available", category: "analytics",
+  },
+  // --- Coming soon ---
+  {
+    id: "bigquery", name: "BigQuery / Snowflake", description: "Data warehouse, requetes SQL directes",
+    icon: Database, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon", category: "data",
+  },
+  {
+    id: "tiktok_ads", name: "TikTok Ads", description: "Campagnes, audiences, conversions TikTok",
+    icon: Zap, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon", category: "ads",
+  },
+  {
+    id: "criteo", name: "Criteo", description: "Retargeting, retail media, ROAS",
+    icon: ShieldCheck, color: "text-gray-500", bg: "bg-gray-50", border: "border-gray-200",
+    status: "coming_soon", category: "ads",
+  },
+];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  analytics: "Analytics",
+  ads: "Publicite",
+  crm: "CRM & Fidelite",
+  ecommerce: "E-commerce",
+  data: "Data & ERP",
+  reviews: "Avis & Reputation",
+};
+
+function ConnectorsSection() {
+  const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>("all");
+
+  const connectedCount = CONNECTORS.filter(c => c.status === "connected").length;
+  const filtered = filter === "all"
+    ? CONNECTORS
+    : CONNECTORS.filter(c => c.category === filter);
+
+  const categories = Array.from(new Set(CONNECTORS.map(c => c.category)));
+
+  function handleConnect(id: string) {
+    setConnectingId(id);
+    setTimeout(() => setConnectingId(null), 2000);
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100">
+              <Plug className="h-5 w-5 text-indigo-600" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Connecteurs & Integrations</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {connectedCount} connecte{connectedCount > 1 ? "s" : ""} sur {CONNECTORS.length} disponibles
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-medium">
+              <Zap className="h-3 w-3" />
+              Inclus dans votre plan
+            </span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Category filter */}
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setFilter("all")}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              filter === "all"
+                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                : "bg-gray-50 text-gray-600 border border-transparent hover:bg-gray-100"
+            }`}
+          >
+            Tous ({CONNECTORS.length})
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFilter(cat)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                filter === cat
+                  ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                  : "bg-gray-50 text-gray-600 border border-transparent hover:bg-gray-100"
+              }`}
+            >
+              {CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+
+        {/* Connector grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map(connector => {
+            const Icon = connector.icon;
+            const isConnecting = connectingId === connector.id;
+            return (
+              <div
+                key={connector.id}
+                className={`relative rounded-xl border p-4 transition-all ${
+                  connector.status === "connected"
+                    ? `${connector.bg} ${connector.border} border-2`
+                    : connector.status === "coming_soon"
+                    ? "bg-gray-50/50 border-dashed border-gray-200 opacity-75"
+                    : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                }`}
+              >
+                {/* Status badge */}
+                {connector.status === "connected" && (
+                  <div className="absolute top-3 right-3">
+                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Connecte
+                    </span>
+                  </div>
+                )}
+                {connector.status === "coming_soon" && (
+                  <div className="absolute top-3 right-3">
+                    <span className="flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                      <Clock className="h-2.5 w-2.5" />
+                      Bientot
+                    </span>
+                  </div>
+                )}
+
+                {/* Icon + Info */}
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${
+                    connector.status === "connected" ? "bg-white shadow-sm" : connector.bg
+                  }`}>
+                    <Icon className={`h-5 w-5 ${connector.color}`} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${
+                      connector.status === "coming_soon" ? "text-gray-500" : "text-foreground"
+                    }`}>
+                      {connector.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                      {connector.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Connected: show badge + sync info */}
+                {connector.status === "connected" && (
+                  <div className="mt-3 pt-3 border-t border-current/10 space-y-1.5">
+                    {connector.badge && (
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-bold ${connector.color}`}>{connector.badge}</span>
+                      </div>
+                    )}
+                    {connector.syncLabel && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <RefreshCw className="h-2.5 w-2.5" />
+                        {connector.syncLabel}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Available: connect button */}
+                {connector.status === "available" && (
+                  <div className="mt-3">
+                    <button
+                      onClick={() => handleConnect(connector.id)}
+                      disabled={isConnecting}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all disabled:opacity-50"
+                    >
+                      {isConnecting ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Connexion...
+                        </>
+                      ) : (
+                        <>
+                          <Plug className="h-3 w-3" />
+                          Connecter
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Coming soon: locked */}
+                {connector.status === "coming_soon" && (
+                  <div className="mt-3">
+                    <div className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-400">
+                      <Lock className="h-3 w-3" />
+                      Disponible prochainement
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer info */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg px-4 py-3 border border-indigo-100">
+          <Info className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+          <span>
+            Les connecteurs enrichissent automatiquement vos analyses concurrentielles avec vos donnees first-party.
+            Donnees chiffrees, synchronisees et securisees.
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -733,7 +1050,14 @@ export default function AccountPage() {
       </Card>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* Section 2 : Concurrents Suggeres                                  */}
+      {/* Section 2 : Connecteurs & Integrations                            */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {!isNewBrand && profile && (
+        <ConnectorsSection />
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Section 3 : Concurrents Suggeres                                  */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {!isNewBrand && suggestions.length > 0 && (
         <Card>
