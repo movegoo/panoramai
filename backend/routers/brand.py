@@ -13,7 +13,7 @@ from typing import List, Optional
 from database import get_db, Advertiser, Competitor, User
 from models.schemas import BrandSetup
 from core.sectors import get_sector_label, get_competitors_for_sector, list_sectors, SECTORS
-from core.auth import get_current_user, get_optional_user
+from core.auth import get_current_user, get_optional_user, get_current_advertiser
 from core.utils import get_logo_url
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def count_configured_channels(brand: Advertiser) -> int:
     return sum(1 for c in channels if c)
 
 
-def get_current_brand(db: Session, user: User | None = None) -> Advertiser:
+def get_current_brand(db: Session, user: User | None = None, advertiser_id: int | None = None) -> Advertiser:
     """Récupère l'enseigne courante, filtrée par user si authentifié."""
     if user:
         from core.auth import claim_orphans
@@ -41,6 +41,8 @@ def get_current_brand(db: Session, user: User | None = None) -> Advertiser:
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         query = query.filter(Advertiser.user_id == user.id)
+    if advertiser_id:
+        query = query.filter(Advertiser.id == advertiser_id)
     brand = query.first()
     if not brand:
         raise HTTPException(
@@ -93,14 +95,22 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
     in rankings alongside competitors.
     """
     comp = db.query(Competitor).filter(
-        Competitor.name == brand.company_name,
+        Competitor.advertiser_id == brand.id,
         Competitor.is_active == True,
-        *([Competitor.user_id == user.id] if user else []),
     ).first()
+    if not comp:
+        # Fallback: match by name for legacy records
+        comp = db.query(Competitor).filter(
+            Competitor.name == brand.company_name,
+            Competitor.is_active == True,
+            Competitor.advertiser_id == None,
+            *([Competitor.user_id == user.id] if user else []),
+        ).first()
 
     if not comp:
         comp = Competitor(
             user_id=user.id if user else None,
+            advertiser_id=brand.id,
             name=brand.company_name,
             website=brand.website,
             logo_url=get_logo_url(brand.website),
@@ -120,6 +130,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
     else:
         # Sync fields from brand to competitor
+        comp.advertiser_id = brand.id
         comp.website = brand.website
         comp.logo_url = get_logo_url(brand.website)
         comp.playstore_app_id = brand.playstore_app_id
@@ -142,22 +153,34 @@ async def get_available_sectors():
     return list_sectors()
 
 
+@router.get("/list")
+async def list_brands(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Liste toutes les enseignes de l'utilisateur."""
+    brands = db.query(Advertiser).filter(
+        Advertiser.user_id == user.id,
+        Advertiser.is_active == True,
+    ).order_by(Advertiser.id).all()
+    return [
+        {
+            "id": b.id,
+            "company_name": b.company_name,
+            "sector": b.sector,
+            "logo_url": get_logo_url(b.website),
+        }
+        for b in brands
+    ]
+
+
 @router.post("/setup")
 async def setup_brand(
     data: BrandSetup,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    """Onboarding initial de l'enseigne."""
-    exist_query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        exist_query = exist_query.filter(Advertiser.user_id == user.id)
-    existing = exist_query.first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Une enseigne est déjà configurée: {existing.company_name}"
-        )
+    """Onboarding initial de l'enseigne (permet plusieurs enseignes)."""
 
     if data.sector not in SECTORS:
         raise HTTPException(
@@ -204,14 +227,16 @@ async def setup_brand(
 
 @router.get("/profile")
 async def get_brand_profile(
+    advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
     """Récupère le profil de mon enseigne."""
-    brand = get_current_brand(db, user)
+    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
         *([Competitor.user_id == user.id] if user else []),
+        *([Competitor.advertiser_id == brand.id] if brand else []),
     ).count()
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
@@ -219,22 +244,18 @@ async def get_brand_profile(
 
 @router.delete("/reset")
 async def reset_brand(
+    advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
     """Supprime l'enseigne et ses concurrents pour reconfigurer."""
-    query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
-    brand = query.first()
-    if not brand:
-        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
 
-    # Deactivate competitors
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    comp_query.update({"is_active": False})
+    # Deactivate competitors linked to this advertiser
+    db.query(Competitor).filter(
+        Competitor.advertiser_id == brand.id,
+        Competitor.is_active == True,
+    ).update({"is_active": False})
 
     # Deactivate brand
     brand.is_active = False
@@ -246,11 +267,12 @@ async def reset_brand(
 @router.put("/profile")
 async def update_brand_profile(
     data: BrandSetup,
+    advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
     """Met à jour le profil de mon enseigne."""
-    brand = get_current_brand(db, user)
+    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
 
     brand.company_name = data.company_name
     brand.sector = data.sector

@@ -5,12 +5,12 @@ JWT token management and password hashing.
 import bcrypt
 import jwt
 from datetime import datetime, timedelta
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from database import get_db, User
+from database import get_db, User, Advertiser
 
 security = HTTPBearer(auto_error=False)
 
@@ -79,6 +79,32 @@ def get_optional_user(
         return get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+def get_current_advertiser(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_advertiser_id: str | None = Header(None),
+) -> Advertiser:
+    """Resolve the active advertiser from X-Advertiser-Id header or user's first advertiser."""
+    query = db.query(Advertiser).filter(
+        Advertiser.user_id == user.id,
+        Advertiser.is_active == True,
+    )
+    if x_advertiser_id:
+        try:
+            adv_id = int(x_advertiser_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="X-Advertiser-Id invalide")
+        advertiser = query.filter(Advertiser.id == adv_id).first()
+        if not advertiser:
+            raise HTTPException(status_code=403, detail="Accès refusé à cet annonceur")
+        return advertiser
+    # Fallback: first advertiser
+    advertiser = query.order_by(Advertiser.id).first()
+    if not advertiser:
+        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+    return advertiser
 
 
 def claim_orphans(db: Session, user: User) -> None:

@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
-import { brandAPI } from "@/lib/api";
+import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import {
   LayoutDashboard,
@@ -61,13 +60,12 @@ const navigation = [
 
 export function SidebarNav({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, currentAdvertiserId } = useAuth();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [brandName, setBrandName] = useState<string | null>(null);
 
-  useEffect(() => {
-    brandAPI.getProfile().then((p) => setBrandName(p.company_name)).catch(() => {});
-  }, []);
+  const advertisers = user?.advertisers || [];
+  const currentAdv = advertisers.find((a) => a.id === currentAdvertiserId) || advertisers[0];
+  const brandName = currentAdv?.company_name || null;
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";

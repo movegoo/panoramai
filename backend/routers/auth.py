@@ -27,16 +27,20 @@ class LoginRequest(BaseModel):
 
 def _build_user_dict(user: User, db: Session) -> dict:
     """Build user response dict."""
-    has_brand = db.query(Advertiser).filter(
+    advertisers = db.query(Advertiser).filter(
         Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).first() is not None
+    ).order_by(Advertiser.id).all()
 
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
-        "has_brand": has_brand,
+        "has_brand": len(advertisers) > 0,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
+        "advertisers": [
+            {"id": a.id, "company_name": a.company_name, "sector": a.sector}
+            for a in advertisers
+        ],
     }
 
 
@@ -112,15 +116,19 @@ async def reset_user(email: str, db: Session = Depends(get_db)):
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get current user profile."""
-    brand = db.query(Advertiser).filter(
+    advertisers = db.query(Advertiser).filter(
         Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).first()
+    ).order_by(Advertiser.id).all()
 
     return {
         "id": user.id,
         "email": user.email,
         "name": user.name,
-        "has_brand": brand is not None,
-        "brand_name": brand.company_name if brand else None,
+        "has_brand": len(advertisers) > 0,
+        "brand_name": advertisers[0].company_name if advertisers else None,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
+        "advertisers": [
+            {"id": a.id, "company_name": a.company_name, "sector": a.sector}
+            for a in advertisers
+        ],
     }

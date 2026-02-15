@@ -1,15 +1,25 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { authAPI, AuthUser, setToken, clearToken } from "./api";
+import {
+  authAPI,
+  AuthUser,
+  setToken,
+  clearToken,
+  getCurrentAdvertiserId,
+  setCurrentAdvertiserId,
+  clearCurrentAdvertiserId,
+} from "./api";
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  currentAdvertiserId: number | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
+  switchAdvertiser: (id: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -17,14 +27,26 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentAdvertiserId, setCurrentAdvId] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const me = await authAPI.me();
       setUser(me);
+      // Initialize advertiser ID if not set or invalid
+      const stored = getCurrentAdvertiserId();
+      const advIds = (me.advertisers || []).map((a) => a.id);
+      if (stored && advIds.includes(Number(stored))) {
+        setCurrentAdvId(Number(stored));
+      } else if (advIds.length > 0) {
+        setCurrentAdvertiserId(advIds[0]);
+        setCurrentAdvId(advIds[0]);
+      }
     } catch {
       clearToken();
+      clearCurrentAdvertiserId();
       setUser(null);
+      setCurrentAdvId(null);
     }
   }, []);
 
@@ -41,6 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await authAPI.login(email, password);
     setToken(res.token);
     setUser(res.user);
+    const advs = res.user.advertisers || [];
+    if (advs.length > 0) {
+      setCurrentAdvertiserId(advs[0].id);
+      setCurrentAdvId(advs[0].id);
+    }
   }
 
   async function register(email: string, password: string, name?: string) {
@@ -51,11 +78,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   function logout() {
     clearToken();
+    clearCurrentAdvertiserId();
     setUser(null);
+    setCurrentAdvId(null);
+  }
+
+  function switchAdvertiser(id: number) {
+    setCurrentAdvertiserId(id);
+    setCurrentAdvId(id);
+    // Force page reload to refetch all data with new advertiser
+    window.location.reload();
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, currentAdvertiserId, login, register, logout, refresh, switchAdvertiser }}>
       {children}
     </AuthContext.Provider>
   );

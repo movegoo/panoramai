@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { brandAPI } from "@/lib/api";
+import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/lib/auth";
 import {
   LayoutDashboard,
   Users,
@@ -12,7 +12,11 @@ import {
   Map,
   Settings,
   ChevronRight,
+  ChevronDown,
+  Plus,
+  Check,
 } from "lucide-react";
+import Link from "next/link";
 
 const PAGE_META: Record<string, { label: string; icon: React.ElementType; parent?: string }> = {
   "/": { label: "Vue d\u2019ensemble", icon: LayoutDashboard, parent: "Dashboard" },
@@ -28,10 +32,21 @@ export function Breadcrumb() {
   const pathname = usePathname();
   const meta = PAGE_META[pathname] || PAGE_META["/"];
   const Icon = meta.icon;
-  const [brandName, setBrandName] = useState<string | null>(null);
+  const { user, currentAdvertiserId, switchAdvertiser } = useAuth();
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const advertisers = user?.advertisers || [];
+  const currentAdv = advertisers.find((a) => a.id === currentAdvertiserId) || advertisers[0];
 
   useEffect(() => {
-    brandAPI.getProfile().then((p) => setBrandName(p.company_name)).catch(() => {});
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
@@ -52,13 +67,62 @@ export function Breadcrumb() {
         </span>
       </div>
 
-      {/* Right side: brand info */}
-      {brandName && (
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
-            {brandName.charAt(0).toUpperCase()}
-          </div>
-          <span className="text-[13px] font-semibold text-foreground">{brandName}</span>
+      {/* Right side: advertiser switcher */}
+      {currentAdv && (
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setOpen(!open)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted/60 transition-colors"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
+              {currentAdv.company_name.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-[13px] font-semibold text-foreground">{currentAdv.company_name}</span>
+            {advertisers.length > 1 && (
+              <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+            )}
+          </button>
+
+          {open && advertisers.length > 0 && (
+            <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border border-border bg-card shadow-lg z-50 py-1">
+              <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Mes enseignes
+              </div>
+              {advertisers.map((adv) => (
+                <button
+                  key={adv.id}
+                  onClick={() => {
+                    if (adv.id !== currentAdvertiserId) {
+                      switchAdvertiser(adv.id);
+                    }
+                    setOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-muted/60 transition-colors"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50 shrink-0">
+                    {adv.company_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium text-foreground truncate">{adv.company_name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{adv.sector}</p>
+                  </div>
+                  {adv.id === currentAdvertiserId && (
+                    <Check className="h-4 w-4 text-violet-600 shrink-0" />
+                  )}
+                </button>
+              ))}
+              <div className="border-t border-border mt-1 pt-1">
+                <Link
+                  href="/account"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-muted/60 transition-colors text-[13px] text-violet-600 font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Ajouter une enseigne
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

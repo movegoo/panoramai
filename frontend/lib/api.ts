@@ -369,17 +369,35 @@ export function clearToken() {
   localStorage.removeItem("auth_token");
 }
 
+// Advertiser switching
+export function getCurrentAdvertiserId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("current_advertiser_id");
+}
+
+export function setCurrentAdvertiserId(id: number) {
+  localStorage.setItem("current_advertiser_id", String(id));
+}
+
+export function clearCurrentAdvertiserId() {
+  localStorage.removeItem("current_advertiser_id");
+}
+
 async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
   const token = getToken();
+  const advertiserId = getCurrentAdvertiserId();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) || {}),
   };
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (advertiserId) {
+    headers["X-Advertiser-Id"] = advertiserId;
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -398,6 +416,12 @@ async function fetchAPI<T>(
 }
 
 // Auth API
+export interface AdvertiserSummary {
+  id: number;
+  company_name: string;
+  sector: string;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
@@ -405,6 +429,7 @@ export interface AuthUser {
   has_brand: boolean;
   brand_name?: string;
   is_admin?: boolean;
+  advertisers?: AdvertiserSummary[];
 }
 
 export interface AuthResponse {
@@ -702,7 +727,16 @@ export interface SetupResponseData {
   message: string;
 }
 
+export interface BrandListItem {
+  id: number;
+  company_name: string;
+  sector: string;
+  logo_url?: string;
+}
+
 export const brandAPI = {
+  list: () => fetchAPI<BrandListItem[]>("/brand/list"),
+
   getSectors: () => fetchAPI<SectorData[]>("/brand/sectors"),
 
   setup: (data: BrandSetupData) =>

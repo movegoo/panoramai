@@ -29,7 +29,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
 
-    advertiser = relationship("Advertiser", back_populates="user", uselist=False)
+    advertisers = relationship("Advertiser", back_populates="user")
     competitors = relationship("Competitor", back_populates="user")
 
 
@@ -38,6 +38,7 @@ class Competitor(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
     website = Column(String(500))
     facebook_page_id = Column(String(100))
@@ -277,7 +278,7 @@ class Advertiser(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
-    user = relationship("User", back_populates="advertiser")
+    user = relationship("User", back_populates="advertisers")
     stores = relationship("Store", back_populates="advertiser")
 
 
@@ -479,6 +480,7 @@ def _run_migrations(engine):
             # Creative Analysis columns
             ("geo_results", "user_id", "INTEGER REFERENCES users(id)"),
             ("serp_results", "user_id", "INTEGER REFERENCES users(id)"),
+            ("competitors", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
             ("ads", "creative_analysis", "TEXT"),
             ("ads", "creative_concept", "VARCHAR(100)"),
             ("ads", "creative_hook", "VARCHAR(500)"),
@@ -556,10 +558,35 @@ def _backfill_logos(engine):
         logging.getLogger(__name__).warning(f"Logo backfill warning: {e}")
 
 
+def _backfill_competitor_advertiser(engine):
+    """Backfill advertiser_id on competitors that have user_id but no advertiser_id."""
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            # For each competitor with user_id but no advertiser_id,
+            # assign the user's first active advertiser
+            rows = conn.execute(text(
+                'SELECT c.id, c.user_id FROM competitors c '
+                'WHERE c.user_id IS NOT NULL AND c.advertiser_id IS NULL'
+            )).fetchall()
+            for comp_id, uid in rows:
+                adv = conn.execute(text(
+                    'SELECT id FROM advertisers WHERE user_id = :uid AND is_active = 1 ORDER BY id LIMIT 1'
+                ), {"uid": uid}).fetchone()
+                if adv:
+                    conn.execute(text(
+                        'UPDATE competitors SET advertiser_id = :aid WHERE id = :cid'
+                    ), {"aid": adv[0], "cid": comp_id})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Competitor advertiser backfill warning: {e}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     _run_migrations(engine)
     _backfill_logos(engine)
+    _backfill_competitor_advertiser(engine)
 
 
 def get_db():
