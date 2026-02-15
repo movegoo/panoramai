@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -8,7 +8,7 @@ from database import get_db, Competitor, InstagramData, User
 from models.schemas import InstagramDataResponse
 from services.scrapecreators import scrapecreators
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors
+from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
 router = APIRouter()
 
@@ -19,9 +19,10 @@ async def get_instagram_history(
     limit: int = 30,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get historical Instagram data for a competitor"""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     return db.query(InstagramData).filter(
         InstagramData.competitor_id == competitor_id
     ).order_by(desc(InstagramData.recorded_at)).limit(limit).all()
@@ -32,9 +33,10 @@ async def get_latest_instagram_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get the latest Instagram data for a competitor"""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     data = db.query(InstagramData).filter(
         InstagramData.competitor_id == competitor_id
     ).order_by(desc(InstagramData.recorded_at)).first()
@@ -49,9 +51,10 @@ async def fetch_instagram_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch and store current Instagram data for a competitor"""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.instagram_username:
         raise HTTPException(
@@ -109,9 +112,11 @@ async def compare_instagram_accounts(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare Instagram metrics across all tracked competitors"""
-    competitors = get_user_competitors(db, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     competitors = [c for c in competitors if c.instagram_username]
 
     comparison = []

@@ -2,7 +2,7 @@
 Play Store API router.
 Endpoints for fetching and analyzing Google Play Store app data.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -13,7 +13,7 @@ from database import get_db, Competitor, AppData, User
 from models.schemas import AppDataResponse, TrendResponse
 from core.trends import calculate_trend, parse_download_count
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors
+from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
 router = APIRouter()
 
@@ -78,9 +78,10 @@ async def get_playstore_history(
     limit: int = 30,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get historical Play Store data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     return (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "playstore")
@@ -95,9 +96,10 @@ async def get_latest_playstore_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get the latest Play Store data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     data = (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "playstore")
@@ -114,9 +116,10 @@ async def fetch_playstore_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch and store current Play Store data for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.playstore_app_id:
         raise HTTPException(status_code=400, detail="No Play Store app ID configured")
@@ -163,10 +166,12 @@ async def compare_playstore_apps(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare Play Store metrics across all tracked competitors."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = [
-        c for c in get_user_competitors(db, user)
+        c for c in get_user_competitors(db, user, advertiser_id=adv_id)
         if c.playstore_app_id is not None and c.is_active
     ]
 
@@ -220,9 +225,10 @@ async def get_recent_reviews(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get recent reviews for a competitor's Play Store app."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.playstore_app_id:
         raise HTTPException(status_code=400, detail="No Play Store app ID configured")
@@ -242,13 +248,14 @@ async def get_playstore_trends(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Get Play Store trends and variations for a competitor.
 
     Returns current metrics, previous metrics, and trend indicators.
     """
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     recent_data = (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "playstore")

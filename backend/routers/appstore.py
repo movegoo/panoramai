@@ -2,7 +2,7 @@
 App Store API router.
 Endpoints for fetching and analyzing Apple App Store data.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -13,7 +13,7 @@ from database import get_db, Competitor, AppData, User
 from models.schemas import AppDataResponse, TrendResponse
 from core.trends import calculate_trend
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors
+from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
 router = APIRouter()
 
@@ -90,9 +90,10 @@ async def get_appstore_history(
     limit: int = 30,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get historical App Store data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     return (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "appstore")
@@ -107,9 +108,10 @@ async def get_latest_appstore_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get the latest App Store data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     data = (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "appstore")
@@ -126,9 +128,10 @@ async def fetch_appstore_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch and store current App Store data for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.appstore_app_id:
         raise HTTPException(status_code=400, detail="No App Store app ID configured")
@@ -171,10 +174,12 @@ async def compare_appstore_apps(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare App Store metrics across all tracked competitors."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = [
-        c for c in get_user_competitors(db, user)
+        c for c in get_user_competitors(db, user, advertiser_id=adv_id)
         if c.appstore_app_id is not None and c.is_active
     ]
 
@@ -225,9 +230,10 @@ async def get_recent_reviews(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get recent reviews for a competitor's App Store app."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.appstore_app_id:
         raise HTTPException(status_code=400, detail="No App Store app ID configured")
@@ -277,13 +283,14 @@ async def get_appstore_trends(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Get App Store trends and variations for a competitor.
 
     Returns current metrics, previous metrics, and trend indicators.
     """
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     recent_data = (
         db.query(AppData)
         .filter(AppData.competitor_id == competitor_id, AppData.store == "appstore")

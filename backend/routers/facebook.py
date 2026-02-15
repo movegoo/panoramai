@@ -2,7 +2,7 @@
 Meta Ads Router.
 Veille publicitaire concurrentielle via ScrapeCreators Ad Library API.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
@@ -13,7 +13,7 @@ import logging
 
 from database import get_db, Competitor, Ad, User
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids
+from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids, parse_advertiser_header
 from services.scrapecreators import scrapecreators
 
 logger = logging.getLogger(__name__)
@@ -30,9 +30,11 @@ async def get_all_ads(
     active_only: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Retourne TOUTES les publicités des concurrents actifs."""
-    competitors = get_user_competitors(db, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     active_comps = {c.id: c.name for c in competitors}
 
     query = db.query(Ad).filter(Ad.competitor_id.in_(active_comps.keys()))
@@ -54,11 +56,13 @@ async def get_competitor_ads(
     active_only: bool = True,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Retourne les publicités stockées pour un concurrent.
     """
-    verify_competitor_ownership(db, competitor_id, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     query = db.query(Ad).filter(Ad.competitor_id == competitor_id)
     if active_only:
@@ -133,12 +137,14 @@ async def fetch_competitor_ads(
     country: str = Query("FR", description="Pays de diffusion"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Récupère les publicités d'un concurrent via ScrapeCreators Ad Library.
     Recherche par nom de l'entreprise.
     """
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     # Search by competitor name
     result = await scrapecreators.search_facebook_ads(
@@ -279,13 +285,14 @@ async def fetch_competitor_ads(
 async def enrich_ads_transparency(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Enrich all Meta ads that lack EU transparency data (age, gender, location, reach)
     by fetching individual ad details from the Ad Library.
     """
-    # Scope to user's competitors only
-    user_comp_ids = get_user_competitor_ids(db, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    user_comp_ids = get_user_competitor_ids(db, user, advertiser_id=adv_id)
 
     # Only enrich Meta/Facebook ads (not TikTok/Google)
     meta_platforms = ["facebook", "instagram", "messenger", "audience_network", "meta",
@@ -352,9 +359,11 @@ async def get_ads_stats(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Statistiques publicitaires d'un concurrent."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     ads = db.query(Ad).filter(Ad.competitor_id == competitor_id).all()
     active_ads = [a for a in ads if a.is_active]
@@ -395,9 +404,11 @@ async def get_ads_stats(
 async def compare_competitors_ads(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare les activités publicitaires des concurrents de l'utilisateur."""
-    competitors = get_user_competitors(db, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
 
     items = []
     for comp in competitors:

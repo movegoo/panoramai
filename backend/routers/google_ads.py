@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db, Competitor, Ad, User
 from services.scrapecreators import scrapecreators
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors
+from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +119,11 @@ async def get_google_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Liste les pubs Google collectees pour un concurrent."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     ads = db.query(Ad).filter(
         Ad.competitor_id == competitor_id,
@@ -154,12 +156,14 @@ async def fetch_google_ads(
     country: str = Query("FR", description="Pays cible"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Collecte les pubs Google d'un concurrent via Google Ads Transparency Center.
     Utilise le domaine du site web du concurrent.
     """
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     domain = _extract_domain(competitor.website)
     if not domain:

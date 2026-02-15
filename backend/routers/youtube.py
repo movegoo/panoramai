@@ -2,7 +2,7 @@
 YouTube API router.
 Endpoints for fetching and analyzing YouTube channel data.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -13,7 +13,7 @@ from models.schemas import YouTubeDataResponse, TrendResponse
 from services.youtube_api import youtube_api
 from core.trends import calculate_trend
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors
+from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
 router = APIRouter()
 
@@ -28,9 +28,10 @@ async def get_youtube_history(
     limit: int = 30,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get historical YouTube data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     return (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -45,9 +46,10 @@ async def get_latest_youtube_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get the latest YouTube data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     data = (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -64,9 +66,10 @@ async def fetch_youtube_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch and store current YouTube data for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.youtube_channel_id:
         raise HTTPException(status_code=400, detail="No YouTube channel ID configured")
@@ -112,10 +115,12 @@ async def compare_youtube_channels(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare YouTube metrics across all tracked competitors."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = [
-        c for c in get_user_competitors(db, user)
+        c for c in get_user_competitors(db, user, advertiser_id=adv_id)
         if c.youtube_channel_id
     ]
 
@@ -170,9 +175,10 @@ async def get_youtube_trends(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get YouTube trends and variations for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     recent_data = (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -221,9 +227,10 @@ async def get_recent_videos(
     limit: int = 10,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get recent YouTube videos for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.youtube_channel_id:
         raise HTTPException(status_code=400, detail="No YouTube channel ID configured")

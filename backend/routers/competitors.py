@@ -215,12 +215,17 @@ async def get_competitor(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Profil détaillé d'un concurrent."""
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    from core.permissions import parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id, Competitor.is_active == True).first()
     if not comp:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
     if user and comp.user_id and comp.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    if adv_id and comp.advertiser_id != adv_id:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
 
     # Récupère toutes les données
@@ -304,10 +309,12 @@ async def get_competitor(
             }
         )
 
-    # Calcul du score et du rang (scoped to user's competitors)
+    # Calcul du score et du rang (scoped to user's advertiser)
     all_comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         all_comp_query = all_comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        all_comp_query = all_comp_query.filter(Competitor.advertiser_id == adv_id)
     all_competitors = all_comp_query.all()
     all_ids = [c.id for c in all_competitors]
     from routers.watch import _batch_load_latest
@@ -411,17 +418,16 @@ async def update_competitor(
     data: CompetitorUpdate,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Met à jour les identifiants d'un concurrent.
 
     Permet de corriger les app IDs, usernames, etc.
     """
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if user and comp.user_id and comp.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -454,13 +460,12 @@ async def delete_competitor(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Supprime un concurrent (soft delete)."""
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if user and comp.user_id and comp.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     comp.is_active = False
     db.commit()
@@ -477,13 +482,12 @@ async def get_competitor_stores(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Liste les magasins d'un concurrent."""
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if user and comp.user_id and comp.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     stores = db.query(StoreLocation).filter(
         StoreLocation.competitor_id == competitor_id,
@@ -517,13 +521,12 @@ async def refresh_competitor_stores(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Relance la recherche de magasins pour un concurrent."""
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if user and comp.user_id and comp.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     from services.banco import banco_service
     count = await banco_service.search_and_store(comp.id, comp.name, db)
