@@ -145,9 +145,10 @@ async def compare_tiktok_accounts(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Compare TikTok metrics across all tracked competitors."""
-    competitors = get_user_competitors(db, user)
+    competitors = get_user_competitors(db, user, advertiser_id=int(x_advertiser_id) if x_advertiser_id else None)
     competitors = [c for c in competitors if c.tiktok_username]
 
     comparison = []
@@ -272,9 +273,10 @@ async def get_recent_videos(
 async def get_all_tiktok_ads(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get all TikTok ads stored in the database."""
-    competitors = {c.id: c.name for c in get_user_competitors(db, user)}
+    competitors = {c.id: c.name for c in get_user_competitors(db, user, advertiser_id=int(x_advertiser_id) if x_advertiser_id else None)}
     ads = (
         db.query(Ad)
         .filter(Ad.platform == "tiktok", Ad.competitor_id.in_(competitors.keys()))

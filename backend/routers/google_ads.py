@@ -278,9 +278,10 @@ async def fetch_all_google_ads(
     country: str = Query("FR"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Collecte les pubs Google pour tous les concurrents."""
-    competitors = get_user_competitors(db, user)
+    competitors = get_user_competitors(db, user, advertiser_id=int(x_advertiser_id) if x_advertiser_id else None)
     results = []
 
     for comp in competitors:
