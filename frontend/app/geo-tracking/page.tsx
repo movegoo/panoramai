@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 
@@ -54,7 +54,19 @@ export default function GeoTrackingPage() {
     }
   }
 
-  useEffect(() => { loadData(); }, []);
+  const autoTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Auto-trigger tracking once if no data
+  useEffect(() => {
+    if (!loading && !autoTrackedRef.current && insights && insights.total_queries === 0) {
+      autoTrackedRef.current = true;
+      handleTrack();
+    }
+  }, [loading, insights]);
 
   async function handleTrack() {
     setTracking(true);
@@ -116,7 +128,7 @@ export default function GeoTrackingPage() {
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-200/50 hover:shadow-xl hover:shadow-teal-300/50 transition-all disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`} />
-          {tracking ? "Analyse en cours..." : "Analyser la visibilite"}
+          {tracking ? "Analyse en cours..." : "Rafraichir la visibilite"}
         </button>
       </div>
 
@@ -133,46 +145,63 @@ export default function GeoTrackingPage() {
           <span className="ml-3 text-muted-foreground">Chargement des donnees GEO...</span>
         </div>
       ) : !insights || insights.total_queries === 0 ? (
-        <div className="rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-12 text-center">
-          <Bot className="h-12 w-12 text-teal-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Aucune donnee GEO</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Cliquez sur &quot;Analyser la visibilite&quot; pour interroger Claude, Gemini et ChatGPT sur vos mots-cles strategiques.
-          </p>
+        <div className="space-y-4 animate-pulse">
+          <div className="grid grid-cols-3 gap-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="rounded-2xl bg-teal-100/60 p-5 h-20" />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="rounded-2xl border bg-card p-5">
+                <div className="h-3 w-20 bg-teal-100 rounded mb-3" />
+                <div className="h-7 w-16 bg-teal-200 rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border bg-card p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <RefreshCw className="h-5 w-5 animate-spin text-teal-500" />
+              <span className="text-sm text-muted-foreground">Premiere analyse GEO en cours...</span>
+            </div>
+            {[1,2,3].map(i => (
+              <div key={i} className="h-10 bg-teal-50 rounded-lg mb-2" />
+            ))}
+          </div>
         </div>
       ) : (
         <>
           {/* Hero Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 p-5 text-white shadow-lg shadow-teal-200/50">
-              <div className="flex items-center gap-2 mb-2 opacity-90">
-                <Eye className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wider">Marque la plus visible</span>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 px-4 py-3 text-white shadow-lg shadow-teal-200/50">
+              <div className="flex items-center gap-2 mb-1 opacity-90">
+                <Eye className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-medium uppercase tracking-wider">Plus visible</span>
               </div>
-              <p className="text-2xl font-bold">{mostVisible?.competitor || "\u2014"}</p>
-              <p className="text-sm opacity-80 mt-1">{mostVisible?.pct}% de part de voix IA ({mostVisible?.mentions} mentions)</p>
+              <p className="text-lg font-bold leading-tight">{mostVisible?.competitor || "\u2014"}</p>
+              <p className="text-[11px] opacity-80">{mostVisible?.pct}% part de voix ({mostVisible?.mentions} mentions)</p>
             </div>
-            <div className="rounded-2xl bg-gradient-to-br from-cyan-500 to-cyan-600 p-5 text-white shadow-lg shadow-cyan-200/50">
-              <div className="flex items-center gap-2 mb-2 opacity-90">
-                <Zap className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wider">Plus recommandee</span>
+            <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 px-4 py-3 text-white shadow-lg shadow-cyan-200/50">
+              <div className="flex items-center gap-2 mb-1 opacity-90">
+                <Zap className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-medium uppercase tracking-wider">Plus recommandee</span>
               </div>
-              <p className="text-2xl font-bold">{mostRecommended?.competitor || "\u2014"}</p>
-              <p className="text-sm opacity-80 mt-1">Recommandee dans {mostRecommended?.rate}% des reponses</p>
+              <p className="text-lg font-bold leading-tight">{mostRecommended?.competitor || "\u2014"}</p>
+              <p className="text-[11px] opacity-80">Recommandee dans {mostRecommended?.rate}% des reponses</p>
             </div>
-            <div className={`rounded-2xl p-5 text-white shadow-lg ${
+            <div className={`rounded-xl px-4 py-3 text-white shadow-lg ${
               brandGap && brandGap.gap >= 0
                 ? "bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-200/50"
                 : "bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-200/50"
             }`}>
-              <div className="flex items-center gap-2 mb-2 opacity-90">
-                <TrendingUp className="h-4 w-4" />
-                <span className="text-xs font-medium uppercase tracking-wider">Ecart SEO/GEO {brandName}</span>
+              <div className="flex items-center gap-2 mb-1 opacity-90">
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-medium uppercase tracking-wider">Ecart SEO/GEO {brandName}</span>
               </div>
-              <p className="text-2xl font-bold">
+              <p className="text-lg font-bold leading-tight">
                 {brandGap ? `${brandGap.gap > 0 ? "+" : ""}${brandGap.gap} pts` : "\u2014"}
               </p>
-              <p className="text-sm opacity-80 mt-1">
+              <p className="text-[11px] opacity-80">
                 {brandGap ? `SEO ${brandGap.seo_pct}% vs GEO ${brandGap.geo_pct}%` : "Pas de donnees SEO"}
               </p>
             </div>

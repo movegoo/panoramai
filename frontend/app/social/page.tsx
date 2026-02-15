@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   competitorsAPI,
@@ -148,6 +148,15 @@ export default function SocialPage() {
     }
     loadAll();
   }, [periodDays, contentPlatform]);
+
+  // Auto-trigger content analysis once if no data
+  const autoAnalyzedRef = React.useRef(false);
+  useEffect(() => {
+    if (!loading && !autoAnalyzedRef.current && contentInsights && contentInsights.total_analyzed === 0) {
+      autoAnalyzedRef.current = true;
+      handleAnalyzeContent();
+    }
+  }, [loading, contentInsights]);
 
   async function handleRefreshAll() {
     setFetching(true);
@@ -724,7 +733,7 @@ export default function SocialPage() {
             className="gap-2 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
           >
             <Brain className={`h-3.5 w-3.5 ${contentLoading ? "animate-pulse" : ""}`} />
-            {contentLoading ? "Analyse..." : "Analyser le contenu"}
+            {contentLoading ? "Analyse..." : "Rafraichir le contenu"}
           </Button>
         </div>
 
@@ -1121,21 +1130,26 @@ export default function SocialPage() {
           );
         })()}
 
-        {/* Empty state */}
+        {/* Empty state — skeleton */}
         {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (
-          <div className="rounded-2xl border-2 border-dashed border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/10 p-8 text-center">
-            <div className="flex justify-center mb-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
-                <Brain className="h-6 w-6 text-emerald-500" />
-              </div>
+          <div className="space-y-4 animate-pulse">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="rounded-xl border bg-card p-4">
+                  <div className="h-3 w-20 bg-emerald-100 rounded mb-3" />
+                  <div className="h-7 w-14 bg-emerald-200 rounded" />
+                </div>
+              ))}
             </div>
-            <h3 className="text-base font-semibold text-foreground mb-1">
-              Aucune analyse de contenu{contentPlatform ? ` ${contentPlatform === "instagram" ? "Instagram" : contentPlatform === "tiktok" ? "TikTok" : "YouTube"}` : ""}
-            </h3>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
-              Cliquez sur &quot;Analyser le contenu&quot; pour collecter les posts sociaux et les analyser avec l&apos;IA.
-              {contentPlatform && " Essayez aussi la vue globale pour voir les donnees de toutes les plateformes."}
-            </p>
+            <div className="rounded-2xl border bg-card p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Brain className="h-5 w-5 animate-pulse text-emerald-500" />
+                <span className="text-sm text-muted-foreground">Premiere analyse de contenu en cours...</span>
+              </div>
+              {[1,2,3].map(i => (
+                <div key={i} className="h-10 bg-emerald-50 rounded-lg mb-2" />
+              ))}
+            </div>
           </div>
         )}
       </div>

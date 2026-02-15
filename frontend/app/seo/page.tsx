@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
 import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
 
@@ -53,7 +53,21 @@ export default function SeoPage() {
     }
   }
 
-  useEffect(() => { loadData(); }, []);
+  const autoTrackedRef = React.useRef(false);
+
+  useEffect(() => {
+    loadData().then(() => {
+      // Will be called after state is set — check via ref below
+    });
+  }, []);
+
+  // Auto-trigger tracking once if no data
+  useEffect(() => {
+    if (!loading && !autoTrackedRef.current && insights && insights.total_keywords === 0) {
+      autoTrackedRef.current = true;
+      handleTrack();
+    }
+  }, [loading, insights]);
 
   async function handleTrack() {
     setTracking(true);
@@ -105,7 +119,7 @@ export default function SeoPage() {
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 transition-all disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`} />
-          {tracking ? "Tracking en cours..." : "Tracker les positions"}
+          {tracking ? "Tracking en cours..." : "Rafraichir les positions"}
         </button>
       </div>
 
@@ -122,12 +136,24 @@ export default function SeoPage() {
           <span className="ml-3 text-muted-foreground">Chargement des donnees SEO...</span>
         </div>
       ) : !insights || insights.total_keywords === 0 ? (
-        <div className="rounded-2xl border border-dashed border-blue-300 bg-blue-50/50 p-12 text-center">
-          <Search className="h-12 w-12 text-blue-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Aucune donnee SEO</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Cliquez sur &quot;Tracker les positions&quot; pour lancer le premier scan des resultats Google.
-          </p>
+        <div className="space-y-4 animate-pulse">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="rounded-2xl border bg-card p-5">
+                <div className="h-3 w-20 bg-blue-100 rounded mb-3" />
+                <div className="h-7 w-16 bg-blue-200 rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl border bg-card p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
+              <span className="text-sm text-muted-foreground">Premiere analyse SEO en cours...</span>
+            </div>
+            {[1,2,3].map(i => (
+              <div key={i} className="h-10 bg-blue-50 rounded-lg mb-2" />
+            ))}
+          </div>
         </div>
       ) : (
         <>
