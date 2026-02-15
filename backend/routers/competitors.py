@@ -93,6 +93,32 @@ def calculate_score(
 # Endpoints
 # =============================================================================
 
+@router.get("/lookup")
+async def lookup_competitor(q: str = ""):
+    """
+    Search the built-in competitor database by name.
+    Returns matching competitors with pre-filled social handles and app IDs.
+    Used by the frontend to auto-suggest fields when adding a competitor.
+    """
+    from routers.advertiser import COMPETITORS_BY_SECTOR
+
+    if not q or len(q) < 2:
+        return []
+
+    q_lower = q.lower().strip()
+    results = []
+    seen = set()
+    for sector, comps in COMPETITORS_BY_SECTOR.items():
+        for comp in comps:
+            name_lower = comp["name"].lower()
+            if q_lower in name_lower and name_lower not in seen:
+                seen.add(name_lower)
+                results.append({**comp, "sector": sector})
+    # Sort: exact prefix match first, then alphabetical
+    results.sort(key=lambda c: (0 if c["name"].lower().startswith(q_lower) else 1, c["name"]))
+    return results[:10]
+
+
 @router.get("/dashboard")
 async def get_dashboard(
     db: Session = Depends(get_db),

@@ -478,6 +478,8 @@ export const competitorsAPI = {
 
   getDashboard: () => fetchAPI<DashboardStats>("/competitors/dashboard"),
 
+  lookup: (q: string) => fetchAPI<CompetitorCreate[]>(`/competitors/lookup?q=${encodeURIComponent(q)}`),
+
   getAnalysis: (id: number) => fetchAPI<any>(`/competitors/${id}/analysis`),
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -118,6 +118,46 @@ export default function CompetitorsPage() {
     playstore_app_id: "",
     appstore_app_id: "",
   });
+
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleNameChange = useCallback((value: string) => {
+    setFormData((prev) => ({ ...prev, name: value }));
+    if (editingCompetitor || value.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    lookupTimer.current = setTimeout(async () => {
+      try {
+        const results = await competitorsAPI.lookup(value);
+        setSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 250);
+  }, [editingCompetitor]);
+
+  function applySuggestion(s: any) {
+    setFormData({
+      name: s.name,
+      website: s.website || "",
+      facebook_page_id: s.facebook_page_id || "",
+      instagram_username: s.instagram_username || "",
+      tiktok_username: s.tiktok_username || "",
+      youtube_channel_id: s.youtube_channel_id || "",
+      playstore_app_id: s.playstore_app_id || "",
+      appstore_app_id: s.appstore_app_id || "",
+    });
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
 
   useEffect(() => {
     loadCompetitors();
@@ -296,19 +336,54 @@ export default function CompetitorsPage() {
               <div className="space-y-5 py-5">
                 {/* Basic info */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 relative">
                     <Label htmlFor="name" className="text-xs font-medium flex items-center gap-1.5">
                       <Building2 className="h-3 w-3 text-muted-foreground" />
                       Nom *
                     </Label>
                     <Input
                       id="name"
+                      ref={nameInputRef}
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                       placeholder="Carrefour"
                       required
+                      autoComplete="off"
                       className="h-9"
                     />
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div ref={suggestionsRef} className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-border bg-white shadow-lg max-h-48 overflow-y-auto">
+                        {suggestions.map((s) => {
+                          const channels = [
+                            s.instagram_username && "Instagram",
+                            s.tiktok_username && "TikTok",
+                            s.youtube_channel_id && "YouTube",
+                            s.playstore_app_id && "Play Store",
+                            s.appstore_app_id && "App Store",
+                          ].filter(Boolean);
+                          return (
+                            <button
+                              key={s.name}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); applySuggestion(s); }}
+                              className="w-full text-left px-3 py-2 hover:bg-violet-50 flex items-center justify-between gap-2 transition-colors"
+                            >
+                              <div>
+                                <span className="text-sm font-medium text-foreground">{s.name}</span>
+                                {s.website && <span className="text-[11px] text-muted-foreground ml-2">{s.website.replace("https://www.", "")}</span>}
+                              </div>
+                              {channels.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                  {channels.length} canaux
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="website" className="text-xs font-medium flex items-center gap-1.5">
