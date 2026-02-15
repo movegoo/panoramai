@@ -1393,6 +1393,15 @@ export default function AdsPage() {
     setFilterDateTo(to.toISOString().split("T")[0]);
   }
 
+  function deduplicateAds(ads: (Ad & { competitor_name: string })[]) {
+    const seen = new Set<string>();
+    return ads.filter(a => {
+      if (seen.has(a.ad_id)) return false;
+      seen.add(a.ad_id);
+      return true;
+    });
+  }
+
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
@@ -1407,36 +1416,37 @@ export default function AdsPage() {
       const fbAds = fbAdsRes.status === "fulfilled" ? fbAdsRes.value : [];
       const ttAds = ttAdsRes.status === "fulfilled" ? ttAdsRes.value : [];
       const gAds = gAdsRes.status === "fulfilled" ? gAdsRes.value : [];
-      const ads = [...fbAds, ...ttAds, ...gAds];
+      const ads = deduplicateAds([...fbAds, ...ttAds, ...gAds]);
       const comps = compRes.status === "fulfilled" ? compRes.value : [];
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
       if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
 
-      // Auto-fetch missing platforms if competitors exist
-      const hasFb = fbAds.length > 0;
-      const hasTt = ttAds.length > 0;
-      const hasG = gAds.length > 0;
-      const missingPlatforms = comps.length > 0 && (!hasFb || !hasTt || !hasG);
+      // Auto-fetch missing platforms by checking actual platform values in returned ads
+      const allPlatforms = new Set(ads.map(a => a.platform));
+      const hasMeta = allPlatforms.has("facebook") || allPlatforms.has("instagram");
+      const hasTiktok = allPlatforms.has("tiktok");
+      const hasGoogle = allPlatforms.has("google");
+      const missingPlatforms = comps.length > 0 && (!hasMeta || !hasTiktok || !hasGoogle);
       if (missingPlatforms) {
         setFetching(true);
         try {
           for (const c of comps) {
-            if (!hasFb) try { await facebookAPI.fetchAds(c.id); } catch {}
-            if (!hasTt) try { await tiktokAPI.fetchAds(c.id); } catch {}
-            if (!hasG) try { await googleAdsAPI.fetchAds(c.id); } catch {}
+            if (!hasMeta) try { await facebookAPI.fetchAds(c.id); } catch {}
+            if (!hasTiktok) try { await tiktokAPI.fetchAds(c.id); } catch {}
+            if (!hasGoogle) try { await googleAdsAPI.fetchAds(c.id); } catch {}
           }
-          if (!hasFb) try { await facebookAPI.enrichTransparency(); } catch {}
+          if (!hasMeta) try { await facebookAPI.enrichTransparency(); } catch {}
           const [freshFb, freshTt, freshG] = await Promise.allSettled([
             facebookAPI.getAllAds(),
             tiktokAPI.getAllAds(),
             googleAdsAPI.getAllAds(),
           ]);
-          setAllAds([
+          setAllAds(deduplicateAds([
             ...(freshFb.status === "fulfilled" ? freshFb.value : []),
             ...(freshTt.status === "fulfilled" ? freshTt.value : []),
             ...(freshG.status === "fulfilled" ? freshG.value : []),
-          ]);
+          ]));
         } finally {
           setFetching(false);
         }
@@ -1465,11 +1475,11 @@ export default function AdsPage() {
       const [fbAds, ttAds, gAds] = await Promise.allSettled([
         facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(),
       ]);
-      setAllAds([
+      setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
-      ]);
+      ]));
     } catch (err) {
       console.error(err);
     } finally {
@@ -1492,11 +1502,11 @@ export default function AdsPage() {
         tiktokAPI.getAllAds(),
         googleAdsAPI.getAllAds(),
       ]);
-      setAllAds([
+      setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
-      ]);
+      ]));
     } catch (err) {
       console.error(err);
     } finally {
