@@ -19,7 +19,7 @@ load_dotenv(dotenv_path=".env")
 
 # Routers
 from routers import auth, brand, watch, competitors, geo, layers, admin
-from routers import facebook, playstore, appstore, instagram, tiktok, youtube, google_ads, creative_analysis, social_analysis, seo, geo_tracking
+from routers import facebook, playstore, appstore, instagram, tiktok, youtube, google_ads, creative_analysis, social_analysis, seo, geo_tracking, gsc
 from services.scheduler import scheduler
 
 # Logging
@@ -191,6 +191,7 @@ app.include_router(creative_analysis.router, prefix="/api/creative", tags=["Crea
 app.include_router(social_analysis.router, prefix="/api/social-content", tags=["Social Content Analysis"])
 app.include_router(seo.router, prefix="/api/seo", tags=["SEO / SERP Tracking"])
 app.include_router(geo_tracking.router, prefix="/api/geo-tracking", tags=["GEO / AI Visibility"])
+app.include_router(gsc.router, prefix="/api/gsc", tags=["Google Search Console"])
 
 
 # =============================================================================

@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   brandAPI,
+  gscAPI,
+  GscStatus,
+  GscSite,
   BrandProfileData,
   BrandSetupData,
   SectorData,
@@ -38,6 +41,9 @@ import {
   Sparkles,
   RefreshCw,
   Info,
+  Unplug,
+  PlugZap,
+  Search,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -305,6 +311,12 @@ export default function AccountPage() {
   const [expandedSuggestion, setExpandedSuggestion] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
+  // GSC integration state
+  const [gscStatus, setGscStatus] = useState<GscStatus | null>(null);
+  const [gscSites, setGscSites] = useState<GscSite[]>([]);
+  const [gscLoading, setGscLoading] = useState(false);
+  const [gscConnecting, setGscConnecting] = useState(false);
+
   const [form, setForm] = useState<BrandSetupData>({
     company_name: "",
     sector: "",
@@ -318,6 +330,20 @@ export default function AccountPage() {
 
   useEffect(() => {
     loadData();
+    loadGscStatus();
+
+    // Detect GSC OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    const gscParam = params.get("gsc");
+    if (gscParam === "connected") {
+      setToast({ type: "success", text: "Google Search Console connecte avec succes !" });
+      window.history.replaceState({}, "", "/account");
+      // Reload GSC status after connection
+      setTimeout(() => loadGscStatus(), 500);
+    } else if (gscParam === "error") {
+      setToast({ type: "error", text: "Erreur lors de la connexion a Google Search Console" });
+      window.history.replaceState({}, "", "/account");
+    }
   }, []);
 
   useEffect(() => {
@@ -326,6 +352,58 @@ export default function AccountPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  async function loadGscStatus() {
+    try {
+      const status = await gscAPI.getStatus();
+      setGscStatus(status);
+      if (status.connected && !status.selected_site) {
+        // Auto-load sites if connected but no site selected
+        const sitesData = await gscAPI.getSites();
+        setGscSites(sitesData.sites);
+      }
+    } catch {
+      // Not logged in or API unavailable
+    }
+  }
+
+  async function handleGscConnect() {
+    setGscConnecting(true);
+    try {
+      const { auth_url } = await gscAPI.getAuthUrl();
+      window.location.href = auth_url;
+    } catch (err: any) {
+      setToast({ type: "error", text: err.message || "Erreur GSC" });
+      setGscConnecting(false);
+    }
+  }
+
+  async function handleGscSelectSite(siteUrl: string) {
+    setGscLoading(true);
+    try {
+      await gscAPI.selectSite(siteUrl);
+      setGscStatus((prev) => prev ? { ...prev, selected_site: siteUrl } : prev);
+      setToast({ type: "success", text: `Propriete ${siteUrl} selectionnee` });
+    } catch (err: any) {
+      setToast({ type: "error", text: err.message || "Erreur" });
+    } finally {
+      setGscLoading(false);
+    }
+  }
+
+  async function handleGscDisconnect() {
+    setGscLoading(true);
+    try {
+      await gscAPI.disconnect();
+      setGscStatus({ connected: false, selected_site: null, connected_at: null });
+      setGscSites([]);
+      setToast({ type: "success", text: "Google Search Console deconnecte" });
+    } catch (err: any) {
+      setToast({ type: "error", text: err.message || "Erreur" });
+    } finally {
+      setGscLoading(false);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -735,6 +813,118 @@ export default function AccountPage() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* Section 2 : Concurrents Suggeres                                  */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Section : Integrations                                             */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {!isNewBrand && profile && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
+                <PlugZap className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Integrations</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Connectez vos services pour enrichir les donnees
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Google Search Console */}
+            <div className="rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <Search className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Google Search Console</p>
+                    <p className="text-xs text-muted-foreground">
+                      Clics, impressions, CTR et positions de votre site
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!gscStatus || !gscStatus.connected ? (
+                    <Button
+                      size="sm"
+                      onClick={handleGscConnect}
+                      disabled={gscConnecting}
+                      className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                    >
+                      {gscConnecting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      ) : (
+                        <PlugZap className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Connecter
+                    </Button>
+                  ) : gscStatus.connected && !gscStatus.selected_site ? (
+                    <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Selectionnez un site
+                    </span>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                        <Check className="h-3 w-3" />
+                        {gscStatus.selected_site}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleGscDisconnect}
+                        disabled={gscLoading}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Unplug className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Site picker: shown when connected but no site selected */}
+              {gscStatus?.connected && !gscStatus.selected_site && gscSites.length > 0 && (
+                <div className="mt-3 pt-3 border-t space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Choisissez une propriete :</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {gscSites.map((site) => (
+                      <button
+                        key={site.siteUrl}
+                        onClick={() => handleGscSelectSite(site.siteUrl)}
+                        disabled={gscLoading}
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm hover:border-blue-300 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                      >
+                        <Globe className="h-4 w-4 text-blue-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{site.siteUrl}</p>
+                          <p className="text-[10px] text-muted-foreground">{site.permissionLevel}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end pt-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleGscDisconnect}
+                      disabled={gscLoading}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      <Unplug className="h-3 w-3 mr-1" />
+                      Deconnecter
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {!isNewBrand && suggestions.length > 0 && (
         <Card>
           <CardHeader>

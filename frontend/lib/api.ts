@@ -953,6 +953,79 @@ export const geoTrackingAPI = {
   getInsights: () => fetchAPI<GeoInsights>("/geo-tracking/insights"),
 };
 
+// Google Search Console API
+export interface GscStatus {
+  connected: boolean;
+  selected_site: string | null;
+  connected_at: string | null;
+}
+
+export interface GscSite {
+  siteUrl: string;
+  permissionLevel: string;
+}
+
+export interface GscPerformance {
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_clicks: number;
+  total_impressions: number;
+  avg_ctr: number;
+  avg_position: number;
+  daily: {
+    date: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  }[];
+}
+
+export interface GscQueryRow {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface GscPageRow {
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export const gscAPI = {
+  getStatus: () => fetchAPI<GscStatus>("/gsc/status"),
+
+  getAuthUrl: () => fetchAPI<{ auth_url: string }>("/gsc/auth/url"),
+
+  getSites: () => fetchAPI<{ sites: GscSite[] }>("/gsc/sites"),
+
+  selectSite: (site_url: string) =>
+    fetchAPI<{ selected_site: string }>("/gsc/select-site", {
+      method: "POST",
+      body: JSON.stringify({ site_url }),
+    }),
+
+  disconnect: () =>
+    fetchAPI<{ disconnected: boolean }>("/gsc/disconnect", {
+      method: "POST",
+    }),
+
+  getPerformance: (period: string = "28d") =>
+    fetchAPI<GscPerformance>(`/gsc/performance?period=${period}`),
+
+  getQueries: (period: string = "28d", limit: number = 20) =>
+    fetchAPI<{ queries: GscQueryRow[]; period: string }>(`/gsc/queries?period=${period}&limit=${limit}`),
+
+  getPages: (period: string = "28d", limit: number = 20) =>
+    fetchAPI<{ pages: GscPageRow[]; period: string }>(`/gsc/pages?period=${period}&limit=${limit}`),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[] }>(

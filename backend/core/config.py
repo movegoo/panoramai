@@ -42,6 +42,12 @@ class Settings:
     DATAGOUV_CACHE_DIR: Path = Path(os.getenv("DATAGOUV_CACHE_DIR", "./cache/datagouv"))
     DATAGOUV_CACHE_DAYS: int = int(os.getenv("DATAGOUV_CACHE_DAYS", "7"))
 
+    # Google OAuth (Search Console)
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/gsc/auth/callback")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
     # Auth
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
     JWT_EXPIRATION_DAYS: int = int(os.getenv("JWT_EXPIRATION_DAYS", "7"))
