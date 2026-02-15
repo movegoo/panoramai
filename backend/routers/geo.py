@@ -13,7 +13,7 @@ import json
 
 import random
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User
-from core.auth import get_optional_user
+from core.auth import get_current_user, get_optional_user
 from services.geodata import (
     geodata_service,
     haversine_distance,
@@ -97,7 +97,7 @@ class MapDataResponse(BaseModel):
 async def list_stores(
     department: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Liste les magasins de l'enseigne."""
@@ -125,7 +125,7 @@ async def list_stores(
 async def create_store(
     data: StoreCreate,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute un magasin."""
@@ -170,7 +170,7 @@ async def create_store(
 async def upload_stores(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -293,7 +293,7 @@ async def delete_store(store_id: int, db: Session = Depends(get_db)):
 async def analyze_zone(
     data: ZoneAnalysisRequest,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -400,7 +400,7 @@ async def analyze_store_zone(
 async def get_map_data(
     department: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -537,7 +537,7 @@ COMPETITOR_COLORS = {
 async def get_all_competitor_stores(
     include_stores: bool = False,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Retourne les magasins concurrents groupés par concurrent.
@@ -641,7 +641,7 @@ async def get_all_competitor_stores(
 async def get_competitor_stores_geo(
     competitor_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Magasins d'un concurrent spécifique."""
@@ -683,7 +683,7 @@ async def get_competitor_stores_geo(
 async def get_catchment_zones(
     radius_km: float = 10,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -904,7 +904,7 @@ MEDIUM_CITIES = {"le mans", "aix-en-provence", "clermont-ferrand", "brest", "tou
 async def enrich_gmb_demo(
     force: bool = False,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -1098,7 +1098,7 @@ async def refresh_datasets():
 async def analyze_zone_enriched(
     data: ZoneAnalysisRequest,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """

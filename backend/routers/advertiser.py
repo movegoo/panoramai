@@ -9,7 +9,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from database import get_db, Advertiser, Competitor, User
-from core.auth import get_optional_user
+from core.auth import get_current_user
 from models.schemas import (
     AdvertiserCreate,
     AdvertiserUpdate,
@@ -319,7 +319,7 @@ async def onboard_advertiser(
 async def get_competitor_suggestions(
     sector: str,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ) -> List[CompetitorSuggestion]:
     """
     Get competitor suggestions for a given sector.
@@ -456,7 +456,7 @@ async def add_selected_competitors(
 
 
 @router.get("/")
-async def list_advertisers(db: Session = Depends(get_db), user: User | None = Depends(get_optional_user)):
+async def list_advertisers(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """List all advertisers."""
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
@@ -478,7 +478,7 @@ async def update_advertiser(
     advertiser_id: int,
     update: AdvertiserUpdate,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Update advertiser profile."""
     query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)
@@ -501,7 +501,7 @@ async def update_advertiser(
 async def delete_advertiser(
     advertiser_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Soft delete an advertiser."""
     query = db.query(Advertiser).filter(Advertiser.id == advertiser_id)

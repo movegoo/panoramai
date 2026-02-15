@@ -180,7 +180,7 @@ async def list_brands(
 async def setup_brand(
     data: BrandSetup,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Onboarding initial de l'enseigne (permet plusieurs enseignes)."""
 
@@ -232,7 +232,7 @@ async def setup_brand(
 async def get_brand_profile(
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Récupère le profil de mon enseigne."""
@@ -252,7 +252,7 @@ async def get_brand_profile(
 async def reset_brand(
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Supprime l'enseigne et ses concurrents pour reconfigurer."""
@@ -277,7 +277,7 @@ async def update_brand_profile(
     data: BrandSetup,
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Met à jour le profil de mon enseigne."""
@@ -312,7 +312,7 @@ async def update_brand_profile(
 @router.post("/sync")
 async def sync_brand_competitor(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Force sync brand to competitor entry + trigger enrichment."""
@@ -334,7 +334,7 @@ async def sync_brand_competitor(
 @router.get("/suggestions")
 async def get_competitor_suggestions(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Retourne les concurrents suggérés pour le secteur de l'enseigne."""
@@ -364,7 +364,7 @@ async def get_competitor_suggestions(
 async def add_suggested_competitors(
     names: List[str],
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute des concurrents à partir des suggestions."""

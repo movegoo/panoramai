@@ -10,7 +10,7 @@ from typing import List, Optional, Dict
 from database import get_db, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
 from core.trends import calculate_trend, TrendDirection
-from core.auth import get_optional_user
+from core.auth import get_current_user
 from core.utils import get_logo_url
 
 
@@ -96,7 +96,7 @@ def calculate_score(
 @router.get("/dashboard")
 async def get_dashboard(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -163,7 +163,7 @@ async def get_dashboard(
 @router.get("/")
 async def list_competitors(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -240,7 +240,7 @@ async def list_competitors(
 async def get_competitor(
     competitor_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Profil détaillé d'un concurrent."""
@@ -385,7 +385,7 @@ async def get_competitor(
 async def create_competitor(
     data: CompetitorCreate,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute un nouveau concurrent."""
@@ -443,7 +443,7 @@ async def update_competitor(
     competitor_id: int,
     data: CompetitorUpdate,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
@@ -485,7 +485,7 @@ async def update_competitor(
 async def delete_competitor(
     competitor_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Supprime un concurrent (soft delete)."""
@@ -507,7 +507,7 @@ async def delete_competitor(
 async def get_competitor_stores(
     competitor_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Liste les magasins d'un concurrent."""
@@ -546,7 +546,7 @@ async def get_competitor_stores(
 async def refresh_competitor_stores(
     competitor_id: int,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Relance la recherche de magasins pour un concurrent."""

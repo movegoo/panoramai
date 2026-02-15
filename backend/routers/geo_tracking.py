@@ -60,7 +60,7 @@ def _get_user_brand(db: Session, user: User | None, x_advertiser_id: str | None 
 @router.post("/track")
 async def track_geo(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Run GEO tracking: query Claude + Gemini + ChatGPT, analyse brand mentions."""

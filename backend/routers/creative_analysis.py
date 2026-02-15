@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, Ad, Competitor, User, SystemSetting
 from services.creative_analyzer import creative_analyzer
-from core.auth import get_optional_user
+from core.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def _normalize_platform(platform: str | None) -> str:
 async def analyze_all_creatives(
     limit: int = Query(10, ge=1, le=200),
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze ad creatives that haven't been analyzed yet."""
@@ -180,7 +180,7 @@ async def set_api_key(
 @router.post("/reset-failed")
 async def reset_failed_analyses(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Reset ads that were marked as analyzed but have score=0 (failed analyses)."""
@@ -209,7 +209,7 @@ async def reset_failed_analyses(
 @router.get("/insights")
 async def get_creative_insights(
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated creative intelligence across all analyzed ads."""
