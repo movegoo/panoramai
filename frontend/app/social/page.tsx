@@ -775,7 +775,11 @@ export default function SocialPage() {
 
         {/* Status */}
         {contentStatus && (
-          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-2.5 text-sm text-emerald-800 dark:text-emerald-200">
+          <div className={`rounded-lg px-4 py-2.5 text-sm border ${
+            contentStatus.startsWith("Erreur")
+              ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
+              : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200"
+          }`}>
             {contentStatus}
           </div>
         )}
