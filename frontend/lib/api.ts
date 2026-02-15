@@ -457,7 +457,8 @@ export const authAPI = {
 
 // Competitors API
 export const competitorsAPI = {
-  list: () => fetchAPI<CompetitorListItem[]>("/competitors/"),
+  list: (opts?: { includeBrand?: boolean }) =>
+    fetchAPI<CompetitorListItem[]>(`/competitors/${opts?.includeBrand ? "?include_brand=true" : ""}`),
 
   get: (id: number) => fetchAPI<Competitor>(`/competitors/${id}`),
 

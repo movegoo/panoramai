@@ -140,7 +140,7 @@ export default function AppsPage() {
     async function loadAll() {
       try {
         const [comp, ps, as_, brand, aso] = await Promise.allSettled([
-          competitorsAPI.list(),
+          competitorsAPI.list({ includeBrand: true }),
           playstoreAPI.getComparison(periodDays),
           appstoreAPI.getComparison(periodDays),
           brandAPI.getProfile(),

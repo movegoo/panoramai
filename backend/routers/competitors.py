@@ -188,6 +188,7 @@ async def get_dashboard(
 
 @router.get("/")
 async def list_competitors(
+    include_brand: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
@@ -222,7 +223,7 @@ async def list_competitors(
     if patched:
         db.commit()
 
-    competitors = _scoped_competitor_query(db, user, x_advertiser_id).all()
+    competitors = _scoped_competitor_query(db, user, x_advertiser_id, include_brand=include_brand).all()
     comp_ids = [c.id for c in competitors]
     cards = []
 

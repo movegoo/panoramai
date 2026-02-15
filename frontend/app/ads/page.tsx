@@ -1494,7 +1494,7 @@ export default function AdsPage() {
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
         googleAdsAPI.getAllAds(),
-        competitorsAPI.list(),
+        competitorsAPI.list({ includeBrand: true }),
         brandAPI.getProfile(),
       ]);
       const fbAds = fbAdsRes.status === "fulfilled" ? fbAdsRes.value : [];

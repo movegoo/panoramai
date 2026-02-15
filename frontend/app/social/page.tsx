@@ -129,7 +129,7 @@ export default function SocialPage() {
     async function loadAll() {
       try {
         const [comp, ig, tt, yt, brand, ci] = await Promise.allSettled([
-          competitorsAPI.list(),
+          competitorsAPI.list({ includeBrand: true }),
           instagramAPI.getComparison(periodDays),
           tiktokAPI.getComparison(periodDays),
           youtubeAPI.getComparison(periodDays),
