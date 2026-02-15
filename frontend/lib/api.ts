@@ -920,6 +920,7 @@ export interface GeoQueryResult {
     claude: GeoMention[];
     gemini: GeoMention[];
     chatgpt: GeoMention[];
+    mistral: GeoMention[];
   };
 }
 

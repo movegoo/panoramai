@@ -110,7 +110,7 @@ async def track_geo(
     if errors:
         response["errors"] = errors
     if total_mentions == 0 and not any(available.values()):
-        response["warning"] = "Aucune cle API configuree (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY). Ajoutez-les dans les variables d'environnement."
+        response["warning"] = "Aucune cle API configuree (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, MISTRAL_API_KEY). Ajoutez-les dans les variables d'environnement."
     elif total_mentions == 0:
         response["warning"] = "Les API ont ete appelees mais aucune mention n'a ete detectee. Verifiez les erreurs ci-dessus."
 
@@ -144,7 +144,7 @@ async def get_results(
             grouped[key] = {
                 "keyword": r.keyword,
                 "query": r.query,
-                "platforms": {"claude": [], "gemini": [], "chatgpt": []},
+                "platforms": {"claude": [], "gemini": [], "chatgpt": [], "mistral": []},
             }
 
         mention = {
@@ -361,7 +361,7 @@ async def get_insights(
 
     return {
         "total_queries": total_queries,
-        "platforms": active_platforms or ["claude", "gemini", "chatgpt"],
+        "platforms": active_platforms or ["claude", "gemini", "chatgpt", "mistral"],
         "last_tracked": latest.isoformat(),
         "brand_name": brand.company_name if brand else None,
         "brand_competitor_id": brand_comp.id if brand_comp else None,

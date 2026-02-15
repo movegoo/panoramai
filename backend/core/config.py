@@ -33,6 +33,9 @@ class Settings:
     # OpenAI API (for GEO tracking - ChatGPT)
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
+    # Mistral API (for GEO tracking - Le Chat)
+    MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))

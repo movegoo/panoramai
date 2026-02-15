@@ -345,6 +345,7 @@ class GeoAnalyzer:
             "claude": bool(settings.ANTHROPIC_API_KEY),
             "gemini": bool(settings.GEMINI_API_KEY),
             "chatgpt": bool(settings.OPENAI_API_KEY),
+            "mistral": bool(settings.MISTRAL_API_KEY),
         }
 
     async def _query_claude(self, query: str) -> str:
@@ -466,6 +467,47 @@ class GeoAnalyzer:
             self.errors.append(msg)
             return ""
 
+    async def _query_mistral(self, query: str) -> str:
+        """Query Mistral via Mistral API (Le Chat)."""
+        if not settings.MISTRAL_API_KEY:
+            self.errors.append("mistral: MISTRAL_API_KEY manquante")
+            return ""
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(
+                    "https://api.mistral.ai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {settings.MISTRAL_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "mistral-small-latest",
+                        "max_tokens": 1000,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": query},
+                        ],
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            msg = f"mistral: HTTP {e.response.status_code}"
+            try:
+                body = e.response.json()
+                msg += f" - {body.get('message', str(body))}"
+            except Exception:
+                pass
+            logger.error(f"Mistral query error: {msg}")
+            self.errors.append(msg)
+            return ""
+        except Exception as e:
+            msg = f"mistral: {type(e).__name__}: {e}"
+            logger.error(f"Mistral query error: {msg}")
+            self.errors.append(msg)
+            return ""
+
     async def _analyze_response(self, query: str, answer: str, brand_names: list[str]) -> dict | None:
         """Use Claude Haiku to extract structured brand mentions from a raw AI answer."""
         if not answer or not settings.ANTHROPIC_API_KEY:
@@ -513,9 +555,10 @@ class GeoAnalyzer:
         claude_task = asyncio.create_task(self._query_claude(query))
         gemini_task = asyncio.create_task(self._query_gemini(query))
         chatgpt_task = asyncio.create_task(self._query_chatgpt(query))
+        mistral_task = asyncio.create_task(self._query_mistral(query))
 
-        answers_raw = await asyncio.gather(claude_task, gemini_task, chatgpt_task)
-        platform_names = ["claude", "gemini", "chatgpt"]
+        answers_raw = await asyncio.gather(claude_task, gemini_task, chatgpt_task, mistral_task)
+        platform_names = ["claude", "gemini", "chatgpt", "mistral"]
 
         answers = {
             name: ans for name, ans in zip(platform_names, answers_raw) if ans

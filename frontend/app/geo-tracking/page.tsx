@@ -74,7 +74,7 @@ export default function GeoTrackingPage() {
   const brandId = insights?.brand_competitor_id;
   const brandName = insights?.brand_name || "Ma marque";
   const platforms = insights?.platforms || [];
-  const platformLabel = platforms.length > 0 ? platforms.map(p => p === "chatgpt" ? "ChatGPT" : p.charAt(0).toUpperCase() + p.slice(1)).join(", ") : "Claude, Gemini & ChatGPT";
+  const platformLabel = platforms.length > 0 ? platforms.map(p => p === "chatgpt" ? "ChatGPT" : p === "mistral" ? "Mistral" : p.charAt(0).toUpperCase() + p.slice(1)).join(", ") : "Claude, Gemini, ChatGPT & Mistral";
 
   // Derived
   const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
@@ -329,6 +329,7 @@ export default function GeoTrackingPage() {
                       ...(q.platforms.claude || []),
                       ...(q.platforms.gemini || []),
                       ...(q.platforms.chatgpt || []),
+                      ...(q.platforms.mistral || []),
                     ];
                     allMentions.forEach(m => {
                       if (m.competitor_id && statusMap[m.competitor_id] !== undefined) {
