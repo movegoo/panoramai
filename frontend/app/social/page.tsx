@@ -123,6 +123,7 @@ export default function SocialPage() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [contentPlatform, setContentPlatform] = useState<string | null>(null); // null = overview (all)
   const autoCollectTriggered = useRef(false);
+  const autoProfileTriggered = useRef(false);
 
   useEffect(() => {
     async function loadAll() {
@@ -135,22 +136,38 @@ export default function SocialPage() {
           brandAPI.getProfile(),
           socialContentAPI.getInsights(contentPlatform || undefined),
         ]);
-        if (comp.status === "fulfilled") setCompetitors(comp.value);
-        if (ig.status === "fulfilled") setIgComparison(ig.value);
-        if (tt.status === "fulfilled") setTtComparison(tt.value);
-        if (yt.status === "fulfilled") setYtComparison(yt.value);
+
+        const compList = comp.status === "fulfilled" ? comp.value : [];
+        const igData = ig.status === "fulfilled" ? ig.value : [];
+        const ttData = tt.status === "fulfilled" ? tt.value : [];
+        const ytData = yt.status === "fulfilled" ? yt.value : [];
+
+        setCompetitors(compList);
+        setIgComparison(igData);
+        setTtComparison(ttData);
+        setYtComparison(ytData);
         if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
+
         if (ci.status === "fulfilled") {
           setContentInsights(ci.value);
-          // Auto-collect if no analyzed content yet (first visit)
           if (!autoCollectTriggered.current && (!ci.value || ci.value.total_analyzed === 0)) {
             autoCollectTriggered.current = true;
-            // Don't await — run in background so page stays responsive
             runAutoCollect();
           }
         } else if (!autoCollectTriggered.current) {
           autoCollectTriggered.current = true;
           runAutoCollect();
+        }
+
+        // Auto-fetch profiles for platforms with no data
+        if (!autoProfileTriggered.current && compList.length > 0) {
+          const missingIg = igData.length === 0;
+          const missingTt = ttData.length === 0;
+          const missingYt = ytData.length === 0;
+          if (missingIg || missingTt || missingYt) {
+            autoProfileTriggered.current = true;
+            runAutoFetchProfiles(compList, missingIg, missingTt, missingYt);
+          }
         }
       } catch (err) {
         console.error("Failed to load:", err);
@@ -168,6 +185,38 @@ export default function SocialPage() {
       .then(setContentInsights)
       .catch(() => {});
   }, [contentPlatform]);
+
+  async function runAutoFetchProfiles(
+    compList: CompetitorListItem[],
+    fetchIg: boolean,
+    fetchTt: boolean,
+    fetchYt: boolean,
+  ) {
+    setFetching(true);
+    try {
+      // Fetch profiles for all competitors (backend skips those without handles)
+      for (const c of compList) {
+        const promises: Promise<any>[] = [];
+        if (fetchIg) promises.push(instagramAPI.fetch(c.id).catch(() => null));
+        if (fetchTt) promises.push(tiktokAPI.fetch(c.id).catch(() => null));
+        if (fetchYt) promises.push(youtubeAPI.fetch(c.id).catch(() => null));
+        if (promises.length > 0) await Promise.all(promises);
+      }
+      // Reload comparison data
+      const [ig, tt, yt] = await Promise.allSettled([
+        instagramAPI.getComparison(periodDays),
+        tiktokAPI.getComparison(periodDays),
+        youtubeAPI.getComparison(periodDays),
+      ]);
+      if (ig.status === "fulfilled") setIgComparison(ig.value);
+      if (tt.status === "fulfilled") setTtComparison(tt.value);
+      if (yt.status === "fulfilled") setYtComparison(yt.value);
+    } catch (err) {
+      console.error("Auto-fetch profiles failed:", err);
+    } finally {
+      setFetching(false);
+    }
+  }
 
   async function runAutoCollect() {
     setContentLoading(true);
