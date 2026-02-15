@@ -200,7 +200,7 @@ export default function FranceMap() {
   // Layers panel
   const [layersPanelOpen, setLayersPanelOpen] = useState(false);
   const [layers, setLayers] = useState<LayerConfig[]>([
-    { id: "competitor_stores", name: "Magasins concurrents", icon: <Store className="h-4 w-4" />, color: "#ef4444", enabled: false, description: "Base nationale des commerces" },
+    { id: "competitor_stores", name: "Magasins concurrents", icon: <Store className="h-4 w-4" />, color: "#ef4444", enabled: true, description: "Base nationale des commerces" },
     { id: "catchment_zones", name: "Zones de chalandise", icon: <Target className="h-4 w-4" />, color: "#8b5cf6", enabled: false, description: "Couverture population" },
     { id: "irve", name: "Bornes électriques", icon: <Zap className="h-4 w-4" />, color: "#22c55e", enabled: false, description: "200k+ bornes IRVE" },
     { id: "poi_restaurant", name: "Restaurants", icon: <Coffee className="h-4 w-4" />, color: "#f59e0b", enabled: false, description: "Via OpenStreetMap" },
@@ -606,6 +606,34 @@ export default function FranceMap() {
       map.off("moveend", loadIrisForBounds);
     };
   }, [showIrisLayer, mapReady, loadIrisForBounds]);
+
+  // Auto-load competitor stores + brand stores when map is ready
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current || !leafletRef.current) return;
+    const map = mapInstanceRef.current;
+    const L = leafletRef.current;
+
+    // Load brand stores
+    loadStores();
+
+    // Load competitor stores if layer is enabled by default
+    const compLayer = layers.find(l => l.id === "competitor_stores");
+    if (compLayer?.enabled && !layerGroupsRef.current.has("competitor_stores")) {
+      setLayers(prev => prev.map(l =>
+        l.id === "competitor_stores" ? { ...l, loading: true } : l
+      ));
+      loadCompetitorStoresLayer(map, L).then(() => {
+        setLayers(prev => prev.map(l =>
+          l.id === "competitor_stores" ? { ...l, loading: false } : l
+        ));
+      }).catch(() => {
+        setLayers(prev => prev.map(l =>
+          l.id === "competitor_stores" ? { ...l, loading: false } : l
+        ));
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady]);
 
   // =========================================================================
   // Layer management
