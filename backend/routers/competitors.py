@@ -2,7 +2,7 @@
 Competitors management router.
 CRUD operations for managing competitors.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional, Dict
@@ -12,6 +12,19 @@ from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, C
 from core.trends import calculate_trend, TrendDirection
 from core.auth import get_optional_user
 from core.utils import get_logo_url
+
+
+def _scoped_competitor_query(db, user, x_advertiser_id=None):
+    """Build a competitor query scoped to user + advertiser."""
+    query = db.query(Competitor).filter(Competitor.is_active == True)
+    if user:
+        query = query.filter(Competitor.user_id == user.id)
+    if x_advertiser_id:
+        try:
+            query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        except (ValueError, TypeError):
+            pass
+    return query
 
 router = APIRouter()
 
@@ -58,6 +71,7 @@ def calculate_score(
 async def get_dashboard(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Dashboard stats for the homepage.
@@ -65,10 +79,7 @@ async def get_dashboard(
     """
     from database import Ad
 
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    competitors = comp_query.all()
+    competitors = _scoped_competitor_query(db, user, x_advertiser_id).all()
     comp_ids = [c.id for c in competitors]
 
     # Count totals
@@ -127,6 +138,7 @@ async def get_dashboard(
 async def list_competitors(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Liste tous les concurrents avec leurs métriques clés.
@@ -136,10 +148,7 @@ async def list_competitors(
     if user:
         from core.auth import claim_orphans
         claim_orphans(db, user)
-    query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-    competitors = query.all()
+    competitors = _scoped_competitor_query(db, user, x_advertiser_id).all()
     comp_ids = [c.id for c in competitors]
     cards = []
 
@@ -344,6 +353,7 @@ async def create_competitor(
     data: CompetitorCreate,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute un nouveau concurrent."""
     # Vérifie si le concurrent existe déjà
@@ -356,8 +366,10 @@ async def create_competitor(
     if exist_query.first():
         raise HTTPException(status_code=400, detail=f"Le concurrent '{data.name}' existe déjà")
 
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
     comp = Competitor(
         user_id=user.id if user else None,
+        advertiser_id=adv_id,
         name=data.name,
         website=data.website,
         playstore_app_id=data.playstore_app_id,

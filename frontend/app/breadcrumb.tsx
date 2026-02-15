@@ -113,7 +113,7 @@ export function Breadcrumb() {
               ))}
               <div className="border-t border-border mt-1 pt-1">
                 <Link
-                  href="/account"
+                  href="/account?new=1"
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-muted/60 transition-colors text-[13px] text-violet-600 font-medium"
                 >

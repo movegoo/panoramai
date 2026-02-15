@@ -376,6 +376,7 @@ async def add_suggested_competitors(
 
         new_competitor = Competitor(
             user_id=(user.id if user else None),
+            advertiser_id=brand.id,
             name=comp_data["name"],
             website=comp_data.get("website"),
             logo_url=get_logo_url(comp_data.get("website")),

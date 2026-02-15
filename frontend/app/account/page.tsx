@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +10,12 @@ import {
   brandAPI,
   BrandProfileData,
   BrandSetupData,
+  BrandListItem,
   SectorData,
   CompetitorSuggestionData,
+  setCurrentAdvertiserId,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import {
   Building2,
   Globe,
@@ -606,7 +610,13 @@ function ConnectorsSection() {
 /* Main Page                                                                 */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 export default function AccountPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { user, refresh: refreshAuth, switchAdvertiser } = useAuth();
+  const isNewMode = searchParams.get("new") === "1";
+
   const [profile, setProfile] = useState<BrandProfileData | null>(null);
+  const [allBrands, setAllBrands] = useState<BrandListItem[]>([]);
   const [sectors, setSectors] = useState<SectorData[]>([]);
   const [suggestions, setSuggestions] = useState<CompetitorSuggestionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -631,7 +641,7 @@ export default function AccountPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [isNewMode]);
 
   useEffect(() => {
     if (toast) {
@@ -643,28 +653,44 @@ export default function AccountPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const sectorsData = await brandAPI.getSectors();
+      const [sectorsData, brands] = await Promise.all([
+        brandAPI.getSectors(),
+        brandAPI.list().catch(() => []),
+      ]);
       setSectors(sectorsData);
+      setAllBrands(brands);
 
-      try {
-        const profileData = await brandAPI.getProfile();
-        setProfile(profileData);
-        setForm({
-          company_name: profileData.company_name,
-          sector: profileData.sector,
-          website: profileData.website || "",
-          instagram_username: profileData.instagram_username || "",
-          tiktok_username: profileData.tiktok_username || "",
-          youtube_channel_id: profileData.youtube_channel_id || "",
-          playstore_app_id: profileData.playstore_app_id || "",
-          appstore_app_id: profileData.appstore_app_id || "",
-        });
-
-        const suggestionsData = await brandAPI.getSuggestions();
-        setSuggestions(suggestionsData);
-      } catch {
+      // If ?new=1, show creation form directly
+      if (isNewMode) {
         setIsNewBrand(true);
         setEditing(true);
+        setProfile(null);
+        setForm({
+          company_name: "", sector: "", website: "",
+          instagram_username: "", tiktok_username: "", youtube_channel_id: "",
+          playstore_app_id: "", appstore_app_id: "",
+        });
+      } else {
+        try {
+          const profileData = await brandAPI.getProfile();
+          setProfile(profileData);
+          setForm({
+            company_name: profileData.company_name,
+            sector: profileData.sector,
+            website: profileData.website || "",
+            instagram_username: profileData.instagram_username || "",
+            tiktok_username: profileData.tiktok_username || "",
+            youtube_channel_id: profileData.youtube_channel_id || "",
+            playstore_app_id: profileData.playstore_app_id || "",
+            appstore_app_id: profileData.appstore_app_id || "",
+          });
+
+          const suggestionsData = await brandAPI.getSuggestions();
+          setSuggestions(suggestionsData);
+        } catch {
+          setIsNewBrand(true);
+          setEditing(true);
+        }
       }
     } catch (err) {
       console.error("Failed to load account data:", err);
@@ -685,6 +711,15 @@ export default function AccountPage() {
         setSuggestions(result.suggested_competitors);
         setIsNewBrand(false);
         setToast({ type: "success", text: result.message });
+        // Switch to the newly created advertiser
+        setCurrentAdvertiserId(result.brand.id);
+        // Refresh the auth context to pick up the new advertiser list
+        await refreshAuth();
+        // Refresh local brand list
+        const brands = await brandAPI.list().catch(() => []);
+        setAllBrands(brands);
+        // Remove ?new=1 from URL
+        router.replace("/account");
       } else {
         const updated = await brandAPI.updateProfile(form);
         setProfile(updated);
@@ -701,6 +736,15 @@ export default function AccountPage() {
   }
 
   function handleCancel() {
+    // If we were in new brand mode from ?new=1, go back to normal account view
+    if (isNewMode || (isNewBrand && allBrands.length > 0)) {
+      setIsNewBrand(false);
+      setEditing(false);
+      router.replace("/account");
+      // Reload current brand profile
+      loadData();
+      return;
+    }
     if (profile) {
       setForm({
         company_name: profile.company_name,
@@ -794,10 +838,12 @@ export default function AccountPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">
-            {isNewBrand ? "Bienvenue" : "Mon enseigne"}
+            {isNewBrand && allBrands.length > 0 ? "Nouvelle enseigne" : isNewBrand ? "Bienvenue" : "Mon enseigne"}
           </h1>
           <p className="text-[13px] text-muted-foreground">
-            {isNewBrand
+            {isNewBrand && allBrands.length > 0
+              ? "Ajoutez une nouvelle enseigne à votre compte"
+              : isNewBrand
               ? "Configurez votre marque pour démarrer la veille concurrentielle"
               : "Gérez votre profil et vos concurrents"}
           </p>
@@ -823,6 +869,51 @@ export default function AccountPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Section 0 : Mes enseignes (multi-advertiser switcher)             */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {allBrands.length > 1 && !isNewBrand && (
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mes enseignes</p>
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-violet-600" onClick={() => router.push("/account?new=1")}>
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Ajouter
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {allBrands.map((b) => {
+                const isCurrent = b.id === profile?.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => {
+                      if (!isCurrent) switchAdvertiser(b.id);
+                    }}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all ${
+                      isCurrent
+                        ? "bg-violet-50 border-violet-300 text-violet-700 font-semibold"
+                        : "bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {b.logo_url ? (
+                      <img src={b.logo_url} alt="" className="h-6 w-6 rounded-full object-contain" />
+                    ) : (
+                      <div className="h-6 w-6 rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center text-[10px] font-bold text-violet-700">
+                        {b.company_name.charAt(0)}
+                      </div>
+                    )}
+                    {b.company_name}
+                    {isCurrent && <Check className="h-3.5 w-3.5 text-violet-600" />}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* Section 1 : Profil                                                */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <Card>
@@ -833,7 +924,7 @@ export default function AccountPage() {
             </div>
             <div>
               <CardTitle className="text-lg">
-                {isNewBrand ? "Creer mon enseigne" : "Mon enseigne"}
+                {isNewBrand && allBrands.length > 0 ? "Nouvelle enseigne" : isNewBrand ? "Creer mon enseigne" : "Mon enseigne"}
               </CardTitle>
               {profile && !editing && (
                 <p className="text-sm text-muted-foreground">
@@ -946,9 +1037,9 @@ export default function AccountPage() {
                   ) : (
                     <Save className="h-4 w-4 mr-1" />
                   )}
-                  {isNewBrand ? "Creer mon compte" : "Sauvegarder"}
+                  {isNewBrand ? "Creer l'enseigne" : "Sauvegarder"}
                 </Button>
-                {!isNewBrand && (
+                {(!isNewBrand || allBrands.length > 0) && (
                   <Button type="button" variant="outline" onClick={handleCancel}>
                     <X className="h-4 w-4 mr-1" />
                     Annuler

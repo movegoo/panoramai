@@ -2,7 +2,7 @@
 Veille Concurrentielle - Le coeur du produit.
 Dashboard et alertes pour surveiller la concurrence.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional, Dict
@@ -97,14 +97,16 @@ def format_number(value: Optional[float], suffix: str = "") -> str:
     return f"{value:.0f}{suffix}"
 
 
-def get_brand(db: Session, user: User) -> Advertiser:
-    """Récupère l'enseigne courante, filtrée par user si authentifié."""
+def get_brand(db: Session, user: User, advertiser_id: int | None = None) -> Advertiser:
+    """Récupère l'enseigne courante, filtrée par user et advertiser_id."""
     if user:
         from core.auth import claim_orphans
         claim_orphans(db, user)
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         query = query.filter(Advertiser.user_id == user.id)
+    if advertiser_id:
+        query = query.filter(Advertiser.id == advertiser_id)
     brand = query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
@@ -147,6 +149,7 @@ def calculate_global_score(
 async def get_watch_overview(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Vue d'ensemble de la veille concurrentielle.
@@ -156,10 +159,13 @@ async def get_watch_overview(
     - KPIs clés avec comparaison au meilleur concurrent
     - Résumé textuel de la situation
     """
-    brand = get_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_brand(db, user, adv_id)
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
     competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
 
@@ -349,15 +355,19 @@ async def get_dashboard_data(
     days: int = 7,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Endpoint agrégé pour le dashboard frontend.
     Retourne toutes les données competitors + insights en un seul appel.
     """
-    brand = get_brand(db, user)  # also claims orphans if user is logged in
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_brand(db, user, adv_id)
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
     competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
 
@@ -1090,6 +1100,7 @@ async def get_alerts(
     unread_only: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Liste les alertes de veille concurrentielle.
@@ -1100,13 +1111,16 @@ async def get_alerts(
     - app_update: Mise à jour d'app
     - new_ad: Nouvelle publicité détectée
     """
-    brand = get_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_brand(db, user, adv_id)
     alerts = []
 
     # Build competitor name lookup (single query, scoped to user)
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
     all_comps = comp_query.all()
     comp_names = {c.id: c.name for c in all_comps}
 
@@ -1180,16 +1194,20 @@ async def get_alerts(
 async def get_rankings(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Classements par canal.
 
     Retourne le leaderboard pour chaque métrique clé.
     """
-    brand = get_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_brand(db, user, adv_id)
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
     competitors = comp_query.all()
     comp_ids = [c.id for c in competitors]
     rankings = []
