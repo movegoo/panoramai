@@ -463,9 +463,12 @@ async def create_competitor(
     db.commit()
     db.refresh(comp)
 
-    # Auto-fetch all data in background
-    import asyncio
-    asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
+    # Auto-fetch all data synchronously (reliable, no silent failures)
+    try:
+        await _auto_enrich_competitor(comp.id, comp)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto-enrich failed for '{comp.name}': {e}")
 
     return CompetitorCard(
         id=comp.id,
@@ -498,28 +501,38 @@ async def update_competitor(
     Met à jour les identifiants d'un concurrent.
 
     Permet de corriger les app IDs, usernames, etc.
+    Enrichit automatiquement les nouvelles sources ajoutées.
     """
     from core.permissions import verify_competitor_ownership, parse_advertiser_header
     adv_id = parse_advertiser_header(x_advertiser_id)
     comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
+    # Track which fields are being added (were empty, now have a value)
+    new_fields = []
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
+        old_val = getattr(comp, field, None)
+        if not old_val and value:
+            new_fields.append(field)
         setattr(comp, field, value)
 
     db.commit()
     db.refresh(comp)
 
-    # Auto-fetch all data in background (same as creation)
-    import asyncio
-    asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
+    # Synchronous enrichment for newly added fields (not fire-and-forget)
+    enrich_results = {}
+    if new_fields:
+        enrich_results = await _auto_enrich_competitor(comp.id, comp)
 
     return {
-        "message": f"Concurrent '{comp.name}' mis à jour — enrichissement lancé en arrière-plan",
+        "message": f"Concurrent '{comp.name}' mis à jour" + (f" — enrichissement: {len(enrich_results)} sources" if enrich_results else ""),
         "updated_fields": list(update_data.keys()),
+        "new_fields": new_fields,
+        "enrichment": enrich_results,
         "competitor": {
             "id": comp.id,
             "name": comp.name,
+            "facebook_page_id": comp.facebook_page_id,
             "playstore_app_id": comp.playstore_app_id,
             "appstore_app_id": comp.appstore_app_id,
             "instagram_username": comp.instagram_username,
