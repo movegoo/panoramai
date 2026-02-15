@@ -655,6 +655,20 @@ export const asoAPI = {
   getAnalysis: () => fetchAPI<any>("/aso/analysis"),
 };
 
+// Global Enrichment API
+export const enrichAPI = {
+  enrichAll: () =>
+    fetchAPI<{
+      message: string;
+      competitors_count: number;
+      total_tasks: number;
+      ok: number;
+      skipped: number;
+      errors: number;
+      details: any[];
+    }>("/enrich/all", { method: "POST" }),
+};
+
 // Google Ads API
 export const googleAdsAPI = {
   getAllAds: (activeOnly = false) =>

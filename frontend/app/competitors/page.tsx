@@ -14,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { competitorsAPI, Competitor, CompetitorCreate, API_BASE } from "@/lib/api";
+import { competitorsAPI, enrichAPI, Competitor, CompetitorCreate, API_BASE } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import {
   Plus,
@@ -103,6 +103,8 @@ export default function CompetitorsPage() {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [storeCounts, setStoreCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
+  const [enrichResult, setEnrichResult] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCompetitor, setEditingCompetitor] = useState<Competitor | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -222,6 +224,20 @@ export default function CompetitorsPage() {
     );
   }
 
+  async function handleEnrichAll() {
+    setEnriching(true);
+    setEnrichResult(null);
+    try {
+      const result = await enrichAPI.enrichAll();
+      setEnrichResult(result);
+      loadCompetitors(); // Refresh data
+    } catch (err: any) {
+      setEnrichResult({ message: `Erreur: ${err.message}`, errors: 1 });
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
@@ -237,19 +253,24 @@ export default function CompetitorsPage() {
             </p>
           </div>
         </div>
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="gap-2 shadow-sm">
-              <UserPlus className="h-4 w-4" />
-              Ajouter un concurrent
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2 shadow-sm" onClick={handleEnrichAll} disabled={enriching || competitors.length === 0}>
+            {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {enriching ? "Enrichissement..." : "Enrichir tout"}
+          </Button>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) resetForm();
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className="gap-2 shadow-sm">
+                <UserPlus className="h-4 w-4" />
+                Ajouter
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[560px]">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -356,8 +377,26 @@ export default function CompetitorsPage() {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
+
+      {/* ── Enrichment result banner ── */}
+      {enrichResult && (
+        <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${enrichResult.errors > 0 && enrichResult.ok === 0 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"}`}>
+          <div className="flex items-center gap-2">
+            {enrichResult.errors > 0 && enrichResult.ok === 0 ? (
+              <AlertCircle className="h-4 w-4 text-red-600" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            )}
+            <span className="text-sm font-medium">{enrichResult.message}</span>
+          </div>
+          <button onClick={() => setEnrichResult(null)} className="text-muted-foreground hover:text-foreground">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* ── Search bar ── */}
       {competitors.length > 0 && (
