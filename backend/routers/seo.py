@@ -334,11 +334,13 @@ SECTOR_SEO_KEYWORDS: dict[str, list[str]] = {
 }
 
 
-def _get_user_brand(db: Session, user: User | None) -> Advertiser | None:
-    """Get the user's brand (Advertiser)."""
+def _get_user_brand(db: Session, user: User | None, x_advertiser_id: str | None = None) -> Advertiser | None:
+    """Get the user's brand (Advertiser), scoped by advertiser_id when switching brands."""
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         query = query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Advertiser.id == int(x_advertiser_id))
     return query.first()
 
 
@@ -419,7 +421,7 @@ async def track_serp(
     if not competitors:
         return {"error": "No competitors configured", "tracked_keywords": 0, "total_results": 0}
 
-    brand = _get_user_brand(db, user)
+    brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
     keywords = _get_sector_keywords(sector)
 
@@ -497,7 +499,7 @@ async def get_rankings(
     comp_names = {c.id: c.name for c in competitors}
 
     # Get sector-specific keywords to filter results
-    brand = _get_user_brand(db, user)
+    brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
     sector_kws = _get_sector_keywords(sector)
 
@@ -554,7 +556,7 @@ async def get_insights(
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 
-    brand = _get_user_brand(db, user)
+    brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
     sector_kws = _get_sector_keywords(sector)
 

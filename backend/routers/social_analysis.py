@@ -515,8 +515,13 @@ async def get_content_insights(
     posting_timing = _build_posting_timing(rows)
 
     # Get brand name for recommendations
-    brand = db.query(Advertiser).filter(Advertiser.is_active == True).first()
-    brand_name = brand.company_name if brand else "Auchan"
+    brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
+    if user:
+        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
+    brand = brand_query.first()
+    brand_name = brand.company_name if brand else "Ma marque"
 
     # Recommendations
     recommendations = _generate_recommendations(

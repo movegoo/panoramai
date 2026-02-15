@@ -30,10 +30,12 @@ def _get_user_competitors(db: Session, user: User | None, x_advertiser_id: str |
     return query.all()
 
 
-def _get_user_brand(db: Session, user: User | None) -> Advertiser | None:
+def _get_user_brand(db: Session, user: User | None, x_advertiser_id: str | None = None) -> Advertiser | None:
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         query = query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Advertiser.id == int(x_advertiser_id))
     return query.first()
 
 
@@ -48,7 +50,7 @@ async def track_geo(
     if not competitors:
         return {"error": "No competitors configured", "tracked_queries": 0}
 
-    brand = _get_user_brand(db, user)
+    brand = _get_user_brand(db, user, x_advertiser_id)
     sector = brand.sector if brand else "supermarche"
     sector_label = get_sector_label(sector) if brand else "Grande Distribution"
 
@@ -182,7 +184,7 @@ async def get_insights(
     valid_ids = {c.id for c in competitors}
     comp_names = {c.id: c.name for c in competitors}
 
-    brand = _get_user_brand(db, user)
+    brand = _get_user_brand(db, user, x_advertiser_id)
     brand_comp = None
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
