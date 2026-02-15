@@ -4,6 +4,42 @@ import React, { useState, useEffect } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 
+const LLM_CONFIG: Record<string, { label: string; logo: string; color: string }> = {
+  mistral: {
+    label: "Mistral",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Mistral_AI_Logo_%282025%29.svg/120px-Mistral_AI_Logo_%282025%29.svg.png",
+    color: "text-orange-600",
+  },
+  claude: {
+    label: "Claude",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Claude_AI_logo.svg/120px-Claude_AI_logo.svg.png",
+    color: "text-amber-700",
+  },
+  gemini: {
+    label: "Gemini",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Google_Gemini_logo.svg/120px-Google_Gemini_logo.svg.png",
+    color: "text-blue-600",
+  },
+  chatgpt: {
+    label: "ChatGPT",
+    logo: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/ChatGPT_logo.svg/120px-ChatGPT_logo.svg.png",
+    color: "text-emerald-600",
+  },
+};
+
+function PlatformBadge({ platform, size = "md" }: { platform: string; size?: "sm" | "md" }) {
+  const cfg = LLM_CONFIG[platform];
+  if (!cfg) return <span className="text-xs">{platform}</span>;
+  const imgSize = size === "sm" ? "h-4 w-4" : "h-5 w-5";
+  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${textSize} font-semibold ${cfg.color}`}>
+      <img src={cfg.logo} alt={cfg.label} className={`${imgSize} object-contain`} />
+      {cfg.label}
+    </span>
+  );
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
   const d = new Date(iso);
@@ -86,7 +122,9 @@ export default function GeoTrackingPage() {
   const brandId = insights?.brand_competitor_id;
   const brandName = insights?.brand_name || "Ma marque";
   const platforms = insights?.platforms || [];
-  const platformLabel = platforms.length > 0 ? platforms.map(p => p === "chatgpt" ? "ChatGPT" : p === "mistral" ? "Mistral" : p.charAt(0).toUpperCase() + p.slice(1)).join(", ") : "Claude, Gemini, ChatGPT & Mistral";
+  const platformLabel = platforms.length > 0
+    ? platforms.map(p => LLM_CONFIG[p]?.label || p).join(", ")
+    : "Mistral, Claude, Gemini & ChatGPT";
 
   // Derived
   const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
@@ -119,7 +157,16 @@ export default function GeoTrackingPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Visibilite IA (GEO)</h1>
-            <p className="text-sm text-muted-foreground">Suivi de la presence de marque dans les reponses {platformLabel}</p>
+            <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
+              Presence de marque dans
+              {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map((p, i, arr) => (
+                <span key={p} className="inline-flex items-center gap-1">
+                  {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].logo} alt="" className="h-4 w-4 object-contain" />}
+                  <span className="font-medium text-foreground/70">{LLM_CONFIG[p]?.label || p}</span>
+                  {i < arr.length - 1 && <span className="text-muted-foreground/50">,</span>}
+                </span>
+              ))}
+            </p>
           </div>
         </div>
         <button
@@ -210,7 +257,21 @@ export default function GeoTrackingPage() {
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard label="Requetes analysees" value={insights.total_queries.toString()} icon={Search} color="teal" />
-            <KpiCard label="Plateformes IA" value={platforms.length.toString()} icon={Bot} color="cyan" subtitle={platformLabel} />
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 shadow-md shadow-cyan-200/50">
+                  <Bot className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Plateformes IA</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map(p => (
+                  <span key={p} className="inline-flex items-center gap-1">
+                    {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].logo} alt={LLM_CONFIG[p].label} className="h-4 w-4 object-contain" />}
+                  </span>
+                ))}
+              </div>
+            </div>
             <KpiCard label={`Visibilite ${brandName}`} value={brandSov ? `${brandSov.pct}%` : "0%"} icon={Eye} color="emerald" subtitle={brandSov ? `${brandSov.mentions} mentions` : undefined} />
             <KpiCard label="Derniere analyse" value={formatDate(lastTracked)} icon={Sparkles} color="sky" />
           </div>
@@ -259,7 +320,7 @@ export default function GeoTrackingPage() {
           <div className="rounded-2xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Bot className="h-4 w-4 text-cyan-500" />
-              Comparaison plateformes : {platformLabel}
+              Comparaison par plateforme IA
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -267,8 +328,8 @@ export default function GeoTrackingPage() {
                   <tr className="border-b border-border">
                     <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Concurrent</th>
                     {platforms.map((p) => (
-                      <th key={p} className="text-center py-2 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {p === "chatgpt" ? "ChatGPT" : p.charAt(0).toUpperCase() + p.slice(1)}
+                      <th key={p} className="text-center py-2 px-4">
+                        <PlatformBadge platform={p} size="sm" />
                       </th>
                     ))}
                   </tr>
@@ -355,10 +416,10 @@ export default function GeoTrackingPage() {
                     competitorNames.forEach(c => { statusMap[c.id] = { mentioned: false, recommended: false }; });
 
                     const allMentions = [
+                      ...(q.platforms.mistral || []),
                       ...(q.platforms.claude || []),
                       ...(q.platforms.gemini || []),
                       ...(q.platforms.chatgpt || []),
-                      ...(q.platforms.mistral || []),
                     ];
                     allMentions.forEach(m => {
                       if (m.competitor_id && statusMap[m.competitor_id] !== undefined) {

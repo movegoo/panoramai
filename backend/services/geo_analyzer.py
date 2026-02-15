@@ -557,8 +557,8 @@ class GeoAnalyzer:
         chatgpt_task = asyncio.create_task(self._query_chatgpt(query))
         mistral_task = asyncio.create_task(self._query_mistral(query))
 
-        answers_raw = await asyncio.gather(claude_task, gemini_task, chatgpt_task, mistral_task)
-        platform_names = ["claude", "gemini", "chatgpt", "mistral"]
+        answers_raw = await asyncio.gather(mistral_task, claude_task, gemini_task, chatgpt_task)
+        platform_names = ["mistral", "claude", "gemini", "chatgpt"]
 
         answers = {
             name: ans for name, ans in zip(platform_names, answers_raw) if ans

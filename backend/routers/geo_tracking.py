@@ -170,7 +170,7 @@ async def get_results(
             grouped[key] = {
                 "keyword": r.keyword,
                 "query": r.query,
-                "platforms": {"claude": [], "gemini": [], "chatgpt": [], "mistral": []},
+                "platforms": {"mistral": [], "claude": [], "gemini": [], "chatgpt": []},
             }
 
         mention = {
@@ -390,7 +390,7 @@ async def get_insights(
 
     return {
         "total_queries": total_queries,
-        "platforms": active_platforms or ["claude", "gemini", "chatgpt", "mistral"],
+        "platforms": active_platforms or ["mistral", "claude", "gemini", "chatgpt"],
         "last_tracked": latest.isoformat(),
         "brand_name": brand.company_name if brand else None,
         "brand_competitor_id": brand_comp.id if brand_comp else None,

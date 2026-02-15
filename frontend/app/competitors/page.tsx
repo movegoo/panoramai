@@ -647,8 +647,26 @@ const CI_SOURCES: CISource[] = [
     url: "https://business.google.com",
   },
   {
+    id: "mistral_api", name: "Mistral AI", description: "Visibilite de marque dans les reponses Mistral / Le Chat",
+    icon: Brain, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200",
+    status: "available", category: "geo", purpose: "GEO → Part de voix IA Mistral",
+    url: "https://mistral.ai",
+  },
+  {
+    id: "claude_api", name: "Anthropic / Claude", description: "Visibilite de marque dans les reponses Claude",
+    icon: Brain, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200",
+    status: "available", category: "geo", purpose: "GEO → Part de voix IA Claude",
+    url: "https://anthropic.com",
+  },
+  {
+    id: "gemini_api", name: "Google / Gemini", description: "Visibilite de marque dans les reponses Gemini",
+    icon: Brain, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200",
+    status: "available", category: "geo", purpose: "GEO → Part de voix IA Gemini",
+    url: "https://ai.google.dev",
+  },
+  {
     id: "chatgpt_api", name: "OpenAI / ChatGPT", description: "Visibilite de marque dans les reponses ChatGPT",
-    icon: Brain, color: "text-teal-600", bg: "bg-teal-50", border: "border-teal-200",
+    icon: Brain, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200",
     status: "available", category: "geo", purpose: "GEO → Part de voix IA ChatGPT",
     url: "https://platform.openai.com",
   },
