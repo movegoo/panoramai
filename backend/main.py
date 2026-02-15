@@ -105,9 +105,22 @@ def _patch_missing_social_handles():
                     changed = True
             if changed:
                 patched += 1
+        # Also patch advertisers (brand) with correct IDs
+        advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+        for adv in advertisers:
+            ref = known.get(adv.company_name.lower())
+            if not ref:
+                continue
+            for field in ["playstore_app_id", "appstore_app_id", "instagram_username",
+                          "tiktok_username", "youtube_channel_id"]:
+                current = getattr(adv, field, None)
+                new_val = ref.get(field)
+                if new_val and (not current or current != new_val):
+                    setattr(adv, field, new_val)
+                    patched += 1
         if patched:
             db.commit()
-            logger.info(f"Patched {patched} competitors with missing social handles")
+            logger.info(f"Patched {patched} competitors/advertisers with correct handles")
     finally:
         db.close()
 
