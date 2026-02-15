@@ -296,62 +296,372 @@ def _compute_freshness_score(last_updated: datetime | None) -> dict:
     return scores
 
 
+def _find_dimension_leader(competitor_scores: list, dim_key: str, store: str | None = None) -> dict | None:
+    """Find the competitor with the highest score for a given dimension."""
+    best = None
+    best_score = -1
+    for cs in competitor_scores:
+        if store:
+            s = cs.get(store, {}).get(f"{dim_key}_score", {}).get("total", 0)
+        else:
+            ps = cs.get("playstore", {}).get(f"{dim_key}_score", {}).get("total", 0)
+            _as = cs.get("appstore", {}).get(f"{dim_key}_score", {}).get("total", 0)
+            s = max(ps, _as)
+        if s > best_score:
+            best_score = s
+            best = cs
+    return best
+
+
 def _generate_aso_recommendations(competitor_scores: list, brand_name: str | None) -> list:
-    """Generate actionable ASO recommendations based on scores."""
+    """Generate expert-level ASO recommendations with competitor benchmarking."""
     recs = []
     if not competitor_scores:
         return recs
 
-    brand_score = next((s for s in competitor_scores if brand_name and s["competitor_name"].lower() == brand_name.lower()), None)
-    if not brand_score:
+    brand = next((s for s in competitor_scores if brand_name and s["competitor_name"].lower() == brand_name.lower()), None)
+    if not brand:
         return recs
 
-    # Find weakest dimension
-    dimensions = [
-        ("metadata", "Metadata", "Optimisez le titre (30 chars max), enrichissez la description avec des mots-cles et des bullet points, et ajoutez un changelog detaille a chaque mise a jour."),
-        ("visual", "Assets visuels", "Ajoutez plus de screenshots (idealement le maximum), une video de presentation, et verifiez que votre feature graphic est impactante."),
-        ("rating", "Note utilisateurs", "Ameliorez l'UX, repondez aux avis negatifs, et lancez des campagnes de rating pour augmenter votre note moyenne."),
-        ("reviews", "Volume d'avis", "Encouragez les utilisateurs a laisser un avis via des in-app prompts intelligents apres une experience positive."),
-        ("freshness", "Fraicheur", "Publiez des mises a jour regulieres (idealement toutes les 2-4 semaines) avec des changelogs detailles."),
-    ]
+    leader = max(competitor_scores, key=lambda s: s.get("aso_score_avg", 0))
+    brand_ps = brand.get("playstore", {})
+    brand_as = brand.get("appstore", {})
 
-    brand_ps = brand_score.get("playstore", {})
-    brand_as = brand_score.get("appstore", {})
+    # ── 1. Global positioning ──
+    brand_avg = brand.get("aso_score_avg", 0)
+    leader_avg = leader.get("aso_score_avg", 0)
+    gap = leader_avg - brand_avg
+    rank = next((i + 1 for i, s in enumerate(competitor_scores) if s["competitor_name"] == brand["competitor_name"]), len(competitor_scores))
 
-    for key, label, advice in dimensions:
-        ps_score = brand_ps.get(f"{key}_score", {}).get("total", 0) if brand_ps else 0
-        as_score = brand_as.get(f"{key}_score", {}).get("total", 0) if brand_as else 0
-        avg_score = (ps_score + as_score) / 2 if brand_ps and brand_as else (ps_score or as_score)
+    if gap > 5 and leader["competitor_name"] != brand["competitor_name"]:
+        recs.append({
+            "dimension": "Positionnement global",
+            "score": round(brand_avg, 1),
+            "priority": "high" if gap > 15 else "medium",
+            "advice": f"Vous etes {rank}e/{len(competitor_scores)} en ASO ({brand_avg:.0f}/100). "
+                       f"{leader['competitor_name']} mene a {leader_avg:.0f}/100 — ecart de {gap:.0f} pts. "
+                       f"Concentrez vos efforts sur les dimensions ou l'ecart est le plus grand pour un impact rapide.",
+        })
 
-        if avg_score < 60:
-            store_label = ""
-            if brand_ps and brand_as:
-                if ps_score < as_score:
-                    store_label = " (surtout sur Play Store)"
-                elif as_score < ps_score:
-                    store_label = " (surtout sur App Store)"
+    # ── 2. Metadata deep-dive ──
+    for store_key, store_label in [("playstore", "Play Store"), ("appstore", "App Store")]:
+        sd = brand.get(store_key, {})
+        if not sd:
+            continue
+        ms = sd.get("metadata_score", {})
+        total = ms.get("total", 0)
+        if total >= 80:
+            continue
+
+        advices = []
+        leader_md = _find_dimension_leader(competitor_scores, "metadata", store_key)
+        leader_name = leader_md["competitor_name"] if leader_md else None
+
+        # Title analysis
+        title_score = ms.get("title_length", 0)
+        title_detail = ms.get("title_length_detail", "")
+        app_name = sd.get("app_name", "")
+        if title_score < 80:
+            advices.append(
+                f"Titre ({title_detail}) : votre titre \"{app_name}\" est sous-optimise. "
+                f"Sur {store_label}, le titre doit combiner marque + mot-cle principal (ex: \"[Marque] - [benefice cle]\"). "
+                f"Visez 25-30 caracteres, chaque mot compte pour l'indexation."
+            )
+
+        # Description
+        desc_score = ms.get("description_length", 0)
+        desc_detail = ms.get("description_length_detail", "")
+        if desc_score < 70:
+            if store_key == "playstore":
+                advices.append(
+                    f"Description ({desc_detail}) : Google indexe les 4000 premiers caracteres de la description Play Store. "
+                    f"Visez 2500-4000 caracteres avec vos mots-cles cibles dans les 5 premieres lignes (above the fold). "
+                    f"Integrez naturellement 3-5 mots-cles principaux avec une densite de 2-3%."
+                )
+            else:
+                advices.append(
+                    f"Description ({desc_detail}) : meme si Apple n'indexe pas la description, elle est essentielle pour la conversion. "
+                    f"Utilisez les 3 premieres lignes pour accrocher (visibles avant \"En savoir plus\"). "
+                    f"Structurez avec des emojis/bullets et focalisez sur les benefices, pas les features."
+                )
+
+        # Structure
+        struct_score = ms.get("description_structure", 0)
+        if struct_score < 80:
+            advices.append(
+                "Structure de description faible : les listings structures (bullet points ✓, emojis, sous-titres en majuscules) "
+                "augmentent le taux de conversion de 15-25%. Segmentez par cas d'usage, pas par fonctionnalite."
+            )
+
+        # Short description / subtitle
+        sd_score = ms.get("short_description", 0)
+        if sd_score < 70 and store_key == "playstore":
+            sd_detail = ms.get("short_description_detail", "")
+            advices.append(
+                f"Description courte ({sd_detail}) : ce champ de 80 caracteres est un des plus importants pour l'indexation Play Store. "
+                f"Placez-y votre mot-cle principal + proposition de valeur. C'est aussi le premier texte visible sur la fiche."
+            )
+
+        # Changelog
+        cl_score = ms.get("changelog", 0)
+        if cl_score < 60:
+            advices.append(
+                "Changelog insuffisant : les notes de version detaillees ameliorent la retention et signalent aux stores que l'app est maintenue. "
+                "Decrivez les nouvelles fonctionnalites, corrections de bugs, et ameliorations de performance. "
+                "Un bon changelog rassure les utilisateurs hesitants a mettre a jour."
+            )
+
+        if advices:
+            # Add leader benchmark
+            if leader_md and leader_name and leader_name != brand_name:
+                leader_ms = leader_md.get(store_key, {}).get("metadata_score", {})
+                advices.append(
+                    f"Benchmark : {leader_name} obtient {leader_ms.get('total', 0):.0f}/100 en metadata {store_label} vs {total:.0f} pour vous."
+                )
+
             recs.append({
-                "dimension": label,
-                "score": round(avg_score, 1),
-                "advice": f"{label}{store_label} : score {avg_score:.0f}/100. {advice}",
-                "priority": "high" if avg_score < 40 else "medium",
+                "dimension": f"Metadata {store_label}",
+                "score": round(total, 1),
+                "priority": "high" if total < 40 else "medium",
+                "advice": " | ".join(advices),
             })
 
-    # Compare with leader
-    best = max(competitor_scores, key=lambda s: s.get("aso_score_avg", 0))
-    if best["competitor_name"] != brand_score["competitor_name"]:
-        gap = best.get("aso_score_avg", 0) - brand_score.get("aso_score_avg", 0)
-        if gap > 10:
-            recs.insert(0, {
-                "dimension": "Score global",
-                "score": round(brand_score.get("aso_score_avg", 0), 1),
-                "advice": f"{best['competitor_name']} domine l'ASO avec un score de {best.get('aso_score_avg', 0):.0f}/100 contre {brand_score.get('aso_score_avg', 0):.0f} pour {brand_name}. Ecart de {gap:.0f} points a combler.",
-                "priority": "high" if gap > 20 else "medium",
+    # ── 3. Visual assets ──
+    for store_key, store_label in [("playstore", "Play Store"), ("appstore", "App Store")]:
+        sd = brand.get(store_key, {})
+        if not sd:
+            continue
+        vs = sd.get("visual_score", {})
+        total = vs.get("total", 0)
+        if total >= 85:
+            continue
+
+        advices = []
+        leader_vis = _find_dimension_leader(competitor_scores, "visual", store_key)
+
+        # Screenshots
+        sc_count = sd.get("screenshot_count", 0)
+        max_sc = 8 if store_key == "playstore" else 10
+        if sc_count < max_sc:
+            advices.append(
+                f"{sc_count}/{max_sc} screenshots : les fiches avec le maximum de screenshots convertissent 25% mieux. "
+                f"Utilisez les 2 premiers pour le message cle (visibles dans les resultats de recherche). "
+                f"Privilegiez des screenshots contextuels (lifestyle) plutot que des captures d'ecran brutes. "
+                f"Testez le format panorama/paysage qui occupe plus d'espace visuel dans les SERPs."
+            )
+
+        # Video
+        has_video = sd.get("has_video", False)
+        if not has_video:
+            if store_key == "playstore":
+                advices.append(
+                    "Pas de video promotionnelle : les fiches avec video ont un taux d'installation 35% superieur sur Play Store. "
+                    "Creez une video de 30-90 secondes axee sur les 3 benefices principaux. "
+                    "Les 5 premieres secondes sont critiques — commencez par le probleme resolu, pas par votre logo."
+                )
+            else:
+                advices.append(
+                    "Pas d'App Preview : les previews video App Store se lisent en autoplay dans les resultats de recherche. "
+                    "C'est un avantage concurrentiel enorme. Limitez a 30 secondes, focalisez sur l'UX in-app."
+                )
+
+        # Feature graphic (Play Store only)
+        if store_key == "playstore" and not sd.get("has_header_image"):
+            advices.append(
+                "Pas de feature graphic : cet asset de 1024x500px est affiche en haut de votre fiche et dans les selections editoriales Google. "
+                "C'est obligatoire pour etre mis en avant par l'equipe editoriale du Play Store."
+            )
+
+        if advices:
+            if leader_vis and leader_vis["competitor_name"] != brand_name:
+                lv = leader_vis.get(store_key, {})
+                advices.append(
+                    f"Benchmark : {leader_vis['competitor_name']} a {lv.get('screenshot_count', '?')} screenshots"
+                    f"{', une video' if lv.get('has_video') else ''}"
+                    f"{', un feature graphic' if lv.get('has_header_image') else ''}"
+                    f" ({lv.get('visual_score', {}).get('total', 0):.0f}/100)."
+                )
+
+            recs.append({
+                "dimension": f"Assets visuels {store_label}",
+                "score": round(total, 1),
+                "priority": "high" if total < 40 else "medium",
+                "advice": " | ".join(advices),
             })
 
-    # Sort by priority
-    priority_order = {"high": 0, "medium": 1}
-    recs.sort(key=lambda r: priority_order.get(r["priority"], 2))
+    # ── 4. Rating & reviews strategy ──
+    for store_key, store_label in [("playstore", "Play Store"), ("appstore", "App Store")]:
+        sd = brand.get(store_key, {})
+        if not sd:
+            continue
+        rs = sd.get("rating_score", {})
+        rv = sd.get("reviews_score", {})
+        rating = sd.get("rating", 0) or 0
+        reviews_count = sd.get("reviews_count", 0) or 0
+        rating_total = rs.get("total", 0)
+        reviews_total = rv.get("total", 0)
+
+        advices = []
+
+        # Rating analysis
+        if rating < 4.0:
+            advices.append(
+                f"Note critique ({rating:.1f}/5) : en dessous de 4.0, votre taux de conversion chute de 40-50%. "
+                f"Priorite absolue : identifiez les crash reports et bugs recurrents dans les avis 1-2 etoiles. "
+                f"Repondez systematiquement aux avis negatifs (delai < 24h) — 70% des utilisateurs modifient leur avis apres une reponse."
+            )
+        elif rating < 4.3:
+            advices.append(
+                f"Note a optimiser ({rating:.1f}/5) : la moyenne des apps top 100 est de 4.4. "
+                f"Implementez un in-app rating prompt (StoreKit pour iOS, Play In-App Review pour Android) "
+                f"declenche apres une action positive (achat reussi, milestone atteint, 3 sessions en 7 jours)."
+            )
+        elif rating < 4.5:
+            advices.append(
+                f"Bonne note ({rating:.1f}/5), mais optimisable. "
+                f"Segmentez vos prompts de notation : demandez un feedback interne aux utilisateurs mecontents "
+                f"et redirigez vers le store uniquement les satisfaits (technique du \"happiness gate\")."
+            )
+
+        # Histogram analysis
+        histogram = rs.get("histogram")
+        if histogram and len(histogram) == 5:
+            total_r = sum(histogram)
+            if total_r > 0:
+                one_star_pct = (histogram[0] / total_r) * 100
+                if one_star_pct > 15:
+                    advices.append(
+                        f"Alerte : {one_star_pct:.0f}% d'avis 1 etoile — signe de bugs critiques ou UX frustrant. "
+                        f"Analysez les themes recurrents (crash, lenteur, UX, fonctionnalite manquante) pour prioriser votre roadmap."
+                    )
+
+        # Review volume
+        if reviews_count < 1000:
+            advices.append(
+                f"Volume d'avis faible ({reviews_count:,}) : un volume eleve d'avis recents ameliore votre indexation. "
+                f"Lancez des campagnes de sollicitation ciblees : email post-achat, notification apres une livraison reussie, "
+                f"in-app prompt contextuel. Objectif : +50-100 avis/semaine minimum."
+            )
+
+        # Benchmark vs leader
+        leader_rat = _find_dimension_leader(competitor_scores, "rating", store_key)
+        if leader_rat and leader_rat["competitor_name"] != brand_name:
+            lr = leader_rat.get(store_key, {})
+            lr_rating = lr.get("rating", 0) or 0
+            lr_reviews = lr.get("reviews_count", 0) or 0
+            if lr_rating > rating or lr_reviews > reviews_count * 2:
+                advices.append(
+                    f"Benchmark {leader_rat['competitor_name']} : {lr_rating:.1f}/5 avec {lr_reviews:,} avis "
+                    f"vs vos {rating:.1f}/5 et {reviews_count:,} avis."
+                )
+
+        if advices and (rating_total < 80 or reviews_total < 60):
+            recs.append({
+                "dimension": f"Notes & avis {store_label}",
+                "score": round((rating_total + reviews_total) / 2, 1),
+                "priority": "high" if rating < 4.0 or reviews_total < 30 else "medium",
+                "advice": " | ".join(advices),
+            })
+
+    # ── 5. Freshness & update cadence ──
+    brand_ps_fresh = brand_ps.get("freshness_score", {})
+    brand_as_fresh = brand_as.get("freshness_score", {})
+    ps_days = brand_ps_fresh.get("days_since_update", 999)
+    as_days = brand_as_fresh.get("days_since_update", 999)
+
+    # Find competitors' update frequencies
+    competitor_days = []
+    for cs in competitor_scores:
+        if cs["competitor_name"] == brand_name:
+            continue
+        for sk in ["playstore", "appstore"]:
+            d = cs.get(sk, {}).get("freshness_score", {}).get("days_since_update")
+            if d is not None:
+                competitor_days.append((cs["competitor_name"], d, sk))
+
+    freshness_advices = []
+    for store_key, days, store_label in [("playstore", ps_days, "Play Store"), ("appstore", as_days, "App Store")]:
+        if days == 999:
+            continue
+        if days > 60:
+            freshness_advices.append(
+                f"{store_label} : derniere MAJ il y a {days}j — les algorithmes de classement penalisent les apps inactives. "
+                f"Google et Apple favorisent les apps mises a jour regulierement (toutes les 2-4 semaines ideal). "
+                f"Meme sans nouvelles fonctionnalites, poussez des correctifs mineurs et des optimisations de performance."
+            )
+        elif days > 30:
+            freshness_advices.append(
+                f"{store_label} : MAJ il y a {days}j. Visez un cycle de release toutes les 2-3 semaines. "
+                f"Les apps avec des MAJ frequentes apparaissent plus souvent dans les selections editoriales."
+            )
+
+    # Competitor freshness benchmark
+    if competitor_days:
+        faster = [(n, d, s) for n, d, s in competitor_days if d < min(ps_days, as_days)]
+        if faster:
+            fastest = min(faster, key=lambda x: x[1])
+            freshness_advices.append(
+                f"{fastest[0]} est plus reactif (MAJ il y a {fastest[1]}j sur {fastest[2]}). "
+                f"Un rythme de mise a jour plus frequent ameliore votre ranking et signale un produit vivant aux utilisateurs."
+            )
+
+    if freshness_advices:
+        avg_fresh = ((brand_ps_fresh.get("total", 0) or 0) + (brand_as_fresh.get("total", 0) or 0)) / max(
+            (1 if brand_ps_fresh.get("total") else 0) + (1 if brand_as_fresh.get("total") else 0), 1
+        )
+        if avg_fresh < 80:
+            recs.append({
+                "dimension": "Cadence de mise a jour",
+                "score": round(avg_fresh, 1),
+                "priority": "high" if avg_fresh < 40 else "medium",
+                "advice": " | ".join(freshness_advices),
+            })
+
+    # ── 6. Cross-store consistency ──
+    if brand_ps and brand_as:
+        ps_total = brand_ps.get("aso_score", 0)
+        as_total = brand_as.get("aso_score", 0)
+        store_gap = abs(ps_total - as_total)
+        if store_gap > 15:
+            weaker = "Play Store" if ps_total < as_total else "App Store"
+            stronger = "App Store" if ps_total < as_total else "Play Store"
+            recs.append({
+                "dimension": "Coherence cross-store",
+                "score": round(min(ps_total, as_total), 1),
+                "priority": "medium",
+                "advice": f"Ecart de {store_gap:.0f} pts entre {stronger} ({max(ps_total, as_total):.0f}/100) et {weaker} ({min(ps_total, as_total):.0f}/100). "
+                           f"Les utilisateurs multi-devices attendent une experience coherente. "
+                           f"Alignez vos assets visuels, votre messaging et votre cadence de MAJ entre les deux stores. "
+                           f"Chaque store a ses specificites (keywords field iOS, description indexee Android) mais la qualite globale doit etre homogene.",
+            })
+
+    # ── 7. Conversion Rate Optimization tips (always useful) ──
+    # Check if any competitor has significantly better downloads
+    if brand_ps:
+        brand_downloads = brand_ps.get("downloads", "0")
+        try:
+            brand_dl_num = int(str(brand_downloads).replace(",", "").replace("+", "").replace(" ", "").replace(".", ""))
+        except (ValueError, TypeError):
+            brand_dl_num = 0
+        brand_rating_val = brand_ps.get("rating", 0) or 0
+        brand_sc = brand_ps.get("screenshot_count", 0) or 0
+
+        if brand_dl_num > 0 and brand_rating_val >= 4.0 and brand_sc >= 5:
+            # App has basics covered, give advanced CRO tips
+            recs.append({
+                "dimension": "CRO avance",
+                "score": round(brand_avg, 1),
+                "priority": "low",
+                "advice": "Optimisations avancees pour maximiser votre taux de conversion : "
+                           "1) Testez vos screenshots via Google Play Experiments (A/B natif) — variez l'ordre et le messaging. "
+                           "2) Localisez votre fiche dans les 5 langues europeennes principales pour capter le trafic organique non-francophone. "
+                           "3) Creez des custom store listings par source d'acquisition (campagne UA vs organique). "
+                           "4) Monitorez votre taux de retention J1/J7/J30 — un bon ASO attire, mais c'est la retention qui compte pour le ranking long-terme.",
+            })
+
+    # Sort: high > medium > low
+    priority_order = {"high": 0, "medium": 1, "low": 2}
+    recs.sort(key=lambda r: (priority_order.get(r["priority"], 2), r.get("score", 100)))
 
     return recs
 

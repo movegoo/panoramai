@@ -1147,28 +1147,40 @@ function AsoSection({ data, brandName }: { data: any; brandName: string | null }
         );
       })()}
 
-      {/* ASO Recommendations (compact) */}
+      {/* ASO Recommendations (expert) */}
       {recommendations.length > 0 && (
         <div className="rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 dark:border-violet-800 p-3 space-y-2">
           <div className="flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-violet-600" />
-            <h3 className="text-xs font-semibold text-violet-800 dark:text-violet-200">Recommandations ASO</h3>
+            <h3 className="text-xs font-semibold text-violet-800 dark:text-violet-200">Recommandations ASO Expert</h3>
+            <span className="text-[9px] text-violet-500 dark:text-violet-400">{recommendations.length} axes d&apos;amelioration</span>
           </div>
-          <div className="space-y-1.5">
-            {recommendations.map((rec: any, i: number) => (
-              <div key={i} className={`rounded-lg bg-white/80 dark:bg-white/5 border px-2.5 py-2 flex items-start gap-2 ${rec.priority === "high" ? "border-red-200 dark:border-red-800" : "border-violet-100 dark:border-violet-800"}`}>
-                {rec.priority === "high" ? <AlertTriangle className="h-3 w-3 text-red-600 shrink-0 mt-0.5" /> : <Info className="h-3 w-3 text-amber-600 shrink-0 mt-0.5" />}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">{rec.dimension}</span>
-                    <span className={`text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${rec.score < 40 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+          <div className="space-y-2">
+            {recommendations.map((rec: any, i: number) => {
+              const points = (rec.advice as string).split(" | ").filter(Boolean);
+              return (
+                <div key={i} className={`rounded-lg bg-white/80 dark:bg-white/5 border px-3 py-2.5 ${rec.priority === "high" ? "border-red-200 dark:border-red-800" : rec.priority === "low" ? "border-emerald-200 dark:border-emerald-800" : "border-violet-100 dark:border-violet-800"}`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {rec.priority === "high" ? <AlertTriangle className="h-3 w-3 text-red-600 shrink-0" /> : rec.priority === "low" ? <Sparkles className="h-3 w-3 text-emerald-600 shrink-0" /> : <Info className="h-3 w-3 text-amber-600 shrink-0" />}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{rec.dimension}</span>
+                    <span className={`text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${rec.priority === "high" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : rec.priority === "low" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
                       {Math.round(rec.score)}/100
                     </span>
+                    <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ${rec.priority === "high" ? "bg-red-600 text-white" : rec.priority === "low" ? "bg-emerald-600 text-white" : "bg-amber-500 text-white"}`}>
+                      {rec.priority === "high" ? "Critique" : rec.priority === "low" ? "Avance" : "Important"}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-foreground/80">{rec.advice}</p>
+                  <ul className="space-y-1">
+                    {points.map((point: string, j: number) => (
+                      <li key={j} className="flex items-start gap-1.5 text-[11px] text-foreground/80 leading-relaxed">
+                        <span className="text-violet-400 mt-0.5 shrink-0">&#8250;</span>
+                        <span>{point.trim()}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
