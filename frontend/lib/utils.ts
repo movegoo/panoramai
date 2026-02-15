@@ -18,7 +18,10 @@ export function formatNumber(num: number): string {
 }
 
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("fr-FR", {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("fr-FR", {
     year: "numeric",
     month: "short",
     day: "numeric",

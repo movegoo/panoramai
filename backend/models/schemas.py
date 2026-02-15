@@ -270,6 +270,7 @@ class CompetitorCreate(BaseModel):
     """Création d'un concurrent."""
     name: str
     website: Optional[str] = None
+    facebook_page_id: Optional[str] = None
     playstore_app_id: Optional[str] = None
     appstore_app_id: Optional[str] = None
     instagram_username: Optional[str] = None
@@ -281,6 +282,7 @@ class CompetitorUpdate(BaseModel):
     """Mise à jour d'un concurrent (tous les champs optionnels)."""
     name: Optional[str] = None
     website: Optional[str] = None
+    facebook_page_id: Optional[str] = None
     playstore_app_id: Optional[str] = None
     appstore_app_id: Optional[str] = None
     instagram_username: Optional[str] = None
@@ -319,6 +321,9 @@ class CompetitorCard(BaseModel):
 
     # Canaux actifs
     active_channels: List[str]
+
+    # Date d'ajout
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

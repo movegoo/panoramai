@@ -36,6 +36,7 @@ export interface CompetitorListItem {
   youtube_channel_id?: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
+  created_at?: string;
 }
 
 export interface CompetitorCreate {

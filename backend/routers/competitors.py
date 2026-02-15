@@ -214,7 +214,7 @@ async def list_competitors(
         ref = known.get(comp.name.lower())
         if not ref:
             continue
-        for f in ["playstore_app_id", "appstore_app_id", "instagram_username",
+        for f in ["facebook_page_id", "playstore_app_id", "appstore_app_id", "instagram_username",
                   "tiktok_username", "youtube_channel_id", "website"]:
             if ref.get(f) and not getattr(comp, f, None):
                 setattr(comp, f, ref[f])
@@ -274,6 +274,7 @@ async def list_competitors(
             "youtube_subscribers": youtube.subscribers if youtube else None,
             "trend": None,
             "active_channels": get_active_channels(comp),
+            "created_at": comp.created_at,
         })
 
     # Tri par score et assignation du rang
@@ -453,6 +454,7 @@ async def create_competitor(
         advertiser_id=adv_id,
         name=data.name,
         website=data.website,
+        facebook_page_id=data.facebook_page_id,
         playstore_app_id=data.playstore_app_id,
         appstore_app_id=data.appstore_app_id,
         instagram_username=data.instagram_username,
