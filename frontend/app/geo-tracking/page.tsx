@@ -39,6 +39,14 @@ function getRankColor(rank: number, total: number) {
   return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
 }
 
+/** Color based on absolute percentage value, not relative rank */
+function getValueColor(value: number) {
+  if (value >= 90) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  if (value >= 75) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
+  if (value >= 50) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
+  return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
+}
+
 function getCellColor(value: number, allValues: number[]) {
   if (value === 0) return "bg-gray-50 text-gray-400";
   const sorted = Array.from(new Set(allValues)).sort((a, b) => b - a);
@@ -342,7 +350,7 @@ export default function GeoTrackingPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {insights.recommendation_rate.map((r, i) => {
                 const isBrand = r.competitor_id === brandId;
-                const rc = getRankColor(i, insights.recommendation_rate.length);
+                const rc = getValueColor(r.rate);
                 return (
                   <div key={r.competitor_id} className={`rounded-xl p-4 border ${rc.bg} ${rc.border} ${isBrand ? "ring-2 ring-teal-400" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
