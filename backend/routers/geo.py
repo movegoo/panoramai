@@ -98,11 +98,14 @@ async def list_stores(
     department: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Liste les magasins de l'enseigne."""
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         query = query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        query = query.filter(Advertiser.id == int(x_advertiser_id))
     brand = query.first()
     if not brand:
         return []
@@ -123,11 +126,14 @@ async def create_store(
     data: StoreCreate,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute un magasin."""
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
@@ -165,6 +171,7 @@ async def upload_stores(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Upload massif de magasins via CSV.
@@ -183,6 +190,8 @@ async def upload_stores(
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
@@ -285,6 +294,7 @@ async def analyze_zone(
     data: ZoneAnalysisRequest,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Analyse une zone de chalandise.
@@ -318,6 +328,8 @@ async def analyze_zone(
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
     concurrents = []
 
@@ -389,6 +401,7 @@ async def get_map_data(
     department: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Données pour affichage carte de France.
@@ -399,6 +412,8 @@ async def get_map_data(
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
 
     # Magasins
@@ -1084,6 +1099,7 @@ async def analyze_zone_enriched(
     data: ZoneAnalysisRequest,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Analyse de zone enrichie avec données data.gouv.fr.
@@ -1125,6 +1141,8 @@ async def analyze_zone_enriched(
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
         brand_query = brand_query.filter(Advertiser.user_id == user.id)
+    if x_advertiser_id:
+        brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
     concurrents = []
 

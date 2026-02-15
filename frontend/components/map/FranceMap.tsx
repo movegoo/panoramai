@@ -145,8 +145,13 @@ interface QuickLocation {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 function authHeaders(): Record<string, string> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  if (typeof window === "undefined") return {};
+  const headers: Record<string, string> = {};
+  const token = localStorage.getItem("auth_token");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const advId = localStorage.getItem("current_advertiser_id");
+  if (advId) headers["X-Advertiser-Id"] = advId;
+  return headers;
 }
 
 type AnalysisMode = "radius" | "postal_code" | "iris";
