@@ -458,18 +458,38 @@ export default function CompetitorsPage() {
 
       {/* ── Enrichment result banner ── */}
       {enrichResult && (
-        <div className={`rounded-xl border px-4 py-3 flex items-center justify-between ${enrichResult.errors > 0 && enrichResult.ok === 0 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"}`}>
-          <div className="flex items-center gap-2">
-            {enrichResult.errors > 0 && enrichResult.ok === 0 ? (
-              <AlertCircle className="h-4 w-4 text-red-600" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            )}
-            <span className="text-sm font-medium">{enrichResult.message}</span>
+        <div className={`rounded-xl border px-4 py-3 ${enrichResult.errors > 0 && enrichResult.ok === 0 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800" : "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {enrichResult.errors > 0 && enrichResult.ok === 0 ? (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              )}
+              <span className="text-sm font-medium">{enrichResult.message}</span>
+            </div>
+            <button onClick={() => setEnrichResult(null)} className="text-muted-foreground hover:text-foreground">
+              <XCircle className="h-4 w-4" />
+            </button>
           </div>
-          <button onClick={() => setEnrichResult(null)} className="text-muted-foreground hover:text-foreground">
-            <XCircle className="h-4 w-4" />
-          </button>
+          {enrichResult.details && enrichResult.errors > 0 && (() => {
+            const errors = enrichResult.details.filter((d: any) => d.status === "error");
+            const grouped = errors.reduce((acc: Record<string, string[]>, d: any) => {
+              const reason = d.reason || "unknown";
+              if (!acc[reason]) acc[reason] = [];
+              acc[reason].push(`${d.competitor || "?"} (${d.platform || "?"})`);
+              return acc;
+            }, {} as Record<string, string[]>);
+            return (
+              <div className="mt-2 space-y-1">
+                {Object.entries(grouped).slice(0, 5).map(([reason, items]) => (
+                  <div key={reason} className="text-xs text-red-700 dark:text-red-400">
+                    <span className="font-medium">{(items as string[]).length}x</span> {reason}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 
