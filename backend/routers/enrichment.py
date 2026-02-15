@@ -41,6 +41,7 @@ async def _fetch_instagram(competitor: Competitor, db: Session) -> dict:
         db.commit()
         return {"platform": "instagram", "competitor": competitor.name, "status": "ok", "followers": record.followers}
     except Exception as e:
+        db.rollback()
         return {"platform": "instagram", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
@@ -66,6 +67,7 @@ async def _fetch_tiktok(competitor: Competitor, db: Session) -> dict:
         db.commit()
         return {"platform": "tiktok", "competitor": competitor.name, "status": "ok", "followers": record.followers}
     except Exception as e:
+        db.rollback()
         return {"platform": "tiktok", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
@@ -99,6 +101,7 @@ async def _fetch_youtube(competitor: Competitor, db: Session) -> dict:
         db.commit()
         return {"platform": "youtube", "competitor": competitor.name, "status": "ok", "subscribers": record.subscribers}
     except Exception as e:
+        db.rollback()
         return {"platform": "youtube", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
@@ -112,6 +115,34 @@ async def _fetch_playstore(competitor: Competitor, db: Session) -> dict:
         data = await loop.run_in_executor(None, lambda: gplay_app(competitor.playstore_app_id, lang="fr", country="fr"))
         if not data:
             return {"platform": "playstore", "competitor": competitor.name, "status": "error", "reason": "no data returned"}
+        # Parse last_updated: google-play-scraper returns localized strings like "28 janv. 2026"
+        last_updated_raw = data.get("lastUpdatedOn") or data.get("updated")
+        last_updated_dt = None
+        if last_updated_raw:
+            if isinstance(last_updated_raw, str):
+                try:
+                    import locale, contextlib
+                    from datetime import datetime as _dt
+                    # Try ISO format first
+                    try:
+                        last_updated_dt = _dt.fromisoformat(last_updated_raw)
+                    except ValueError:
+                        # Try French locale parsing
+                        for fmt in ["%d %b. %Y", "%d %b %Y", "%d %B %Y", "%b %d, %Y", "%B %d, %Y"]:
+                            try:
+                                with contextlib.suppress(locale.Error):
+                                    locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
+                                last_updated_dt = _dt.strptime(last_updated_raw.strip(), fmt)
+                                break
+                            except ValueError:
+                                continue
+                        # Reset locale
+                        with contextlib.suppress(locale.Error):
+                            locale.setlocale(locale.LC_TIME, "")
+                except Exception:
+                    pass  # Store None if unparseable
+            else:
+                last_updated_dt = last_updated_raw  # Already a datetime
         record = AppData(
             competitor_id=competitor.id,
             store="playstore",
@@ -121,7 +152,7 @@ async def _fetch_playstore(competitor: Competitor, db: Session) -> dict:
             reviews_count=data.get("ratings"),
             downloads=data.get("installs") or data.get("realInstalls"),
             version=data.get("version"),
-            last_updated=data.get("lastUpdatedOn") or data.get("updated"),
+            last_updated=last_updated_dt,
             description=data.get("description", "")[:2000] if data.get("description") else None,
             changelog=data.get("recentChanges", "")[:1000] if data.get("recentChanges") else None,
         )
@@ -129,6 +160,7 @@ async def _fetch_playstore(competitor: Competitor, db: Session) -> dict:
         db.commit()
         return {"platform": "playstore", "competitor": competitor.name, "status": "ok", "rating": record.rating, "downloads": str(record.downloads)}
     except Exception as e:
+        db.rollback()
         return {"platform": "playstore", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
@@ -144,6 +176,15 @@ async def _fetch_appstore(competitor: Competitor, db: Session) -> dict:
         if not results:
             return {"platform": "appstore", "competitor": competitor.name, "status": "error", "reason": "not found in iTunes"}
         app_info = results[0]
+        # Parse ISO date from iTunes
+        appstore_last_updated = None
+        raw_date = app_info.get("currentVersionReleaseDate")
+        if raw_date:
+            try:
+                from datetime import datetime as _dt
+                appstore_last_updated = _dt.fromisoformat(raw_date.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
         record = AppData(
             competitor_id=competitor.id,
             store="appstore",
@@ -152,7 +193,7 @@ async def _fetch_appstore(competitor: Competitor, db: Session) -> dict:
             rating=app_info.get("averageUserRating"),
             reviews_count=app_info.get("userRatingCount"),
             version=app_info.get("version"),
-            last_updated=app_info.get("currentVersionReleaseDate"),
+            last_updated=appstore_last_updated,
             description=app_info.get("description", "")[:2000] if app_info.get("description") else None,
             changelog=app_info.get("releaseNotes", "")[:1000] if app_info.get("releaseNotes") else None,
         )
@@ -160,6 +201,7 @@ async def _fetch_appstore(competitor: Competitor, db: Session) -> dict:
         db.commit()
         return {"platform": "appstore", "competitor": competitor.name, "status": "ok", "rating": record.rating}
     except Exception as e:
+        db.rollback()
         return {"platform": "appstore", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
@@ -254,6 +296,7 @@ async def _fetch_facebook_ads(competitor: Competitor, db: Session) -> dict:
             "facebook_page_id": page_id,
         }
     except Exception as e:
+        db.rollback()
         return {"platform": "facebook_ads", "competitor": competitor.name, "status": "error", "reason": str(e)}
 
 
