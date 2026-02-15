@@ -639,7 +639,13 @@ export default function AccountPage() {
     appstore_app_id: "",
   });
 
+  const skipNextLoad = useRef(false);
+
   useEffect(() => {
+    if (skipNextLoad.current) {
+      skipNextLoad.current = false;
+      return;
+    }
     loadData();
   }, [isNewMode]);
 
@@ -718,7 +724,8 @@ export default function AccountPage() {
         // Refresh local brand list
         const brands = await brandAPI.list().catch(() => []);
         setAllBrands(brands);
-        // Remove ?new=1 from URL
+        // Remove ?new=1 from URL without re-fetching (we already have the data)
+        skipNextLoad.current = true;
         router.replace("/account");
       } else {
         const updated = await brandAPI.updateProfile(form);

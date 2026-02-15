@@ -4,7 +4,7 @@ Central entity representing the user's retail brand.
 """
 import re
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -215,7 +215,7 @@ async def setup_brand(
 
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
-        *([Competitor.user_id == user.id] if user else []),
+        Competitor.advertiser_id == brand.id,
     ).count()
 
     return JSONResponse(content={
@@ -230,9 +230,11 @@ async def get_brand_profile(
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Récupère le profil de mon enseigne."""
-    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
+    adv_id = advertiser_id or (int(x_advertiser_id) if x_advertiser_id else None)
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
         *([Competitor.user_id == user.id] if user else []),
@@ -247,9 +249,11 @@ async def reset_brand(
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Supprime l'enseigne et ses concurrents pour reconfigurer."""
-    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
+    adv_id = advertiser_id or (int(x_advertiser_id) if x_advertiser_id else None)
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
 
     # Deactivate competitors linked to this advertiser
     db.query(Competitor).filter(
@@ -270,9 +274,11 @@ async def update_brand_profile(
     advertiser_id: int | None = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Met à jour le profil de mon enseigne."""
-    brand = get_current_brand(db, user, advertiser_id=advertiser_id)
+    adv_id = advertiser_id or (int(x_advertiser_id) if x_advertiser_id else None)
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
 
     brand.company_name = data.company_name
     brand.sector = data.sector
@@ -292,7 +298,7 @@ async def update_brand_profile(
 
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
-        *([Competitor.user_id == user.id] if user else []),
+        Competitor.advertiser_id == brand.id,
     ).count()
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
@@ -302,9 +308,11 @@ async def update_brand_profile(
 async def sync_brand_competitor(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Force sync brand to competitor entry + trigger enrichment."""
-    brand = get_current_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
     comp = _sync_brand_competitor(db, brand, user)
 
     # Always trigger re-enrichment on manual sync
@@ -322,13 +330,17 @@ async def sync_brand_competitor(
 async def get_competitor_suggestions(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Retourne les concurrents suggérés pour le secteur de l'enseigne."""
-    brand = get_current_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
 
     comp_query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
         comp_query = comp_query.filter(Competitor.user_id == user.id)
+    if adv_id:
+        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
     tracked_names = {c.name.lower() for c in comp_query.all()}
 
     suggestions = []
@@ -348,9 +360,11 @@ async def add_suggested_competitors(
     names: List[str],
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute des concurrents à partir des suggestions."""
-    brand = get_current_brand(db, user)
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
     sector_competitors = {c["name"].lower(): c for c in get_competitors_for_sector(brand.sector)}
 
     added = []
@@ -367,9 +381,8 @@ async def add_suggested_competitors(
         exist_query = db.query(Competitor).filter(
             Competitor.name == comp_data["name"],
             Competitor.is_active == True,
+            Competitor.advertiser_id == brand.id,
         )
-        if user:
-            exist_query = exist_query.filter(Competitor.user_id == user.id)
         if exist_query.first():
             skipped.append(name)
             continue
@@ -402,7 +415,7 @@ async def add_suggested_competitors(
         "not_found": not_found,
         "total_competitors": db.query(Competitor).filter(
             Competitor.is_active == True,
-            *([Competitor.user_id == user.id] if user else []),
+            Competitor.advertiser_id == brand.id,
         ).count()
     }
 
