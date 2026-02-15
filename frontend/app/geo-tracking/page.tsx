@@ -7,7 +7,7 @@ import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
   claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", icon: "https://claude.ai/favicon.ico" },
-  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", icon: "https://gemini.google.com/favicon.ico" },
+  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Google-gemini-icon.svg/3840px-Google-gemini-icon.svg.png" },
   chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", icon: "https://chatgpt.com/favicon.ico" },
 };
 

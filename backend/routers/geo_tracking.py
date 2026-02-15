@@ -128,7 +128,7 @@ async def track_geo(
 
     response = {
         "tracked_queries": len(queries),
-        "platforms": sorted(active_platforms) if active_platforms else [],
+        "platforms": [p for p in ["mistral", "claude", "gemini", "chatgpt"] if p in active_platforms] if active_platforms else [],
         "platforms_configured": available,
         "total_mentions": total_mentions,
         "matched_competitors": len(matched),
@@ -260,8 +260,9 @@ async def get_insights(
     all_keywords = sorted(set(r.keyword for r in rows))
     total_queries = len(all_keywords)
 
-    # Detect active platforms
-    active_platforms = sorted(set(r.platform for r in rows))
+    # Detect active platforms (preferred display order)
+    _PLATFORM_ORDER = ["mistral", "claude", "gemini", "chatgpt"]
+    active_platforms = [p for p in _PLATFORM_ORDER if p in set(r.platform for r in rows)]
 
     # --- Share of Voice ---
     mentions_by_comp = defaultdict(int)
