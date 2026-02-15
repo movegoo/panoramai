@@ -644,6 +644,153 @@ async def get_competitor_stores_geo(
 
 
 # =============================================================================
+# Endpoints - Zones de chalandise concurrents
+# =============================================================================
+
+@router.get("/catchment-zones")
+async def get_catchment_zones(
+    radius_km: float = 10,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """
+    Calcule les zones de chalandise de chaque concurrent.
+
+    Pour chaque magasin concurrent, détermine les communes couvertes dans un rayon donné,
+    agrège la population couverte, et calcule les chevauchements entre concurrents.
+    """
+    import time
+    start = time.time()
+
+    if radius_km < 1 or radius_km > 50:
+        raise HTTPException(status_code=400, detail="radius_km doit être entre 1 et 50")
+
+    # 1. Load communes with coordinates + population
+    all_communes = await datagouv_service.get_communes_with_data()
+    communes_with_coords = [
+        c for c in all_communes
+        if c.get("latitude") and c.get("longitude") and c.get("population")
+    ]
+
+    # 2. Load competitor stores (BANCO source)
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    if user:
+        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+    competitors_list = user_comp_query.all()
+
+    if not competitors_list:
+        return {"radius_km": radius_km, "total_population_france": 67000000,
+                "competitors": [], "overlaps": [], "computation_time_ms": 0}
+
+    comp_map = {c.id: c.name for c in competitors_list}
+    comp_ids = list(comp_map.keys())
+
+    stores = db.query(StoreLocation).filter(
+        StoreLocation.source == "BANCO",
+        StoreLocation.competitor_id.in_(comp_ids),
+        StoreLocation.latitude.isnot(None),
+        StoreLocation.longitude.isnot(None),
+    ).all()
+
+    # Group stores by competitor
+    stores_by_comp: Dict[int, list] = {}
+    for s in stores:
+        stores_by_comp.setdefault(s.competitor_id, []).append(s)
+
+    # 3. For each store, find communes in radius using bbox pre-filter + haversine
+    # Result: dict[competitor_id] -> dict[commune_code] -> {population, min_distance}
+    comp_communes: Dict[int, Dict[str, Dict]] = {}
+
+    for comp_id, comp_stores in stores_by_comp.items():
+        covered: Dict[str, Dict] = {}
+        for store in comp_stores:
+            bbox = get_bounding_box(store.latitude, store.longitude, radius_km)
+            for commune in communes_with_coords:
+                clat = commune["latitude"]
+                clon = commune["longitude"]
+                # Quick bbox filter
+                if clat < bbox["min_lat"] or clat > bbox["max_lat"]:
+                    continue
+                if clon < bbox["min_lon"] or clon > bbox["max_lon"]:
+                    continue
+                # Precise haversine
+                dist = haversine_distance(store.latitude, store.longitude, clat, clon)
+                if dist <= radius_km:
+                    code = commune.get("code", "")
+                    if not code:
+                        continue
+                    if code not in covered or dist < covered[code]["distance"]:
+                        covered[code] = {
+                            "population": commune.get("population", 0),
+                            "distance": dist,
+                        }
+        comp_communes[comp_id] = covered
+
+    # 4. Aggregate per competitor
+    total_pop_france = sum(c.get("population", 0) for c in communes_with_coords)
+    if total_pop_france == 0:
+        total_pop_france = 67000000
+
+    competitors_result = []
+    for comp_id in comp_ids:
+        covered = comp_communes.get(comp_id, {})
+        pop_covered = sum(v["population"] for v in covered.values())
+        nb_communes = len(covered)
+        name = comp_map[comp_id]
+        color = COMPETITOR_COLORS.get(name.lower(), "#6b7280")
+        total_stores = len(stores_by_comp.get(comp_id, []))
+        pct = round(pop_covered / total_pop_france * 100, 1) if total_pop_france > 0 else 0
+
+        competitors_result.append({
+            "competitor_id": comp_id,
+            "competitor_name": name,
+            "color": color,
+            "total_stores": total_stores,
+            "population_covered": pop_covered,
+            "nb_communes_covered": nb_communes,
+            "pct_population": pct,
+        })
+
+    # Sort by population covered descending
+    competitors_result.sort(key=lambda x: x["population_covered"], reverse=True)
+
+    # 5. Compute pairwise overlaps
+    overlaps = []
+    comp_id_list = [c["competitor_id"] for c in competitors_result]
+    for i in range(len(comp_id_list)):
+        for j in range(i + 1, len(comp_id_list)):
+            a_id = comp_id_list[i]
+            b_id = comp_id_list[j]
+            a_codes = set(comp_communes.get(a_id, {}).keys())
+            b_codes = set(comp_communes.get(b_id, {}).keys())
+            shared = a_codes & b_codes
+            if not shared:
+                continue
+            shared_pop = sum(
+                comp_communes[a_id][code]["population"]
+                for code in shared
+            )
+            overlaps.append({
+                "competitor_a_name": comp_map[a_id],
+                "competitor_b_name": comp_map[b_id],
+                "shared_population": shared_pop,
+                "shared_communes": len(shared),
+            })
+
+    overlaps.sort(key=lambda x: x["shared_population"], reverse=True)
+
+    elapsed_ms = round((time.time() - start) * 1000)
+
+    return {
+        "radius_km": radius_km,
+        "total_population_france": total_pop_france,
+        "competitors": competitors_result,
+        "overlaps": overlaps,
+        "computation_time_ms": elapsed_ms,
+    }
+
+
+# =============================================================================
 # Endpoints - Base commerces management
 # =============================================================================
 

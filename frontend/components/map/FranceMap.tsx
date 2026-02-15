@@ -190,6 +190,7 @@ export default function FranceMap() {
   const [layersPanelOpen, setLayersPanelOpen] = useState(false);
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: "competitor_stores", name: "Magasins concurrents", icon: <Store className="h-4 w-4" />, color: "#ef4444", enabled: false, description: "Base nationale des commerces" },
+    { id: "catchment_zones", name: "Zones de chalandise", icon: <Target className="h-4 w-4" />, color: "#8b5cf6", enabled: false, description: "Couverture population" },
     { id: "irve", name: "Bornes électriques", icon: <Zap className="h-4 w-4" />, color: "#22c55e", enabled: false, description: "200k+ bornes IRVE" },
     { id: "poi_restaurant", name: "Restaurants", icon: <Coffee className="h-4 w-4" />, color: "#f59e0b", enabled: false, description: "Via OpenStreetMap" },
     { id: "poi_shop", name: "Commerces", icon: <ShoppingBag className="h-4 w-4" />, color: "#ec4899", enabled: false, description: "Via OpenStreetMap" },
@@ -204,6 +205,11 @@ export default function FranceMap() {
   const [pois, setPois] = useState<POI[]>([]);
   const [irveStats, setIrveStats] = useState<any>(null);
   const [competitorStoreGroups, setCompetitorStoreGroups] = useState<CompetitorStoreGroup[]>([]);
+
+  // Catchment zones
+  const [catchmentData, setCatchmentData] = useState<any>(null);
+  const [catchmentRadius, setCatchmentRadius] = useState(10);
+  const catchmentRadiusRef = useRef(10);
 
   // Active tab for analysis panel
   const [activeTab, setActiveTab] = useState<"overview" | "demo" | "communes">("overview");
@@ -609,10 +615,15 @@ export default function FranceMap() {
         map.removeLayer(layerGroup);
         layerGroupsRef.current.delete(layerId);
       }
-      // Clean up move handler for competitor stores
+      // Clean up move handlers
       if (layerId === "competitor_stores") {
         const handler = (layerGroupsRef.current as any).__competitorMoveHandler;
         if (handler) map.off("moveend", handler);
+      }
+      if (layerId === "catchment_zones") {
+        const handler = (layerGroupsRef.current as any).__catchmentMoveHandler;
+        if (handler) map.off("moveend", handler);
+        setCatchmentData(null);
       }
       setLayers(prev => prev.map(l =>
         l.id === layerId ? { ...l, enabled: false, loading: false } : l
@@ -627,6 +638,8 @@ export default function FranceMap() {
     try {
       if (layerId === "competitor_stores") {
         await loadCompetitorStoresLayer(map, L);
+      } else if (layerId === "catchment_zones") {
+        await loadCatchmentZonesLayer(map, L);
       } else if (layerId === "irve") {
         await loadIRVELayer(map, L);
       } else if (layerId === "poi_restaurant" || layerId === "poi_shop") {
@@ -837,6 +850,79 @@ export default function FranceMap() {
 
     layerGroup.addTo(map);
     layerGroupsRef.current.set("competitor_stores", layerGroup);
+  };
+
+  // =========================================================================
+  // Catchment zones layer
+  // =========================================================================
+
+  const loadCatchmentZonesLayer = async (map: any, L: any) => {
+    const radiusKm = catchmentRadiusRef.current;
+
+    // Fetch stats
+    const res = await fetch(`${API_BASE}/geo/catchment-zones?radius_km=${radiusKm}`, { headers: authHeaders() });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    setCatchmentData(data);
+
+    // We need store coordinates — reuse competitorStoreDataRef if available, otherwise fetch
+    let storeGroups = competitorStoreDataRef.current;
+    if (!storeGroups || storeGroups.length === 0) {
+      const storeRes = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`, { headers: authHeaders() });
+      if (storeRes.ok) {
+        const storeData = await storeRes.json();
+        storeGroups = storeData.competitors || [];
+        competitorStoreDataRef.current = storeGroups;
+      }
+    }
+
+    // Render circles
+    renderCatchmentZonesInView(map, L, storeGroups, radiusKm);
+
+    // Re-render on move
+    const onMoveEnd = () => {
+      renderCatchmentZonesInView(map, L, competitorStoreDataRef.current, catchmentRadiusRef.current);
+    };
+    map.on("moveend", onMoveEnd);
+    (layerGroupsRef.current as any).__catchmentMoveHandler = onMoveEnd;
+  };
+
+  const renderCatchmentZonesInView = (map: any, L: any, groups: CompetitorStoreGroup[], radiusKm: number) => {
+    const oldLayer = layerGroupsRef.current.get("catchment_zones");
+    if (oldLayer) map.removeLayer(oldLayer);
+
+    const zoom = map.getZoom();
+    if (zoom < 6) return; // Too zoomed out
+
+    const bounds = map.getBounds();
+    // Pad bounds by radius
+    const padDeg = radiusKm / 111;
+    const paddedBounds = L.latLngBounds(
+      [bounds.getSouth() - padDeg, bounds.getWest() - padDeg],
+      [bounds.getNorth() + padDeg, bounds.getEast() + padDeg]
+    );
+
+    const layerGroup = L.layerGroup();
+
+    groups.forEach((group) => {
+      group.stores.forEach((store) => {
+        if (!store.latitude || !store.longitude) return;
+        if (!paddedBounds.contains([store.latitude, store.longitude])) return;
+
+        L.circle([store.latitude, store.longitude], {
+          radius: radiusKm * 1000,
+          fillColor: group.color,
+          color: group.color,
+          fillOpacity: 0.08,
+          weight: 1,
+          interactive: false,
+        }).addTo(layerGroup);
+      });
+    });
+
+    layerGroup.addTo(map);
+    layerGroupsRef.current.set("catchment_zones", layerGroup);
   };
 
   const loadLayersForArea = (lat: number, lng: number, radiusKm: number) => {
@@ -1104,6 +1190,84 @@ export default function FranceMap() {
                     <span className="text-[10px] text-gray-400 font-mono">{group.total}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Catchment Zones Stats panel */}
+          {layers.find(l => l.id === "catchment_zones")?.enabled && catchmentData && (
+            <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl border border-purple-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-purple-500 rounded-lg">
+                  <Target className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-semibold text-purple-800">Zones de chalandise</span>
+                <div className="flex gap-1 ml-auto">
+                  {[5, 10, 15].map((r) => (
+                    <button
+                      key={r}
+                      onClick={async () => {
+                        setCatchmentRadius(r);
+                        catchmentRadiusRef.current = r;
+                        const map = mapInstanceRef.current;
+                        const L = leafletRef.current;
+                        if (!map || !L) return;
+                        setLayers(prev => prev.map(l =>
+                          l.id === "catchment_zones" ? { ...l, loading: true } : l
+                        ));
+                        await loadCatchmentZonesLayer(map, L);
+                        setLayers(prev => prev.map(l =>
+                          l.id === "catchment_zones" ? { ...l, loading: false } : l
+                        ));
+                      }}
+                      className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${
+                        catchmentRadius === r
+                          ? "bg-purple-600 text-white"
+                          : "bg-white text-purple-600 border border-purple-200 hover:bg-purple-100"
+                      }`}
+                    >
+                      {r} km
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Per-competitor coverage */}
+              <div className="space-y-2 mb-3">
+                {catchmentData.competitors?.map((comp: any) => (
+                  <div key={comp.competitor_id} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: comp.color }} />
+                    <span className="text-xs font-medium text-gray-700 w-24 truncate">{comp.competitor_name}</span>
+                    <div className="flex-1 h-4 bg-white/80 rounded-full overflow-hidden border">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.max(comp.pct_population, 1)}%`, backgroundColor: comp.color, opacity: 0.7 }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-gray-700 w-12 text-right">{comp.pct_population}%</span>
+                    <span className="text-[10px] text-gray-400 w-20 text-right">{formatNumber(comp.population_covered)} hab.</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Overlaps */}
+              {catchmentData.overlaps?.length > 0 && (
+                <div className="border-t border-purple-200 pt-2">
+                  <div className="text-[10px] uppercase tracking-wider text-purple-500 font-medium mb-1.5">Chevauchements</div>
+                  <div className="space-y-1">
+                    {catchmentData.overlaps.slice(0, 3).map((o: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                        <span className="truncate">{o.competitor_a_name} / {o.competitor_b_name}</span>
+                        <span className="ml-auto font-medium text-purple-700 whitespace-nowrap">{formatNumber(o.shared_population)} hab.</span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">{o.shared_communes} communes</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-[10px] text-purple-400 mt-2 text-right">
+                Calcul: {catchmentData.computation_time_ms}ms
               </div>
             </div>
           )}
