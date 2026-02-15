@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {showBSOD && <BSODScreen onDone={() => {}} />}
       <Win98Taskbar active={win98} onToggle={toggleWin98} />
 
-      <div className={`flex ${win98 ? "h-[calc(100vh-28px)]" : "h-screen"}`}>
+      <div className={`flex ${win98 ? "h-[calc(100vh-30px)]" : "h-screen"}`}>
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className={`
             fixed inset-y-0 left-0 z-50 w-[220px] transform transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0
             ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-            ${win98 ? "lg:bottom-[28px]" : ""}
+            ${win98 ? "lg:bottom-[30px]" : ""}
           `}
         >
           <SidebarNav onClose={closeSidebar} />
