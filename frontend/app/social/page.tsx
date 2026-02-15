@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   competitorsAPI,
@@ -122,6 +122,7 @@ export default function SocialPage() {
   const [contentStatus, setContentStatus] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
   const [contentPlatform, setContentPlatform] = useState<string | null>(null); // null = overview (all)
+  const autoCollectTriggered = useRef(false);
 
   useEffect(() => {
     async function loadAll() {
@@ -139,7 +140,18 @@ export default function SocialPage() {
         if (tt.status === "fulfilled") setTtComparison(tt.value);
         if (yt.status === "fulfilled") setYtComparison(yt.value);
         if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
-        if (ci.status === "fulfilled") setContentInsights(ci.value);
+        if (ci.status === "fulfilled") {
+          setContentInsights(ci.value);
+          // Auto-collect if no analyzed content yet (first visit)
+          if (!autoCollectTriggered.current && (!ci.value || ci.value.total_analyzed === 0)) {
+            autoCollectTriggered.current = true;
+            // Don't await — run in background so page stays responsive
+            runAutoCollect();
+          }
+        } else if (!autoCollectTriggered.current) {
+          autoCollectTriggered.current = true;
+          runAutoCollect();
+        }
       } catch (err) {
         console.error("Failed to load:", err);
       } finally {
@@ -147,10 +159,44 @@ export default function SocialPage() {
       }
     }
     loadAll();
-  }, [periodDays, contentPlatform]);
+  }, [periodDays]);
 
-  // Do NOT auto-trigger content analysis — it costs API credits (Claude Vision)
-  // User must click "Analyser" manually
+  // Re-fetch insights when content platform filter changes (no re-collect)
+  useEffect(() => {
+    if (initialLoad) return;
+    socialContentAPI.getInsights(contentPlatform || undefined)
+      .then(setContentInsights)
+      .catch(() => {});
+  }, [contentPlatform]);
+
+  async function runAutoCollect() {
+    setContentLoading(true);
+    setContentStatus("Collecte des posts sociaux...");
+    try {
+      const collectResult = await socialContentAPI.collectAll();
+      if (collectResult.total_in_db > 0 || collectResult.new > 0) {
+        setContentStatus(`${collectResult.new} nouveaux posts collectes. Analyse IA...`);
+        let batchNum = 0;
+        let totalAnalyzed = 0;
+        while (batchNum < 10) {
+          batchNum++;
+          const r = await socialContentAPI.analyzeAll(10);
+          totalAnalyzed += r.analyzed || 0;
+          if (totalAnalyzed > 0) {
+            setContentStatus(`Analyse IA: ${totalAnalyzed} posts traites${r.remaining > 0 ? ` — ${r.remaining} restants...` : ""}`);
+          }
+          if (r.remaining === 0 || r.analyzed === 0) break;
+        }
+      }
+      const insights = await socialContentAPI.getInsights(contentPlatform || undefined);
+      setContentInsights(insights);
+      setContentStatus(null);
+    } catch (err: any) {
+      setContentStatus(`Erreur: ${err.message || "Echec de la collecte"}`);
+    } finally {
+      setContentLoading(false);
+    }
+  }
 
   async function handleRefreshAll() {
     setFetching(true);
@@ -250,6 +296,7 @@ export default function SocialPage() {
       // Step 3: Refresh insights
       const insights = await socialContentAPI.getInsights(contentPlatform || undefined);
       setContentInsights(insights);
+      setContentStatus(null); // Clear status on success
     } catch (err: any) {
       console.error("Content analysis failed:", err);
       setContentStatus(`Erreur: ${err.message || "Echec de l'analyse"}`);
@@ -742,8 +789,8 @@ export default function SocialPage() {
             disabled={contentLoading}
             className="gap-2 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
           >
-            <Brain className={`h-3.5 w-3.5 ${contentLoading ? "animate-pulse" : ""}`} />
-            {contentLoading ? "Analyse..." : "Rafraichir le contenu"}
+            <RefreshCw className={`h-3.5 w-3.5 ${contentLoading ? "animate-spin" : ""}`} />
+            {contentLoading ? "Collecte..." : "Rafraichir"}
           </Button>
         </div>
 
@@ -1144,7 +1191,20 @@ export default function SocialPage() {
           );
         })()}
 
-        {/* Empty state */}
+        {/* Loading skeleton */}
+        {contentLoading && (!contentInsights || contentInsights.total_analyzed === 0) && (
+          <div className="grid grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-xl border bg-card p-4 space-y-3 animate-pulse">
+                <div className="h-3 w-20 bg-muted rounded" />
+                <div className="h-7 w-16 bg-muted rounded" />
+                <div className="h-2 w-full bg-muted rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Empty state — only if not loading and no data */}
         {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (
           <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
             <div className="flex justify-center">
@@ -1152,14 +1212,14 @@ export default function SocialPage() {
                 <Brain className="h-6 w-6 text-emerald-600" />
               </div>
             </div>
-            <h3 className="text-sm font-semibold">Aucune analyse de contenu pour cette enseigne</h3>
+            <h3 className="text-sm font-semibold">Aucune analyse de contenu disponible</h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Cliquez sur &laquo;&nbsp;Analyser le contenu&nbsp;&raquo; pour collecter et analyser les posts sociaux.
+              La collecte automatique n&apos;a trouve aucun post a analyser. Verifiez les comptes sociaux de vos concurrents ou relancez manuellement.
             </p>
             <button onClick={handleAnalyzeContent} disabled={contentLoading}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-              <Brain className="h-4 w-4" />
-              Lancer l&apos;analyse
+              <RefreshCw className="h-4 w-4" />
+              Relancer la collecte
             </button>
           </div>
         )}
