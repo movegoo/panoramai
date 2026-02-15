@@ -39,11 +39,14 @@ function getRankColor(rank: number, total: number) {
   return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
 }
 
-/** Color based on absolute percentage value, not relative rank */
-function getValueColor(value: number) {
-  if (value >= 90) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
-  if (value >= 75) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
-  if (value >= 50) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
+/** Color based on recommendation score (rate weighted by volume) */
+function getRecommendationColor(rate: number, count: number, maxCount: number) {
+  // Weighted score: rate matters, but volume gives confidence
+  const volumeWeight = maxCount > 0 ? Math.min(count / maxCount, 1) : 0;
+  const score = rate * (0.5 + 0.5 * volumeWeight); // rate 0-100 scaled by volume
+  if (score >= 80) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
+  if (score >= 60) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
+  if (score >= 40) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
   return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
 }
 
@@ -346,11 +349,14 @@ export default function GeoTrackingPage() {
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Zap className="h-4 w-4 text-teal-500" />
               Taux de recommandation
+              <span className="text-[11px] font-normal text-muted-foreground ml-2">
+                Quand l&apos;enseigne est citee, est-elle recommandee ?
+              </span>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {insights.recommendation_rate.map((r, i) => {
+              {(() => { const maxRec = Math.max(...insights.recommendation_rate.map(r => r.recommended_count || 0), 1); return insights.recommendation_rate.map((r, i) => {
                 const isBrand = r.competitor_id === brandId;
-                const rc = getValueColor(r.rate);
+                const rc = getRecommendationColor(r.rate, r.recommended_count || 0, maxRec);
                 return (
                   <div key={r.competitor_id} className={`rounded-xl p-4 border ${rc.bg} ${rc.border} ${isBrand ? "ring-2 ring-teal-400" : ""}`}>
                     <div className="flex items-center justify-between mb-2">
@@ -362,11 +368,11 @@ export default function GeoTrackingPage() {
                       {r.rate}%
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Recommande {r.recommended_count} fois
+                      {r.recommended_count} recommandation{r.recommended_count !== 1 ? "s" : ""} / {r.total_mentions} mention{r.total_mentions !== 1 ? "s" : ""}
                     </p>
                   </div>
                 );
-              })}
+              }); })()}
             </div>
           </div>
 

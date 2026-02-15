@@ -310,9 +310,10 @@ async def get_insights(
             "competitor_id": cid,
             "rate": round(d["recommended"] / d["total"] * 100, 1) if d["total"] else 0,
             "recommended_count": d["recommended"],
+            "total_mentions": d["total"],
         }
         for cid, d in rec_by_comp.items()
-    ], key=lambda x: -x["rate"])
+    ], key=lambda x: (-x["recommended_count"], -x["rate"]))
 
     # --- Sentiment ---
     sent_by_comp = defaultdict(lambda: {"positif": 0, "neutre": 0, "negatif": 0})
