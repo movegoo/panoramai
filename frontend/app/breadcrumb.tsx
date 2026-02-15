@@ -74,9 +74,13 @@ export function Breadcrumb() {
             onClick={() => setOpen(!open)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted/60 transition-colors"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
-              {currentAdv.company_name.charAt(0).toUpperCase()}
-            </div>
+            {currentAdv.logo_url ? (
+              <img src={currentAdv.logo_url} alt="" className="h-7 w-7 rounded-full object-contain bg-white border border-border/50" />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50">
+                {currentAdv.company_name.charAt(0).toUpperCase()}
+              </div>
+            )}
             <span className="text-[13px] font-semibold text-foreground">{currentAdv.company_name}</span>
             {advertisers.length > 1 && (
               <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
@@ -99,9 +103,13 @@ export function Breadcrumb() {
                   }}
                   className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-muted/60 transition-colors"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50 shrink-0">
-                    {adv.company_name.charAt(0).toUpperCase()}
-                  </div>
+                  {adv.logo_url ? (
+                    <img src={adv.logo_url} alt="" className="h-7 w-7 rounded-full object-contain bg-white border border-border/50 shrink-0" />
+                  ) : (
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[11px] font-bold text-violet-700 border border-violet-200/50 shrink-0">
+                      {adv.company_name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium text-foreground truncate">{adv.company_name}</p>
                     <p className="text-[10px] text-muted-foreground truncate">{adv.sector}</p>

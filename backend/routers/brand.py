@@ -4,7 +4,8 @@ Central entity representing the user's retail brand.
 """
 import re
 import logging
-from fastapi import APIRouter, Depends, Header, HTTPException
+import base64
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -287,7 +288,9 @@ async def update_brand_profile(
     brand.company_name = data.company_name
     brand.sector = data.sector
     brand.website = data.website
-    brand.logo_url = get_logo_url(data.website)
+    # Only auto-generate logo if no custom logo was uploaded
+    if not brand.logo_url or not brand.logo_url.startswith("data:"):
+        brand.logo_url = get_logo_url(data.website)
     brand.playstore_app_id = data.playstore_app_id
     brand.appstore_app_id = data.appstore_app_id
     brand.instagram_username = data.instagram_username
@@ -307,6 +310,31 @@ async def update_brand_profile(
     ).count()
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
+
+
+@router.post("/logo")
+async def upload_brand_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Upload a custom logo (1:1 ratio, max 512KB)."""
+    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    brand = get_current_brand(db, user, advertiser_id=adv_id)
+
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Le fichier doit etre une image")
+
+    data = await file.read()
+    if len(data) > 512 * 1024:
+        raise HTTPException(status_code=400, detail="L'image ne doit pas depasser 512 Ko")
+
+    b64 = base64.b64encode(data).decode("utf-8")
+    brand.logo_url = f"data:{file.content_type};base64,{b64}"
+    db.commit()
+
+    return {"message": "Logo mis a jour", "logo_url": brand.logo_url}
 
 
 @router.post("/sync")

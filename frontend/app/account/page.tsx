@@ -59,6 +59,7 @@ import {
   TrendingUp,
   ShieldCheck,
   Zap,
+  Camera,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -1057,6 +1058,37 @@ export default function AccountPage() {
           ) : profile ? (
             /* ── Profile display ── */
             <div className="space-y-4">
+              {/* Logo + Info */}
+              <div className="flex items-start gap-5">
+                <div className="relative group">
+                  {profile.logo_url ? (
+                    <img src={profile.logo_url} alt={profile.company_name} className="h-16 w-16 rounded-xl object-contain bg-white border border-border shadow-sm" />
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 flex items-center justify-center text-xl font-bold text-violet-700 border border-violet-200/50">
+                      {profile.company_name.charAt(0)}
+                    </div>
+                  )}
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera className="h-5 w-5 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const res = await brandAPI.uploadLogo(file);
+                          setProfile((prev) => prev ? { ...prev, logo_url: res.logo_url } : prev);
+                          refreshAuth();
+                        } catch (err: any) {
+                          alert(err.message || "Erreur lors de l'upload");
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="flex-1">
               {/* Info grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <div>
@@ -1082,6 +1114,8 @@ export default function AccountPage() {
                   </div>
                 )}
               </div>
+                </div>{/* end flex-1 */}
+              </div>{/* end flex row */}
 
               {/* Channels badges */}
               <div>

@@ -38,7 +38,7 @@ def _build_user_dict(user: User, db: Session) -> dict:
         "has_brand": len(advertisers) > 0,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
         "advertisers": [
-            {"id": a.id, "company_name": a.company_name, "sector": a.sector}
+            {"id": a.id, "company_name": a.company_name, "sector": a.sector, "logo_url": a.logo_url}
             for a in advertisers
         ],
     }
@@ -132,7 +132,7 @@ async def get_me(user: User = Depends(get_current_user), db: Session = Depends(g
         "brand_name": advertisers[0].company_name if advertisers else None,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
         "advertisers": [
-            {"id": a.id, "company_name": a.company_name, "sector": a.sector}
+            {"id": a.id, "company_name": a.company_name, "sector": a.sector, "logo_url": a.logo_url}
             for a in advertisers
         ],
     }

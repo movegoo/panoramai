@@ -420,6 +420,7 @@ export interface AdvertiserSummary {
   id: number;
   company_name: string;
   sector: string;
+  logo_url?: string;
 }
 
 export interface AuthUser {
@@ -788,6 +789,19 @@ export const brandAPI = {
       "/brand/sync",
       { method: "POST" }
     ),
+
+  uploadLogo: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const advId = typeof window !== "undefined" ? localStorage.getItem("currentAdvertiserId") : null;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (advId) headers["X-Advertiser-Id"] = advId;
+    const res = await fetch(`${API_BASE}/brand/logo`, { method: "POST", headers, body: formData });
+    if (!res.ok) throw new Error((await res.json()).detail || "Upload failed");
+    return res.json() as Promise<{ message: string; logo_url: string }>;
+  },
 };
 
 // Admin API
