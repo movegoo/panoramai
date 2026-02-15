@@ -886,7 +886,7 @@ export default function FranceMap() {
     const layerGroup = L.layerGroup();
     const zoom = map.getZoom();
     // Scale marker size based on zoom
-    const size = zoom >= 10 ? 24 : zoom >= 8 ? 18 : 14;
+    const size = zoom >= 12 ? 36 : zoom >= 10 ? 30 : zoom >= 8 ? 24 : 18;
     const borderWidth = zoom >= 10 ? 3 : 2;
 
     groups.forEach((group) => {
@@ -1275,12 +1275,19 @@ export default function FranceMap() {
                   [...competitorStoreGroups]
                     .filter(g => g.avg_rating != null)
                     .sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0))
-                    .map((group, idx, arr) => (
+                    .map((group, idx, arr) => {
+                      const rating = group.avg_rating || 0;
+                      const rowStyle = rating >= 4.0
+                        ? "bg-green-50 border-green-200"
+                        : rating >= 3.5
+                          ? "bg-yellow-50 border-yellow-200"
+                          : rating >= 3.0
+                            ? "bg-orange-50 border-orange-200"
+                            : "bg-red-50 border-red-200";
+                      return (
                       <div
                         key={group.competitor_id}
-                        className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${
-                          idx === 0 ? "bg-green-50 border-green-200" : idx === arr.length - 1 ? "bg-red-50 border-red-200" : "bg-white/80"
-                        }`}
+                        className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 border ${rowStyle}`}
                       >
                         {group.logo_url ? (
                           <img src={group.logo_url} alt="" className="w-5 h-5 rounded-full flex-shrink-0 object-contain border-2" style={{ borderColor: group.color }} />
@@ -1297,7 +1304,8 @@ export default function FranceMap() {
                           {(group.total_reviews || 0) >= 1000 ? `${((group.total_reviews || 0) / 1000).toFixed(1)}K` : group.total_reviews} avis
                         </span>
                       </div>
-                    ))
+                      );
+                    })
                 ) : (
                   // Skeleton / loading state while auto-enrichment runs
                   competitorStoreGroups.map((group) => (
