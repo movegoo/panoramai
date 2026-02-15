@@ -415,6 +415,7 @@ class SerpResult(Base):
     __tablename__ = "serp_results"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     keyword = Column(String(255), nullable=False, index=True)
     position = Column(Integer, nullable=False)  # 1-10
     competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=True, index=True)
@@ -432,6 +433,7 @@ class GeoResult(Base):
     __tablename__ = "geo_results"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     keyword = Column(String(255), nullable=False, index=True)
     query = Column(Text)
     platform = Column(String(50), index=True)  # "claude", "gemini"
@@ -475,6 +477,8 @@ def _run_migrations(engine):
             ("store_locations", "google_place_id", "VARCHAR(255)"),
             ("store_locations", "rating_fetched_at", "TIMESTAMP"),
             # Creative Analysis columns
+            ("geo_results", "user_id", "INTEGER REFERENCES users(id)"),
+            ("serp_results", "user_id", "INTEGER REFERENCES users(id)"),
             ("ads", "creative_analysis", "TEXT"),
             ("ads", "creative_concept", "VARCHAR(100)"),
             ("ads", "creative_hook", "VARCHAR(500)"),

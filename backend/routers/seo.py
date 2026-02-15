@@ -449,6 +449,7 @@ async def track_serp(
                     cid = None
 
                 serp = SerpResult(
+                    user_id=user.id if user else None,
                     keyword=keyword,
                     position=pos_idx,
                     competitor_id=cid,
@@ -496,10 +497,11 @@ async def get_rankings(
     sector = brand.sector if brand else "supermarche"
     sector_kws = _get_sector_keywords(sector)
 
-    # Get latest tracking time for THIS sector's keywords only
+    # Get latest tracking time for THIS user's sector keywords only
+    serp_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
     latest = (
         db.query(func.max(SerpResult.recorded_at))
-        .filter(SerpResult.keyword.in_(sector_kws))
+        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter)
         .scalar()
     )
     if not latest:
@@ -507,7 +509,7 @@ async def get_rankings(
 
     results = (
         db.query(SerpResult)
-        .filter(SerpResult.recorded_at == latest)
+        .filter(SerpResult.recorded_at == latest, serp_user_filter)
         .filter(SerpResult.keyword.in_(sector_kws))
         .order_by(SerpResult.keyword, SerpResult.position)
         .all()
@@ -555,10 +557,11 @@ async def get_insights(
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
 
-    # Get latest tracking time for THIS sector's keywords only
+    # Get latest tracking time for THIS user's sector keywords only
+    serp_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
     latest = (
         db.query(func.max(SerpResult.recorded_at))
-        .filter(SerpResult.keyword.in_(sector_kws))
+        .filter(SerpResult.keyword.in_(sector_kws), serp_user_filter)
         .scalar()
     )
     if not latest:
@@ -570,10 +573,10 @@ async def get_insights(
             "missing_keywords": [], "top_domains": [], "recommendations": [],
         }
 
-    # Only fetch results for this sector's keywords
+    # Only fetch results for this user's sector keywords
     results = (
         db.query(SerpResult)
-        .filter(SerpResult.recorded_at == latest)
+        .filter(SerpResult.recorded_at == latest, serp_user_filter)
         .filter(SerpResult.keyword.in_(sector_kws))
         .all()
     )

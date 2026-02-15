@@ -74,6 +74,7 @@ async def track_geo(
                     break
 
         geo = GeoResult(
+            user_id=user.id if user else None,
             keyword=r["keyword"],
             query=r["query"],
             platform=r["platform"],
@@ -126,13 +127,14 @@ async def get_results(
     competitors = _get_user_competitors(db, user)
     comp_names = {c.id: c.name for c in competitors}
 
-    latest = db.query(func.max(GeoResult.recorded_at)).scalar()
+    user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
+    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter).scalar()
     if not latest:
         return {"queries": [], "last_tracked": None}
 
     rows = (
         db.query(GeoResult)
-        .filter(GeoResult.recorded_at == latest)
+        .filter(GeoResult.recorded_at == latest, user_filter)
         .order_by(GeoResult.keyword, GeoResult.platform, GeoResult.position_in_answer)
         .all()
     )
@@ -180,7 +182,8 @@ async def get_insights(
     if brand:
         brand_comp = next((c for c in competitors if c.name == brand.company_name), None)
 
-    latest = db.query(func.max(GeoResult.recorded_at)).scalar()
+    user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
+    latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter).scalar()
     if not latest:
         return {
             "total_queries": 0, "platforms": [], "last_tracked": None,
@@ -193,7 +196,7 @@ async def get_insights(
 
     rows = (
         db.query(GeoResult)
-        .filter(GeoResult.recorded_at == latest, GeoResult.mentioned == True)
+        .filter(GeoResult.recorded_at == latest, user_filter, GeoResult.mentioned == True)
         .all()
     )
 
@@ -333,9 +336,10 @@ async def get_insights(
 
     # --- SEO vs GEO comparison ---
     seo_vs_geo = []
-    seo_latest = db.query(func.max(SerpResult.recorded_at)).scalar()
+    seo_user_filter = SerpResult.user_id == user.id if user else SerpResult.user_id.is_(None)
+    seo_latest = db.query(func.max(SerpResult.recorded_at)).filter(seo_user_filter).scalar()
     if seo_latest:
-        seo_rows = db.query(SerpResult).filter(SerpResult.recorded_at == seo_latest).all()
+        seo_rows = db.query(SerpResult).filter(SerpResult.recorded_at == seo_latest, seo_user_filter).all()
         seo_total = len(seo_rows) or 1
         seo_appearances = defaultdict(int)
         for sr in seo_rows:
