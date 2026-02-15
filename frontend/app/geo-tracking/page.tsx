@@ -172,7 +172,7 @@ export default function GeoTrackingPage() {
           <RefreshCw className="h-6 w-6 animate-spin text-teal-500" />
           <span className="ml-3 text-muted-foreground">Chargement des donnees GEO...</span>
         </div>
-      ) : !insights || insights.total_queries === 0 ? (
+      ) : !insights || insights.total_queries === 0 || (insights.share_of_voice?.length === 0 && insights.platform_comparison?.length === 0) ? (
         <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
           <div className="flex justify-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100">

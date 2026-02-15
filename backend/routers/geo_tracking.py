@@ -155,12 +155,22 @@ async def get_results(
 
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
     adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
+    comp_ids = {c.id for c in competitors}
 
     latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
-    # Fallback: try old data without advertiser_id
+    # Fallback: try old data without advertiser_id, but only if it matches our competitors
     if not latest and x_advertiser_id:
-        adv_filter = GeoResult.advertiser_id.is_(None)
-        latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
+        adv_filter_null = GeoResult.advertiser_id.is_(None)
+        candidate = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter_null).scalar()
+        if candidate:
+            # Check if the old data has results for our competitors
+            match_count = db.query(GeoResult).filter(
+                GeoResult.recorded_at == candidate, user_filter, adv_filter_null,
+                GeoResult.competitor_id.in_(comp_ids)
+            ).limit(1).count()
+            if match_count > 0:
+                adv_filter = adv_filter_null
+                latest = candidate
     if not latest:
         return {"queries": [], "last_tracked": None}
 
@@ -218,10 +228,18 @@ async def get_insights(
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
     adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
     latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
-    # Fallback: try old data without advertiser_id
+    # Fallback: try old data without advertiser_id, only if it matches our competitors
     if not latest and x_advertiser_id:
-        adv_filter = GeoResult.advertiser_id.is_(None)
-        latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
+        adv_filter_null = GeoResult.advertiser_id.is_(None)
+        candidate = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter_null).scalar()
+        if candidate:
+            match_count = db.query(GeoResult).filter(
+                GeoResult.recorded_at == candidate, user_filter, adv_filter_null,
+                GeoResult.competitor_id.in_(valid_ids)
+            ).limit(1).count()
+            if match_count > 0:
+                adv_filter = adv_filter_null
+                latest = candidate
     if not latest:
         return {
             "total_queries": 0, "platforms": [], "last_tracked": None,
