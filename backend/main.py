@@ -20,7 +20,7 @@ load_dotenv(dotenv_path="../.env")
 load_dotenv(dotenv_path=".env")
 
 # Routers
-from routers import auth, brand, watch, competitors, geo, layers, admin
+from routers import auth, brand, watch, competitors, geo, layers, admin, advertiser
 from routers import facebook, playstore, appstore, aso, instagram, tiktok, youtube, google_ads, creative_analysis, social_analysis, seo, geo_tracking, enrichment
 from services.scheduler import scheduler
 
@@ -214,6 +214,7 @@ app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 # Core (nouvelle architecture)
 app.include_router(brand.router, prefix="/api/brand", tags=["Mon Enseigne"])
+app.include_router(advertiser.router, prefix="/api/advertiser", tags=["Annonceurs"])
 app.include_router(watch.router, prefix="/api/watch", tags=["Veille Concurrentielle"])
 app.include_router(competitors.router, prefix="/api/competitors", tags=["Concurrents"])
 app.include_router(geo.router, prefix="/api/geo", tags=["Géographie & Magasins"])
