@@ -293,6 +293,7 @@ async def enrich_ads_transparency(
     """
     Enrich all Meta ads that lack EU transparency data (age, gender, location, reach)
     by fetching individual ad details from the Ad Library.
+    Uses concurrent requests for speed (batches of 5).
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     user_comp_ids = get_user_competitor_ids(db, user, advertiser_id=adv_id)
@@ -304,7 +305,7 @@ async def enrich_ads_transparency(
         Ad.eu_total_reach.is_(None),
         Ad.platform.in_(meta_platforms),
         Ad.competitor_id.in_(user_comp_ids),
-    ).all()
+    ).limit(50).all()
 
     if not ads_to_enrich:
         return {"message": "All Meta ads already enriched", "enriched": 0, "total_meta": 0}
@@ -312,48 +313,43 @@ async def enrich_ads_transparency(
     enriched_count = 0
     errors = 0
 
-    for ad in ads_to_enrich:
+    async def _enrich_one(ad):
         try:
             detail = await scrapecreators.get_facebook_ad_detail(ad.ad_id)
-
             if not detail.get("success"):
-                # Mark as processed (reach=0) to avoid re-processing
                 ad.eu_total_reach = 0
-                errors += 1
-                continue
-
+                return False
             ad.age_min = detail.get("age_min")
             ad.age_max = detail.get("age_max")
             ad.gender_audience = detail.get("gender_audience")
-            # Default to 0 if null so we don't re-process
             ad.eu_total_reach = detail.get("eu_total_reach") or 0
-
             loc = detail.get("location_audience", [])
             if loc:
                 ad.location_audience = json.dumps(loc)
-
             breakdown = detail.get("age_country_gender_reach_breakdown", [])
             if breakdown:
                 ad.age_country_gender_reach = json.dumps(breakdown)
-
-            enriched_count += 1
-
-            # Small delay to avoid rate limiting
-            await asyncio.sleep(0.3)
-
+            return True
         except Exception as e:
             logger.error(f"Error enriching ad {ad.ad_id}: {e}")
-            ad.eu_total_reach = 0  # Mark as processed
-            errors += 1
+            ad.eu_total_reach = 0
+            return False
 
-    db.commit()
+    # Process in concurrent batches of 5
+    BATCH_SIZE = 5
+    for i in range(0, len(ads_to_enrich), BATCH_SIZE):
+        batch = ads_to_enrich[i:i + BATCH_SIZE]
+        results = await asyncio.gather(*[_enrich_one(ad) for ad in batch])
+        enriched_count += sum(1 for r in results if r)
+        errors += sum(1 for r in results if not r)
+        # Commit after each batch to save progress
+        db.commit()
 
     return {
         "message": f"Enriched {enriched_count} ads with EU transparency data",
         "enriched": enriched_count,
         "errors": errors,
         "total_meta_ads": len(ads_to_enrich),
-        "remaining": len(ads_to_enrich) - enriched_count - errors,
     }
 
 
