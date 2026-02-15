@@ -157,6 +157,10 @@ async def get_results(
     adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
 
     latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
+    # Fallback: try old data without advertiser_id
+    if not latest and x_advertiser_id:
+        adv_filter = GeoResult.advertiser_id.is_(None)
+        latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
     if not latest:
         return {"queries": [], "last_tracked": None}
 
@@ -214,6 +218,10 @@ async def get_insights(
     user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
     adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
     latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
+    # Fallback: try old data without advertiser_id
+    if not latest and x_advertiser_id:
+        adv_filter = GeoResult.advertiser_id.is_(None)
+        latest = db.query(func.max(GeoResult.recorded_at)).filter(user_filter, adv_filter).scalar()
     if not latest:
         return {
             "total_queries": 0, "platforms": [], "last_tracked": None,
