@@ -115,6 +115,7 @@ interface CompetitorStoreGroup {
   competitor_id: number;
   competitor_name: string;
   color: string;
+  logo_url?: string;
   total: number;
   avg_rating?: number;
   total_reviews?: number;
@@ -878,14 +879,17 @@ export default function FranceMap() {
 
     const bounds = map.getBounds();
     const layerGroup = L.layerGroup();
-    let count = 0;
+    const zoom = map.getZoom();
+    // Scale marker size based on zoom
+    const size = zoom >= 10 ? 24 : zoom >= 8 ? 18 : 14;
+    const borderWidth = zoom >= 10 ? 3 : 2;
 
     groups.forEach((group) => {
+      const strokeColor = group.color;
+
       group.stores.forEach((store) => {
         if (!store.latitude || !store.longitude) return;
         if (!bounds.contains([store.latitude, store.longitude])) return;
-
-        const fillColor = getRatingColor(store.google_rating, group.color);
 
         let popupHtml =
           `<b>${store.name || store.brand_name}</b><br>` +
@@ -899,16 +903,29 @@ export default function FranceMap() {
           }
         }
 
-        L.circleMarker([store.latitude, store.longitude], {
-          radius: 5,
-          fillColor,
-          color: "#fff",
-          weight: 1.5,
-          fillOpacity: 0.85,
-        })
-          .addTo(layerGroup)
-          .bindPopup(popupHtml);
-        count++;
+        if (group.logo_url) {
+          // Logo marker with colored stroke
+          const icon = L.divIcon({
+            className: "",
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:${borderWidth}px solid ${strokeColor};background:#fff;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;"><img src="${group.logo_url}" style="width:${size - borderWidth * 2}px;height:${size - borderWidth * 2}px;border-radius:50%;object-fit:contain;" onerror="this.parentElement.innerHTML='<span style=\\'font-size:${Math.round(size * 0.4)}px;font-weight:700;color:${strokeColor}\\'>${group.competitor_name.charAt(0)}</span>'" /></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          });
+          L.marker([store.latitude, store.longitude], { icon })
+            .addTo(layerGroup)
+            .bindPopup(popupHtml);
+        } else {
+          // Fallback: initial letter with colored stroke
+          const icon = L.divIcon({
+            className: "",
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:${borderWidth}px solid ${strokeColor};background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25);"><span style="font-size:${Math.round(size * 0.4)}px;font-weight:700;color:${strokeColor};line-height:1;">${group.competitor_name.charAt(0)}</span></div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+          });
+          L.marker([store.latitude, store.longitude], { icon })
+            .addTo(layerGroup)
+            .bindPopup(popupHtml);
+        }
       });
     });
 
@@ -1260,7 +1277,13 @@ export default function FranceMap() {
                           idx === 0 ? "bg-green-50 border-green-200" : idx === arr.length - 1 ? "bg-red-50 border-red-200" : "bg-white/80"
                         }`}
                       >
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                        {group.logo_url ? (
+                          <img src={group.logo_url} alt="" className="w-5 h-5 rounded-full flex-shrink-0 object-contain border-2" style={{ borderColor: group.color }} />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full flex-shrink-0 border-2 flex items-center justify-center bg-white" style={{ borderColor: group.color }}>
+                            <span className="text-[8px] font-bold" style={{ color: group.color }}>{group.competitor_name.charAt(0)}</span>
+                          </div>
+                        )}
                         <span className="text-xs font-medium text-gray-700 flex-1">{group.competitor_name}</span>
                         <span className="text-xs font-semibold" style={{ color: (group.avg_rating || 0) >= 4.0 ? "#16a34a" : (group.avg_rating || 0) >= 3.5 ? "#ca8a04" : "#dc2626" }}>
                           ⭐ {group.avg_rating}
@@ -1274,7 +1297,13 @@ export default function FranceMap() {
                   // Skeleton / loading state while auto-enrichment runs
                   competitorStoreGroups.map((group) => (
                     <div key={group.competitor_id} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 border bg-white/80 animate-pulse">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                      {group.logo_url ? (
+                        <img src={group.logo_url} alt="" className="w-5 h-5 rounded-full flex-shrink-0 object-contain border-2" style={{ borderColor: group.color }} />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full flex-shrink-0 border-2 flex items-center justify-center bg-white" style={{ borderColor: group.color }}>
+                          <span className="text-[8px] font-bold" style={{ color: group.color }}>{group.competitor_name.charAt(0)}</span>
+                        </div>
+                      )}
                       <span className="text-xs font-medium text-gray-700 flex-1">{group.competitor_name}</span>
                       <span className="text-xs text-gray-300">⭐ —</span>
                       <span className="w-10 h-3 bg-gray-200 rounded" />
@@ -1293,16 +1322,10 @@ export default function FranceMap() {
                 {gmbEnriching ? "Analyse GMB en cours..." : "Rafraîchir les notes Google"}
               </button>
 
-              {/* Rating legend */}
-              {competitorStoreGroups.some(g => g.avg_rating != null) && (
-                <div className="flex items-center gap-3 text-[10px] text-gray-500 pt-2 border-t border-red-100 mt-2">
-                  <span>Couleur marqueurs :</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> ≥4.0</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500" /> 3.5-3.9</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" /> 3.0-3.4</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> &lt;3.0</span>
-                </div>
-              )}
+              {/* Legend */}
+              <div className="flex items-center gap-2 text-[10px] text-gray-500 pt-2 border-t border-red-100 mt-2">
+                <span>Bordure = couleur enseigne</span>
+              </div>
             </div>
           )}
 

@@ -576,6 +576,7 @@ async def get_all_competitor_stores(
             "competitor_id": comp_id,
             "competitor_name": comp_name,
             "color": color,
+            "logo_url": comp.logo_url if comp else None,
             "total": count,
         }
 
