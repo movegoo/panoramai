@@ -650,6 +650,11 @@ export const appstoreAPI = {
     fetchAPI<any[]>(`/appstore/search?query=${encodeURIComponent(query)}`),
 };
 
+// ASO Analysis API
+export const asoAPI = {
+  getAnalysis: () => fetchAPI<any>("/aso/analysis"),
+};
+
 // Google Ads API
 export const googleAdsAPI = {
   getAllAds: (activeOnly = false) =>

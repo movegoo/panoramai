@@ -6,6 +6,7 @@ import {
   competitorsAPI,
   playstoreAPI,
   appstoreAPI,
+  asoAPI,
   brandAPI,
   AppData,
   CompetitorListItem,
@@ -28,6 +29,15 @@ import {
   ChevronRight,
   Sparkles,
   AlertTriangle,
+  Search,
+  Image,
+  Shield,
+  Zap,
+  Eye,
+  Target,
+  CheckCircle2,
+  XCircle,
+  Info,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 
@@ -119,6 +129,8 @@ export default function AppsPage() {
   const [asComparison, setAsComparison] = useState<any[]>([]);
   const [trends, setTrends] = useState<Record<string, any>>({});
   const [brandName, setBrandName] = useState<string | null>(null);
+  const [asoData, setAsoData] = useState<any>(null);
+  const [asoLoading, setAsoLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
@@ -127,11 +139,12 @@ export default function AppsPage() {
   useEffect(() => {
     async function loadAll() {
       try {
-        const [comp, ps, as_, brand] = await Promise.allSettled([
+        const [comp, ps, as_, brand, aso] = await Promise.allSettled([
           competitorsAPI.list(),
           playstoreAPI.getComparison(periodDays),
           appstoreAPI.getComparison(periodDays),
           brandAPI.getProfile(),
+          asoAPI.getAnalysis(),
         ]);
         const allComp = comp.status === "fulfilled" ? comp.value : [];
         const withApps = allComp.filter((c) => c.playstore_app_id || c.appstore_app_id);
@@ -139,6 +152,8 @@ export default function AppsPage() {
         if (ps.status === "fulfilled") setPsComparison(ps.value);
         if (as_.status === "fulfilled") setAsComparison(as_.value);
         if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
+        if (aso.status === "fulfilled") setAsoData(aso.value);
+        setAsoLoading(false);
         if (withApps.length > 0 && !selectedCompetitor) setSelectedCompetitor(withApps[0].id);
 
         // Load trends for all competitors (only on first load)
@@ -395,6 +410,18 @@ export default function AppsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* ═══════════════ ASO Analysis Section ═══════════════ */}
+      {asoLoading ? (
+        <div className="rounded-2xl border bg-card p-6">
+          <div className="flex items-center gap-3">
+            <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+            <span className="text-sm text-muted-foreground">Analyse ASO en cours...</span>
+          </div>
+        </div>
+      ) : asoData && asoData.competitors?.length > 0 && (
+        <AsoSection data={asoData} brandName={brandName} />
       )}
 
       {/* Store selector */}
@@ -834,6 +861,368 @@ export default function AppsPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ASO Analysis Component
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ASO_DIMENSIONS = [
+  { key: "metadata", label: "Metadata", icon: Search, color: "text-blue-600", bg: "bg-blue-100" },
+  { key: "visual", label: "Visuels", icon: Image, color: "text-purple-600", bg: "bg-purple-100" },
+  { key: "rating", label: "Note", icon: Star, color: "text-amber-600", bg: "bg-amber-100" },
+  { key: "reviews", label: "Avis", icon: MessageSquare, color: "text-green-600", bg: "bg-green-100" },
+  { key: "freshness", label: "Fraicheur", icon: Zap, color: "text-cyan-600", bg: "bg-cyan-100" },
+];
+
+function AsoScoreRing({ score, size = 52 }: { score: number; size?: number }) {
+  const radius = (size - 6) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = (score / 100) * circumference;
+  const color = score >= 70 ? "#16a34a" : score >= 50 ? "#ca8a04" : score >= 30 ? "#ea580c" : "#dc2626";
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={4} className="text-muted/20" />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={4}
+          strokeDasharray={circumference} strokeDashoffset={circumference - progress}
+          strokeLinecap="round" className="transition-all duration-700" />
+      </svg>
+      <span className="absolute text-xs font-bold tabular-nums" style={{ color }}>{Math.round(score)}</span>
+    </div>
+  );
+}
+
+function AsoScoreBar({ score, label, detail }: { score: number; label: string; detail?: string }) {
+  const color = score >= 70 ? "bg-emerald-500" : score >= 50 ? "bg-yellow-500" : score >= 30 ? "bg-orange-500" : "bg-red-500";
+  const textColor = score >= 70 ? "text-emerald-700" : score >= 50 ? "text-yellow-700" : score >= 30 ? "text-orange-700" : "text-red-600";
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-foreground">{label}</span>
+        <span className={`text-xs font-bold tabular-nums ${textColor}`}>{Math.round(score)}/100</span>
+      </div>
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${Math.max(score, 2)}%` }} />
+      </div>
+      {detail && <p className="text-[10px] text-muted-foreground">{detail}</p>}
+    </div>
+  );
+}
+
+function AsoSection({ data, brandName }: { data: any; brandName: string | null }) {
+  const [expandedCompetitor, setExpandedCompetitor] = useState<number | null>(null);
+  const [selectedStore, setSelectedStore] = useState<"playstore" | "appstore" | "both">("both");
+
+  const competitors = data.competitors || [];
+  const recommendations = data.recommendations || [];
+
+  const dimensionLeaders = useMemo(() => {
+    const leaders: Record<string, { name: string; score: number }> = {};
+    for (const dim of ASO_DIMENSIONS) {
+      let best = { name: "", score: 0 };
+      for (const comp of competitors) {
+        const ps = comp.playstore?.[`${dim.key}_score`]?.total || 0;
+        const as_ = comp.appstore?.[`${dim.key}_score`]?.total || 0;
+        const avg = comp.playstore && comp.appstore ? (ps + as_) / 2 : (ps || as_);
+        if (avg > best.score) best = { name: comp.competitor_name, score: avg };
+      }
+      leaders[dim.key] = best;
+    }
+    return leaders;
+  }, [competitors]);
+
+  return (
+    <div className="space-y-4">
+      {/* ASO Header with score overview */}
+      <div className="rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 text-white p-5 sm:p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
+              <Target className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">Analyse ASO</h2>
+              <p className="text-[11px] text-white/60">App Store Optimization</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 p-0.5 rounded-full bg-white/10">
+            {(["both", "playstore", "appstore"] as const).map((s) => (
+              <button key={s} onClick={() => setSelectedStore(s)}
+                className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all ${selectedStore === s ? "bg-white/20 text-white" : "text-white/50 hover:text-white/70"}`}>
+                {s === "both" ? "Les deux" : s === "playstore" ? "Play Store" : "App Store"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {competitors.slice(0, 5).map((comp: any, i: number) => {
+            const score = selectedStore === "playstore" ? (comp.playstore?.aso_score || 0)
+              : selectedStore === "appstore" ? (comp.appstore?.aso_score || 0)
+              : comp.aso_score_avg || 0;
+            const isBrandComp = comp.is_brand;
+            return (
+              <button key={comp.competitor_id}
+                onClick={() => setExpandedCompetitor(expandedCompetitor === comp.competitor_id ? null : comp.competitor_id)}
+                className={`rounded-xl p-3 text-left transition-all hover:bg-white/15 ${isBrandComp ? "bg-white/15 ring-1 ring-white/30" : "bg-white/5"} ${expandedCompetitor === comp.competitor_id ? "ring-2 ring-white/50" : ""}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {comp.playstore?.icon_url || comp.appstore?.icon_url ? (
+                      <img src={comp.playstore?.icon_url || comp.appstore?.icon_url} alt="" className="h-6 w-6 rounded-md shrink-0" />
+                    ) : (
+                      <div className="h-6 w-6 rounded-md bg-white/20 flex items-center justify-center text-[10px] font-bold shrink-0">{comp.competitor_name.charAt(0)}</div>
+                    )}
+                    <span className="text-xs font-medium truncate">{comp.competitor_name}</span>
+                  </div>
+                  {i === 0 && <Crown className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
+                </div>
+                <AsoScoreRing score={score} />
+                {isBrandComp && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-white/20 mt-1 inline-block">Vous</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dimension Comparison Matrix */}
+      <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="px-5 py-3 border-b bg-muted/20 flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100 dark:bg-violet-900">
+            <BarChart3 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <span className="text-[12px] font-semibold text-foreground">Matrice ASO comparative</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px]">
+            <thead>
+              <tr className="bg-muted/30">
+                <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
+                {ASO_DIMENSIONS.map(d => (
+                  <th key={d.key} className="text-center text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-3 py-2.5">
+                    <div className="flex items-center justify-center gap-1">
+                      <d.icon className="h-3 w-3" />
+                      {d.label}
+                    </div>
+                  </th>
+                ))}
+                <th className="text-center text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Score ASO</th>
+              </tr>
+            </thead>
+            <tbody>
+              {competitors.map((comp: any, i: number) => {
+                const storeData = selectedStore === "playstore" ? comp.playstore
+                  : selectedStore === "appstore" ? comp.appstore
+                  : null;
+                const isBrandComp = comp.is_brand;
+                const overallScore = selectedStore === "both" ? comp.aso_score_avg
+                  : storeData?.aso_score || 0;
+
+                return (
+                  <tr key={comp.competitor_id}
+                    className={`border-t transition-colors hover:bg-muted/30 ${isBrandComp ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? "bg-emerald-50/50 dark:bg-emerald-950/10" : ""}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold shrink-0 ${i < 3 ? ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-700", "bg-orange-300 text-orange-800"][i] : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {(comp.playstore?.icon_url || comp.appstore?.icon_url) && (
+                            <img src={comp.playstore?.icon_url || comp.appstore?.icon_url} alt="" className="h-5 w-5 rounded shrink-0" />
+                          )}
+                          <span className="text-sm font-medium truncate">{comp.competitor_name}</span>
+                          {isBrandComp && <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300 shrink-0">Vous</span>}
+                        </div>
+                      </div>
+                    </td>
+                    {ASO_DIMENSIONS.map(d => {
+                      let score: number;
+                      if (selectedStore === "both") {
+                        const ps = comp.playstore?.[`${d.key}_score`]?.total || 0;
+                        const as_ = comp.appstore?.[`${d.key}_score`]?.total || 0;
+                        score = comp.playstore && comp.appstore ? (ps + as_) / 2 : (ps || as_);
+                      } else {
+                        score = storeData?.[`${d.key}_score`]?.total || 0;
+                      }
+                      const isLeader = dimensionLeaders[d.key]?.name === comp.competitor_name;
+                      const bgColor = score >= 70 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        : score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        : score >= 30 ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
+
+                      return (
+                        <td key={d.key} className="px-3 py-3 text-center">
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold tabular-nums px-2 py-1 rounded-lg ${bgColor}`}>
+                            {Math.round(score)}
+                            {isLeader && <Crown className="h-2.5 w-2.5 text-amber-500" />}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-4 py-3 text-center">
+                      <AsoScoreRing score={overallScore} size={40} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Expanded Competitor Detail */}
+      {expandedCompetitor && (() => {
+        const comp = competitors.find((c: any) => c.competitor_id === expandedCompetitor);
+        if (!comp) return null;
+        const stores = [
+          comp.playstore && { key: "playstore", label: "Play Store", data: comp.playstore, gradient: "from-green-500 to-emerald-600" },
+          comp.appstore && { key: "appstore", label: "App Store", data: comp.appstore, gradient: "from-blue-500 to-blue-600" },
+        ].filter(Boolean) as any[];
+
+        return (
+          <div className="rounded-2xl border bg-card p-5 space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
+                <Eye className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">{comp.competitor_name} — Detail ASO</h3>
+                <p className="text-[11px] text-muted-foreground">Analyse dimensionnelle</p>
+              </div>
+            </div>
+
+            <div className={`grid gap-4 ${stores.length > 1 ? "sm:grid-cols-2" : ""}`}>
+              {stores.map((store: any) => (
+                <div key={store.key} className="rounded-xl border p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full bg-gradient-to-r ${store.gradient}`} />
+                      <span className="text-xs font-semibold">{store.label}</span>
+                      <span className="text-[10px] text-muted-foreground">v{store.data.version || "?"}</span>
+                    </div>
+                    <AsoScoreRing score={store.data.aso_score || 0} size={36} />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <AsoScoreBar score={store.data.metadata_score?.total || 0} label="Metadata"
+                      detail={`Titre: ${store.data.metadata_score?.title_length_detail || "?"} | Desc: ${store.data.metadata_score?.description_length_detail || "?"}`} />
+                    <AsoScoreBar score={store.data.visual_score?.total || 0} label="Visuels"
+                      detail={`${store.data.visual_score?.screenshot_count_detail || "?"} | ${store.data.visual_score?.video_present_detail || "?"}`} />
+                    <AsoScoreBar score={store.data.rating_score?.total || 0} label="Note"
+                      detail={store.data.rating_score?.rating_detail || "?"} />
+                    <AsoScoreBar score={store.data.reviews_score?.total || 0} label="Avis"
+                      detail={store.data.reviews_score?.volume_detail || "?"} />
+                    <AsoScoreBar score={store.data.freshness_score?.total || 0} label="Fraicheur"
+                      detail={store.data.freshness_score?.freshness_detail || "?"} />
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-2 border-t">
+                    {store.data.screenshot_count != null && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <Image className="h-2.5 w-2.5" />{store.data.screenshot_count} screenshots
+                      </span>
+                    )}
+                    {store.data.has_video && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 className="h-2.5 w-2.5" />Video
+                      </span>
+                    )}
+                    {store.data.has_video === false && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                        <XCircle className="h-2.5 w-2.5" />Pas de video
+                      </span>
+                    )}
+                    {store.data.has_header_image && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 className="h-2.5 w-2.5" />Feature graphic
+                      </span>
+                    )}
+                    {store.data.content_rating && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <Shield className="h-2.5 w-2.5" />{store.data.content_rating}
+                      </span>
+                    )}
+                    {store.data.ad_supported && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pubs</span>
+                    )}
+                    {store.data.in_app_purchases && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Achats in-app</span>
+                    )}
+                  </div>
+
+                  {/* Rating Histogram (Play Store) */}
+                  {store.data.rating_score?.histogram && (
+                    <div className="pt-2 border-t space-y-1.5">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Distribution des notes</span>
+                      {[5, 4, 3, 2, 1].map((star) => {
+                        const hist = store.data.rating_score.histogram;
+                        const total = hist.reduce((a: number, b: number) => a + b, 0);
+                        const count = hist[star - 1] || 0;
+                        const pct = total > 0 ? (count / total) * 100 : 0;
+                        return (
+                          <div key={star} className="flex items-center gap-2">
+                            <span className="text-[10px] font-medium text-muted-foreground w-3 text-right">{star}</span>
+                            <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+                            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${star >= 4 ? "bg-emerald-500" : star === 3 ? "bg-yellow-500" : "bg-red-400"}`}
+                                style={{ width: `${Math.max(pct, 0.5)}%` }} />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">{pct.toFixed(0)}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Screenshot Preview */}
+                  {store.data.screenshot_urls?.length > 0 && (
+                    <div className="pt-2 border-t space-y-1.5">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Apercu screenshots</span>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {store.data.screenshot_urls.map((url: string, idx: number) => (
+                          <img key={idx} src={url} alt={`Screenshot ${idx + 1}`}
+                            className="h-28 rounded-lg border shadow-sm shrink-0 object-cover" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ASO Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/30 dark:border-violet-800 p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-violet-600" />
+            <h3 className="text-sm font-semibold text-violet-800 dark:text-violet-200">Recommandations ASO</h3>
+          </div>
+          <div className="space-y-2">
+            {recommendations.map((rec: any, i: number) => (
+              <div key={i} className={`rounded-xl bg-white/80 dark:bg-white/5 border p-3 flex items-start gap-3 ${rec.priority === "high" ? "border-red-200 dark:border-red-800" : "border-violet-100 dark:border-violet-800"}`}>
+                <div className={`flex h-6 w-6 items-center justify-center rounded-full shrink-0 mt-0.5 ${rec.priority === "high" ? "bg-red-100 dark:bg-red-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                  {rec.priority === "high" ? <AlertTriangle className="h-3 w-3 text-red-600" /> : <Info className="h-3 w-3 text-amber-600" />}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{rec.dimension}</span>
+                    <span className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded ${rec.score < 40 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                      {Math.round(rec.score)}/100
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground/80">{rec.advice}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
