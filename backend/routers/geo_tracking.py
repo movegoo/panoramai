@@ -52,7 +52,7 @@ async def track_geo(
     comp_map = {c.name.lower(): c for c in competitors}
     brand_names = [c.name for c in competitors]
 
-    results = await geo_analyzer.run_full_analysis(brand_names, sector=sector, sector_label=sector_label)
+    results, errors = await geo_analyzer.run_full_analysis(brand_names, sector=sector, sector_label=sector_label)
 
     now = datetime.utcnow()
     total_mentions = 0
@@ -97,12 +97,24 @@ async def track_geo(
 
     queries = get_geo_queries(sector, sector_label, brand_names)
 
-    return {
+    # Report which platforms are configured
+    available = geo_analyzer.get_available_platforms()
+
+    response = {
         "tracked_queries": len(queries),
-        "platforms": sorted(active_platforms) if active_platforms else ["claude", "gemini", "chatgpt"],
+        "platforms": sorted(active_platforms) if active_platforms else [],
+        "platforms_configured": available,
         "total_mentions": total_mentions,
         "matched_competitors": len(matched),
     }
+    if errors:
+        response["errors"] = errors
+    if total_mentions == 0 and not any(available.values()):
+        response["warning"] = "Aucune cle API configuree (ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY). Ajoutez-les dans les variables d'environnement."
+    elif total_mentions == 0:
+        response["warning"] = "Les API ont ete appelees mais aucune mention n'a ete detectee. Verifiez les erreurs ci-dessus."
+
+    return response
 
 
 @router.get("/results")

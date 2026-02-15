@@ -336,9 +336,21 @@ Reponse a analyser :
 class GeoAnalyzer:
     """Queries AI engines and analyses brand visibility in their responses."""
 
+    def __init__(self):
+        self.errors: list[str] = []
+
+    def get_available_platforms(self) -> dict[str, bool]:
+        """Check which API keys are configured."""
+        return {
+            "claude": bool(settings.ANTHROPIC_API_KEY),
+            "gemini": bool(settings.GEMINI_API_KEY),
+            "chatgpt": bool(settings.OPENAI_API_KEY),
+        }
+
     async def _query_claude(self, query: str) -> str:
         """Query Claude Haiku via Anthropic API."""
         if not settings.ANTHROPIC_API_KEY:
+            self.errors.append("claude: ANTHROPIC_API_KEY manquante")
             return ""
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -359,13 +371,26 @@ class GeoAnalyzer:
                 resp.raise_for_status()
                 data = resp.json()
                 return data["content"][0]["text"]
+        except httpx.HTTPStatusError as e:
+            msg = f"claude: HTTP {e.response.status_code}"
+            try:
+                body = e.response.json()
+                msg += f" - {body.get('error', {}).get('message', str(body))}"
+            except Exception:
+                pass
+            logger.error(f"Claude query error: {msg}")
+            self.errors.append(msg)
+            return ""
         except Exception as e:
-            logger.error(f"Claude query error: {e}")
+            msg = f"claude: {type(e).__name__}: {e}"
+            logger.error(f"Claude query error: {msg}")
+            self.errors.append(msg)
             return ""
 
     async def _query_gemini(self, query: str) -> str:
         """Query Gemini via Google AI REST API."""
         if not settings.GEMINI_API_KEY:
+            self.errors.append("gemini: GEMINI_API_KEY manquante")
             return ""
         try:
             url = (
@@ -384,13 +409,26 @@ class GeoAnalyzer:
                 resp.raise_for_status()
                 data = resp.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
+        except httpx.HTTPStatusError as e:
+            msg = f"gemini: HTTP {e.response.status_code}"
+            try:
+                body = e.response.json()
+                msg += f" - {body.get('error', {}).get('message', str(body))}"
+            except Exception:
+                pass
+            logger.error(f"Gemini query error: {msg}")
+            self.errors.append(msg)
+            return ""
         except Exception as e:
-            logger.error(f"Gemini query error: {e}")
+            msg = f"gemini: {type(e).__name__}: {e}"
+            logger.error(f"Gemini query error: {msg}")
+            self.errors.append(msg)
             return ""
 
     async def _query_chatgpt(self, query: str) -> str:
         """Query ChatGPT via OpenAI API."""
         if not settings.OPENAI_API_KEY:
+            self.errors.append("chatgpt: OPENAI_API_KEY manquante")
             return ""
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -412,8 +450,20 @@ class GeoAnalyzer:
                 resp.raise_for_status()
                 data = resp.json()
                 return data["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            msg = f"chatgpt: HTTP {e.response.status_code}"
+            try:
+                body = e.response.json()
+                msg += f" - {body.get('error', {}).get('message', str(body))}"
+            except Exception:
+                pass
+            logger.error(f"ChatGPT query error: {msg}")
+            self.errors.append(msg)
+            return ""
         except Exception as e:
-            logger.error(f"ChatGPT query error: {e}")
+            msg = f"chatgpt: {type(e).__name__}: {e}"
+            logger.error(f"ChatGPT query error: {msg}")
+            self.errors.append(msg)
             return ""
 
     async def _analyze_response(self, query: str, answer: str, brand_names: list[str]) -> dict | None:
@@ -510,14 +560,22 @@ class GeoAnalyzer:
 
     async def run_full_analysis(
         self, brand_names: list[str], sector: str = "supermarche", sector_label: str = ""
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         """Run all GEO queries against Claude + Gemini + ChatGPT and return structured results.
 
         Queries are processed in batches of 3 with parallel platform calls for speed.
-        Returns a list of dicts, one per (keyword, platform, brand_mention).
+        Returns (results, errors) where results is a list of dicts and errors is a list of error messages.
         """
+        self.errors = []  # Reset errors for this run
         queries = get_geo_queries(sector, sector_label or sector, brand_names)
         results: list[dict[str, Any]] = []
+
+        # Log available platforms upfront
+        platforms = self.get_available_platforms()
+        logger.info(f"GEO starting: {len(queries)} queries, platforms: {platforms}")
+        for name, available in platforms.items():
+            if not available:
+                logger.warning(f"GEO: {name} API key NOT configured — skipping")
 
         # Process queries in batches of 3 for speed (parallel within each batch)
         batch_size = 3
@@ -532,13 +590,18 @@ class GeoAnalyzer:
                 results.extend(batch_result)
 
             done = min(i + batch_size, len(queries))
-            logger.info(f"GEO [{done}/{len(queries)}] done")
+            logger.info(f"GEO [{done}/{len(queries)}] done, {len(results)} mentions so far")
 
             # Small delay between batches to avoid rate limits
             if done < len(queries):
                 await asyncio.sleep(0.5)
 
-        return results
+        # Deduplicate errors (same missing key logged for each query)
+        unique_errors = list(dict.fromkeys(self.errors))
+        if not results:
+            logger.warning(f"GEO finished with 0 results. Errors: {unique_errors}")
+
+        return results, unique_errors
 
 
 geo_analyzer = GeoAnalyzer()
