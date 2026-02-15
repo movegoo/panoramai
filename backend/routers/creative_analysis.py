@@ -86,13 +86,24 @@ async def analyze_all_creatives(
     analyzed = 0
     errors = 0
     error_details = []
+    MAX_TIME = 90  # Max 90 seconds per batch
+    start_time = asyncio.get_event_loop().time()
+    timed_out = False
 
     for ad in ads_to_analyze:
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed >= MAX_TIME:
+            timed_out = True
+            break
+
         try:
-            result = await creative_analyzer.analyze_creative(
-                creative_url=ad.creative_url,
-                ad_text=ad.ad_text or "",
-                platform=_normalize_platform(ad.platform),
+            result = await asyncio.wait_for(
+                creative_analyzer.analyze_creative(
+                    creative_url=ad.creative_url,
+                    ad_text=ad.ad_text or "",
+                    platform=_normalize_platform(ad.platform),
+                ),
+                timeout=45,
             )
 
             if result:
@@ -113,12 +124,15 @@ async def analyze_all_creatives(
                 ad.creative_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:
-                # Mark as processed to avoid retry loop
                 ad.creative_analyzed_at = datetime.utcnow()
                 ad.creative_score = 0
                 errors += 1
                 error_details.append(f"{ad.ad_id}: returned None (url={ad.creative_url[:80] if ad.creative_url else 'empty'})")
 
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout analyzing ad {ad.ad_id}, skipping")
+            errors += 1
+            error_details.append(f"{ad.ad_id}: timeout")
         except Exception as e:
             logger.error(f"Error analyzing ad {ad.ad_id}: {e}")
             ad.creative_analyzed_at = datetime.utcnow()
@@ -126,7 +140,6 @@ async def analyze_all_creatives(
             errors += 1
             error_details.append(f"{ad.ad_id}: {str(e)[:120]}")
 
-        # Rate limiting
         await asyncio.sleep(1.0)
 
     db.commit()
@@ -139,10 +152,11 @@ async def analyze_all_creatives(
     remaining = remaining_query.count()
 
     return {
-        "message": f"Analyzed {analyzed} ad creatives",
+        "message": f"Analyzed {analyzed} ad creatives" + (f" (time limit reached, {remaining} remaining)" if timed_out else ""),
         "analyzed": analyzed,
         "errors": errors,
         "remaining": remaining,
+        "timed_out": timed_out,
         "error_details": error_details[:10] if error_details else [],
     }
 

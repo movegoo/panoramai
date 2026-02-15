@@ -92,11 +92,20 @@ export default function SeoPage() {
   const brandAvg = insights?.avg_position.find(a => a.competitor_id === brandId);
   const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === brandId);
 
-  // Build competitor list for ranking grid
+  // Build competitor list for ranking grid (from rankings + insights)
   const competitorNames: string[] = [];
-  if (insights) {
+  if (insights || rankings.length > 0) {
     const nameSet = new Set<string>();
-    insights.share_of_voice.forEach(s => nameSet.add(s.competitor));
+    // From share_of_voice
+    insights?.share_of_voice.forEach(s => nameSet.add(s.competitor));
+    // From avg_position
+    insights?.avg_position.forEach(a => nameSet.add(a.competitor));
+    // From rankings results (covers all competitors that appear in SERP)
+    rankings.forEach(kw => {
+      kw.results.forEach(r => {
+        if (r.competitor_name) nameSet.add(r.competitor_name);
+      });
+    });
     competitorNames.push(...Array.from(nameSet));
   }
 

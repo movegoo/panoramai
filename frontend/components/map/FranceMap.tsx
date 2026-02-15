@@ -886,13 +886,19 @@ export default function FranceMap() {
     const layerGroup = L.layerGroup();
     const zoom = map.getZoom();
     // Scale marker size based on zoom
-    const size = zoom >= 12 ? 36 : zoom >= 10 ? 30 : zoom >= 8 ? 24 : 18;
-    const borderWidth = zoom >= 10 ? 3 : 2;
+    const size = zoom >= 12 ? 48 : zoom >= 10 ? 40 : zoom >= 8 ? 32 : 24;
+    const borderWidth = zoom >= 10 ? 4 : 3;
 
     groups.forEach((group) => {
-      const strokeColor = group.color;
-
       group.stores.forEach((store) => {
+        // Stroke color based on GMB rating (green=good, red=bad), fallback to brand color
+        const rating = store.google_rating;
+        const strokeColor = rating != null
+          ? rating >= 4.0 ? "#16a34a"   // green-600
+            : rating >= 3.5 ? "#ca8a04" // yellow-600
+            : rating >= 3.0 ? "#ea580c" // orange-600
+            : "#dc2626"                  // red-600
+          : group.color;
         if (!store.latitude || !store.longitude) return;
         if (!bounds.contains([store.latitude, store.longitude])) return;
 

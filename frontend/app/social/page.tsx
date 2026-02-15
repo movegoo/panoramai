@@ -225,14 +225,30 @@ export default function SocialPage() {
             : `Aucun concurrent trouve. Ajoutez des concurrents dans "Mon enseigne".`;
       setContentStatus(details.length > 0 ? `${collectMsg}\n${details.join(" | ")}` : collectMsg);
 
-      // Step 2: Analyze (only if there are posts)
+      // Step 2: Analyze in batches (auto-continues until done)
       if (collectResult.total_in_db > 0 || collectResult.new > 0) {
-        const analyzeResult = await socialContentAPI.analyzeAll(20);
-        if (analyzeResult.analyzed > 0) {
-          setContentStatus(
-            `${analyzeResult.analyzed} posts analyses${analyzeResult.errors > 0 ? `, ${analyzeResult.errors} erreurs` : ""}${analyzeResult.remaining > 0 ? `, ${analyzeResult.remaining} restants` : ""}`
-          );
-        } else if (analyzeResult.remaining === 0) {
+        let totalAnalyzed = 0;
+        let totalErrors = 0;
+        let batchNum = 0;
+        const MAX_BATCHES = 10; // Safety limit: max 10 batches per click
+
+        while (batchNum < MAX_BATCHES) {
+          batchNum++;
+          const analyzeResult = await socialContentAPI.analyzeAll(10);
+          totalAnalyzed += analyzeResult.analyzed || 0;
+          totalErrors += analyzeResult.errors || 0;
+
+          if (analyzeResult.analyzed > 0) {
+            setContentStatus(
+              `Analyse IA: ${totalAnalyzed} posts analyses${totalErrors > 0 ? `, ${totalErrors} erreurs` : ""}${analyzeResult.remaining > 0 ? ` — ${analyzeResult.remaining} restants...` : ""}`
+            );
+          }
+
+          // Stop if nothing left or no progress this batch
+          if (analyzeResult.remaining === 0 || analyzeResult.analyzed === 0) break;
+        }
+
+        if (totalAnalyzed === 0) {
           setContentStatus("Tous les posts sont deja analyses.");
         }
       }

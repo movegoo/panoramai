@@ -256,18 +256,30 @@ async def analyze_all_content(
 
     analyzed = 0
     errors = 0
+    MAX_TIME = 90  # Max 90 seconds per batch to avoid hanging requests
+    start_time = asyncio.get_event_loop().time()
+    timed_out = False
 
     for post in posts_to_analyze:
+        # Check time budget before each post
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed >= MAX_TIME:
+            timed_out = True
+            break
+
         try:
-            result = await social_content_analyzer.analyze_content(
-                title=post.title or "",
-                description=post.description or "",
-                platform=post.platform or "tiktok",
-                competitor_name=comp_names.get(post.competitor_id, ""),
-                views=post.views or 0,
-                likes=post.likes or 0,
-                comments=post.comments or 0,
-                shares=post.shares or 0,
+            result = await asyncio.wait_for(
+                social_content_analyzer.analyze_content(
+                    title=post.title or "",
+                    description=post.description or "",
+                    platform=post.platform or "tiktok",
+                    competitor_name=comp_names.get(post.competitor_id, ""),
+                    views=post.views or 0,
+                    likes=post.likes or 0,
+                    comments=post.comments or 0,
+                    shares=post.shares or 0,
+                ),
+                timeout=30,
             )
 
             if result:
@@ -289,6 +301,9 @@ async def analyze_all_content(
                 post.content_engagement_score = 0
                 errors += 1
 
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout analyzing post {post.post_id}, skipping")
+            errors += 1
         except Exception as e:
             logger.error(f"Error analyzing post {post.post_id}: {e}")
             post.content_analyzed_at = datetime.utcnow()
@@ -305,11 +320,13 @@ async def analyze_all_content(
     if x_advertiser_id:
         remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
+    remaining = remaining_query.count()
     return {
-        "message": f"Analyzed {analyzed} social posts",
+        "message": f"Analyzed {analyzed} social posts" + (f" (time limit reached, {remaining} remaining)" if timed_out else ""),
         "analyzed": analyzed,
         "errors": errors,
-        "remaining": remaining_query.count(),
+        "remaining": remaining,
+        "timed_out": timed_out,
     }
 
 
