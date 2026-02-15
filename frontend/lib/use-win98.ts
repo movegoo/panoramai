@@ -8,8 +8,8 @@ const CHEAT_SEQUENCE = [
   "ArrowDown", "ArrowDown",
   "ArrowLeft", "ArrowRight",
   "ArrowLeft", "ArrowRight",
-  "KeyB", "KeyA",
-  "KeyB", "KeyA",
+  "b", "a",
+  "b", "a",
 ];
 
 const STORAGE_KEY = "win98_mode";
@@ -51,7 +51,8 @@ export function useWin98Mode() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       const expected = CHEAT_SEQUENCE[inputIndex];
-      if (e.code === expected) {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (key === expected) {
         const next = inputIndex + 1;
         if (next === CHEAT_SEQUENCE.length) {
           toggle();
@@ -61,7 +62,7 @@ export function useWin98Mode() {
         }
       } else {
         // Reset on wrong key, but check if it's the start of the sequence
-        setInputIndex(e.code === CHEAT_SEQUENCE[0] ? 1 : 0);
+        setInputIndex(key === CHEAT_SEQUENCE[0] ? 1 : 0);
       }
     }
     window.addEventListener("keydown", handleKey);
