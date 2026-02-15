@@ -200,6 +200,28 @@ async def list_competitors(
     if user:
         from core.auth import claim_orphans
         claim_orphans(db, user)
+
+    # Auto-patch missing handles from built-in competitor database
+    from routers.advertiser import COMPETITORS_BY_SECTOR
+    known = {}
+    for sector_comps in COMPETITORS_BY_SECTOR.values():
+        for comp in sector_comps:
+            known[comp["name"].lower()] = comp
+
+    all_comps = _scoped_competitor_query(db, user, x_advertiser_id, include_brand=True).all()
+    patched = False
+    for comp in all_comps:
+        ref = known.get(comp.name.lower())
+        if not ref:
+            continue
+        for f in ["playstore_app_id", "appstore_app_id", "instagram_username",
+                  "tiktok_username", "youtube_channel_id", "website"]:
+            if ref.get(f) and not getattr(comp, f, None):
+                setattr(comp, f, ref[f])
+                patched = True
+    if patched:
+        db.commit()
+
     competitors = _scoped_competitor_query(db, user, x_advertiser_id).all()
     comp_ids = [c.id for c in competitors]
     cards = []

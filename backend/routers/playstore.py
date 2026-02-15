@@ -18,6 +18,24 @@ from core.permissions import verify_competitor_ownership, get_user_competitors, 
 router = APIRouter()
 
 
+def _auto_patch_from_db(competitor, db):
+    """Auto-fill missing fields from the built-in competitor database."""
+    from routers.advertiser import COMPETITORS_BY_SECTOR
+    for comps in COMPETITORS_BY_SECTOR.values():
+        for ref in comps:
+            if ref["name"].lower() == competitor.name.lower():
+                changed = False
+                for f in ["playstore_app_id", "appstore_app_id", "instagram_username",
+                          "tiktok_username", "youtube_channel_id", "website"]:
+                    if ref.get(f) and not getattr(competitor, f, None):
+                        setattr(competitor, f, ref[f])
+                        changed = True
+                if changed:
+                    db.commit()
+                return
+    return
+
+
 # =============================================================================
 # Data Fetching
 # =============================================================================
@@ -120,6 +138,9 @@ async def fetch_playstore_data(
 ):
     """Fetch and store current Play Store data for a competitor."""
     competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
+
+    if not competitor.playstore_app_id:
+        _auto_patch_from_db(competitor, db)
 
     if not competitor.playstore_app_id:
         raise HTTPException(status_code=400, detail="No Play Store app ID configured")
@@ -229,6 +250,9 @@ async def get_recent_reviews(
 ):
     """Get recent reviews for a competitor's Play Store app."""
     competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
+
+    if not competitor.playstore_app_id:
+        _auto_patch_from_db(competitor, db)
 
     if not competitor.playstore_app_id:
         raise HTTPException(status_code=400, detail="No Play Store app ID configured")
