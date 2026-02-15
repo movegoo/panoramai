@@ -17,7 +17,7 @@ from services.scrapecreators import scrapecreators
 from core.trends import calculate_trend
 from core.config import settings
 from core.auth import get_current_user
-from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids
+from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids, parse_advertiser_header
 
 router = APIRouter()
 
@@ -48,9 +48,10 @@ async def get_tiktok_history(
     limit: int = 30,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get historical TikTok data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     return (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -65,9 +66,10 @@ async def get_latest_tiktok_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get the latest TikTok data for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     data = (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -84,9 +86,10 @@ async def fetch_tiktok_data(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Fetch and store current TikTok data for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.tiktok_username:
         raise HTTPException(status_code=400, detail="No TikTok username configured")
@@ -199,9 +202,10 @@ async def get_tiktok_trends(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get TikTok trends and variations for a competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     recent_data = (
         db.query(TikTokData)
         .filter(TikTokData.competitor_id == competitor_id)
@@ -250,9 +254,10 @@ async def get_recent_videos(
     limit: int = 10,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get recent TikTok videos for a competitor."""
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     if not competitor.tiktok_username:
         raise HTTPException(status_code=400, detail="No TikTok username configured")
@@ -294,9 +299,10 @@ async def get_tiktok_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Get TikTok ads for a specific competitor."""
-    verify_competitor_ownership(db, competitor_id, user)
+    verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
     ads = (
         db.query(Ad)
         .filter(Ad.competitor_id == competitor_id, Ad.platform == "tiktok")
@@ -311,12 +317,13 @@ async def fetch_tiktok_ads(
     competitor_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
 ):
     """
     Fetch TikTok ads/sponsored content for a competitor via ScrapeCreators.
     Searches by competitor name and stores detected ads.
     """
-    competitor = verify_competitor_ownership(db, competitor_id, user)
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
     result = await scrapecreators.search_tiktok_ads(query=competitor.name, limit=30)
 
