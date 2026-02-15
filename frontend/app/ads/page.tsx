@@ -1427,16 +1427,22 @@ export default function AdsPage() {
       const hasMeta = allPlatforms.has("facebook") || allPlatforms.has("instagram");
       const hasTiktok = allPlatforms.has("tiktok");
       const hasGoogle = allPlatforms.has("google");
+      // Check if Meta ads exist but lack enrichment data (no eu_total_reach)
+      const metaAds = ads.filter(a => a.platform === "facebook" || a.platform === "instagram");
+      const needsEnrichment = metaAds.length > 0 && metaAds.every(a => !a.eu_total_reach);
       const missingPlatforms = comps.length > 0 && (!hasMeta || !hasTiktok || !hasGoogle);
-      if (missingPlatforms) {
+      if (missingPlatforms || needsEnrichment) {
         setFetching(true);
         try {
-          for (const c of comps) {
-            if (!hasMeta) try { await facebookAPI.fetchAds(c.id); } catch {}
-            if (!hasTiktok) try { await tiktokAPI.fetchAds(c.id); } catch {}
-            if (!hasGoogle) try { await googleAdsAPI.fetchAds(c.id); } catch {}
+          if (!hasMeta || !hasTiktok || !hasGoogle) {
+            for (const c of comps) {
+              if (!hasMeta) try { await facebookAPI.fetchAds(c.id); } catch {}
+              if (!hasTiktok) try { await tiktokAPI.fetchAds(c.id); } catch {}
+              if (!hasGoogle) try { await googleAdsAPI.fetchAds(c.id); } catch {}
+            }
           }
-          if (!hasMeta) try { await facebookAPI.enrichTransparency(); } catch {}
+          // Always enrich Meta transparency if data is missing
+          if (!hasMeta || needsEnrichment) try { await facebookAPI.enrichTransparency(); } catch {}
           const [freshFb, freshTt, freshG] = await Promise.allSettled([
             facebookAPI.getAllAds(),
             tiktokAPI.getAllAds(),
