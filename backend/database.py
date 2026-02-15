@@ -51,6 +51,7 @@ class Competitor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    is_brand = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="competitors")
 
@@ -496,6 +497,7 @@ def _run_migrations(engine):
             ("ads", "creative_tags", "TEXT"),
             ("ads", "creative_summary", "TEXT"),
             ("ads", "creative_analyzed_at", "TIMESTAMP"),
+            ("competitors", "is_brand", "BOOLEAN DEFAULT FALSE"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
@@ -582,11 +584,33 @@ def _backfill_competitor_advertiser(engine):
         logging.getLogger(__name__).warning(f"Competitor advertiser backfill warning: {e}")
 
 
+def _backfill_is_brand(engine):
+    """Mark competitor mirror entries that represent the brand itself."""
+    try:
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            # A competitor is a brand mirror if its name matches the advertiser's company_name
+            rows = conn.execute(text(
+                'SELECT c.id FROM competitors c '
+                'JOIN advertisers a ON c.advertiser_id = a.id '
+                'WHERE LOWER(c.name) = LOWER(a.company_name) '
+                'AND c.is_active = 1 AND (c.is_brand IS NULL OR c.is_brand = 0)'
+            )).fetchall()
+            for (comp_id,) in rows:
+                conn.execute(text(
+                    'UPDATE competitors SET is_brand = 1 WHERE id = :cid'
+                ), {"cid": comp_id})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"is_brand backfill warning: {e}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     _run_migrations(engine)
     _backfill_logos(engine)
     _backfill_competitor_advertiser(engine)
+    _backfill_is_brand(engine)
 
 
 def get_db():

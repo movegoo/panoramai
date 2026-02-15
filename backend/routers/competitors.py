@@ -14,9 +14,11 @@ from core.auth import get_optional_user
 from core.utils import get_logo_url
 
 
-def _scoped_competitor_query(db, user, x_advertiser_id=None):
+def _scoped_competitor_query(db, user, x_advertiser_id=None, include_brand=False):
     """Build a competitor query scoped to user + advertiser."""
     query = db.query(Competitor).filter(Competitor.is_active == True)
+    if not include_brand:
+        query = query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))
     if user:
         query = query.filter(Competitor.user_id == user.id)
     if x_advertiser_id:

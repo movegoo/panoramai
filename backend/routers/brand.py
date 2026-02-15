@@ -119,6 +119,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
             instagram_username=brand.instagram_username,
             tiktok_username=brand.tiktok_username,
             youtube_channel_id=brand.youtube_channel_id,
+            is_brand=True,
         )
         db.add(comp)
         db.commit()
@@ -131,6 +132,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
     else:
         # Sync fields from brand to competitor
         comp.advertiser_id = brand.id
+        comp.is_brand = True
         comp.website = brand.website
         comp.logo_url = get_logo_url(brand.website)
         comp.playstore_app_id = brand.playstore_app_id
@@ -215,6 +217,7 @@ async def setup_brand(
 
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
+        (Competitor.is_brand == False) | (Competitor.is_brand == None),
         Competitor.advertiser_id == brand.id,
     ).count()
 
@@ -237,6 +240,7 @@ async def get_brand_profile(
     brand = get_current_brand(db, user, advertiser_id=adv_id)
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
+        (Competitor.is_brand == False) | (Competitor.is_brand == None),
         *([Competitor.user_id == user.id] if user else []),
         *([Competitor.advertiser_id == brand.id] if brand else []),
     ).count()
@@ -298,6 +302,7 @@ async def update_brand_profile(
 
     competitors_count = db.query(Competitor).filter(
         Competitor.is_active == True,
+        (Competitor.is_brand == False) | (Competitor.is_brand == None),
         Competitor.advertiser_id == brand.id,
     ).count()
 
@@ -415,6 +420,7 @@ async def add_suggested_competitors(
         "not_found": not_found,
         "total_competitors": db.query(Competitor).filter(
             Competitor.is_active == True,
+            (Competitor.is_brand == False) | (Competitor.is_brand == None),
             Competitor.advertiser_id == brand.id,
         ).count()
     }
