@@ -293,7 +293,7 @@ async def enrich_ads_transparency(
     """
     Enrich all Meta ads that lack EU transparency data (age, gender, location, reach)
     by fetching individual ad details from the Ad Library.
-    Uses concurrent requests for speed (batches of 5).
+    Uses concurrent requests for speed (batches of 10, max 25 ads per call).
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     user_comp_ids = get_user_competitor_ids(db, user, advertiser_id=adv_id)
@@ -305,7 +305,7 @@ async def enrich_ads_transparency(
         Ad.eu_total_reach.is_(None),
         Ad.platform.in_(meta_platforms),
         Ad.competitor_id.in_(user_comp_ids),
-    ).limit(50).all()
+    ).limit(25).all()
 
     if not ads_to_enrich:
         return {"message": "All Meta ads already enriched", "enriched": 0, "total_meta": 0}
@@ -335,8 +335,8 @@ async def enrich_ads_transparency(
             ad.eu_total_reach = 0
             return False
 
-    # Process in concurrent batches of 5
-    BATCH_SIZE = 5
+    # Process in concurrent batches of 10
+    BATCH_SIZE = 10
     for i in range(0, len(ads_to_enrich), BATCH_SIZE):
         batch = ads_to_enrich[i:i + BATCH_SIZE]
         results = await asyncio.gather(*[_enrich_one(ad) for ad in batch])

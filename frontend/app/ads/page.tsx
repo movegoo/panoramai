@@ -1441,8 +1441,15 @@ export default function AdsPage() {
               if (!hasGoogle) try { await googleAdsAPI.fetchAds(c.id); } catch {}
             }
           }
-          // Always enrich Meta transparency if data is missing
-          if (!hasMeta || needsEnrichment) try { await facebookAPI.enrichTransparency(); } catch {}
+          // Enrich Meta transparency in multiple rounds (API processes 25 ads at a time)
+          if (!hasMeta || needsEnrichment) {
+            for (let round = 0; round < 5; round++) {
+              try {
+                const r = await facebookAPI.enrichTransparency();
+                if (r.enriched === 0) break; // All done
+              } catch { break; }
+            }
+          }
           const [freshFb, freshTt, freshG] = await Promise.allSettled([
             facebookAPI.getAllAds(),
             tiktokAPI.getAllAds(),
@@ -1501,8 +1508,13 @@ export default function AdsPage() {
         try { await tiktokAPI.fetchAds(c.id); } catch {}
         try { await googleAdsAPI.fetchAds(c.id); } catch {}
       }
-      // Enrich with EU transparency data
-      try { await facebookAPI.enrichTransparency(); } catch {}
+      // Enrich with EU transparency data (multiple rounds, 25 ads at a time)
+      for (let round = 0; round < 5; round++) {
+        try {
+          const r = await facebookAPI.enrichTransparency();
+          if (r.enriched === 0) break;
+        } catch { break; }
+      }
       const [fbAds, ttAds, gAds] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
