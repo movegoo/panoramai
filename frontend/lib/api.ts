@@ -987,7 +987,7 @@ export interface GeoInsights {
   brand_competitor_id: number | null;
   share_of_voice: { competitor: string; competitor_id: number; mentions: number; pct: number }[];
   avg_position: { competitor: string; competitor_id: number; avg_pos: number }[];
-  recommendation_rate: { competitor: string; competitor_id: number; rate: number; recommended_count: number }[];
+  recommendation_rate: { competitor: string; competitor_id: number; rate: number; recommended_count: number; total_mentions: number }[];
   sentiment: { competitor: string; competitor_id: number; positive: number; neutral: number; negative: number }[];
   platform_comparison: Record<string, any>[];
   key_criteria: { criterion: string; count: number }[];
