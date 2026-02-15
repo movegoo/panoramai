@@ -21,9 +21,14 @@ class YouTubeAPI:
         return await scrapecreators.fetch_youtube_channel(handle=username)
 
     async def fetch_recent_videos(self, channel_id: str, max_results: int = 10) -> Dict:
-        """Fetch recent videos from a YouTube channel."""
+        """Fetch recent videos from a YouTube channel (accepts UC... ID or handle)."""
+        if channel_id.startswith("UC"):
+            return await scrapecreators.fetch_youtube_videos(
+                channel_id=channel_id, limit=max_results
+            )
+        handle = channel_id.split("/")[-1].lstrip("@")
         return await scrapecreators.fetch_youtube_videos(
-            channel_id=channel_id, limit=max_results
+            handle=handle, limit=max_results
         )
 
     async def search_channels(self, query: str, max_results: int = 10) -> Dict:
@@ -40,13 +45,21 @@ class YouTubeAPI:
         """
         Calculate analytics for a YouTube channel.
         Fetches channel data and recent videos for engagement metrics.
+        channel_id can be a UC... ID or a @handle/username.
         """
-        channel_data = await self.fetch_channel(channel_id)
+        # Detect if it's a handle vs a real channel ID
+        if channel_id.startswith("UC"):
+            channel_data = await self.fetch_channel(channel_id)
+        else:
+            handle = channel_id.split("/")[-1].lstrip("@")
+            channel_data = await self.fetch_channel_by_username(handle)
+
         if not channel_data.get("success"):
             return channel_data
 
-        # Fetch recent videos for analytics
-        videos_data = await self.fetch_recent_videos(channel_id, max_results=20)
+        # Use the resolved channel ID for video fetch
+        resolved_id = channel_data.get("channel_id") or channel_id
+        videos_data = await self.fetch_recent_videos(resolved_id, max_results=20)
         videos = videos_data.get("videos", []) if videos_data.get("success") else []
 
         if not videos:

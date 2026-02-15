@@ -51,6 +51,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "541227977",
             "instagram_username": "auchan_france",
             "tiktok_username": "auchan",
+            "youtube_channel_id": "AuchanFrance",
         },
         {
             "name": "Intermarché",
@@ -59,6 +60,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "1447048498",
             "instagram_username": "intermarche",
             "tiktok_username": "intermarche",
+            "youtube_channel_id": "intermarche",
         },
         {
             "name": "Lidl",
@@ -67,6 +69,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "1276382498",
             "instagram_username": "lidlfrance",
             "tiktok_username": "lidlfrance",
+            "youtube_channel_id": "lidlfrance",
         },
         {
             "name": "Monoprix",
@@ -97,6 +100,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "547347221",
             "instagram_username": "zara",
             "tiktok_username": "zara",
+            "youtube_channel_id": "zara",
         },
         {
             "name": "H&M",
@@ -113,6 +117,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "495571498",
             "instagram_username": "kiabi_official",
             "tiktok_username": "kiabi_official",
+            "youtube_channel_id": "kiabi",
         },
         {
             "name": "Celio",
@@ -137,6 +142,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "393328150",
             "instagram_username": "sephorafrance",
             "tiktok_username": "sephorafrance",
+            "youtube_channel_id": "sephorafrance",
         },
         {
             "name": "Nocibé",
@@ -159,18 +165,21 @@ COMPETITORS_BY_SECTOR = {
             "playstore_app_id": "com.ysl.yvesrocher",
             "instagram_username": "yvesrocherfr",
             "tiktok_username": "yvesrocher",
+            "youtube_channel_id": "yvesrocherfr",
         },
         {
             "name": "L'Occitane",
             "website": "https://www.loccitane.com/fr-fr",
             "instagram_username": "loccitane",
             "tiktok_username": "loccitane_fr",
+            "youtube_channel_id": "loccitaneenprovence",
         },
         {
             "name": "Lush",
             "website": "https://www.lush.com/fr",
             "instagram_username": "lushfrance",
             "tiktok_username": "lush.france",
+            "youtube_channel_id": "LushFrance",
         },
     ],
     "electromenager": [
@@ -211,6 +220,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "522478918",
             "instagram_username": "leroymerlin",
             "tiktok_username": "leroymerlin",
+            "youtube_channel_id": "leroymerlin",
         },
         {
             "name": "Castorama",
@@ -219,6 +229,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "1163490666",
             "instagram_username": "castoramafrance",
             "tiktok_username": "castoramafrance",
+            "youtube_channel_id": "castorama",
         },
         {
             "name": "Brico Dépôt",
@@ -241,6 +252,7 @@ COMPETITORS_BY_SECTOR = {
             "appstore_app_id": "1079647629",
             "instagram_username": "decathlon",
             "tiktok_username": "decathlon",
+            "youtube_channel_id": "decathlon",
         },
         {
             "name": "Go Sport",

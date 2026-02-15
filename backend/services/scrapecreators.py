@@ -256,15 +256,20 @@ class ScrapeCreatorsAPI:
 
     def _parse_youtube_video_item(self, item: dict) -> dict:
         """Parse a YouTube video item from any response format."""
+        # Thumbnail can be a string URL or an object
+        thumb = item.get("thumbnail", item.get("thumbnail_url", ""))
+        if isinstance(thumb, dict):
+            thumb = thumb.get("url", "")
+
         return {
-            "video_id": item.get("videoId", item.get("video_id", "")),
-            "title": item.get("title", "")[:1000],
-            "description": item.get("description", "")[:500],
+            "video_id": item.get("id", item.get("videoId", item.get("video_id", ""))),
+            "title": (item.get("title", "") or "")[:1000],
+            "description": (item.get("description", "") or "")[:500],
             "published_at": item.get("publishedTimeText", item.get("published_at", "")),
-            "thumbnail_url": item.get("thumbnail", item.get("thumbnail_url", "")),
-            "views": item.get("viewCount", item.get("views", 0)) or 0,
-            "likes": item.get("likeCount", item.get("likes", 0)) or 0,
-            "comments": item.get("commentCount", item.get("comments", 0)) or 0,
+            "thumbnail_url": thumb,
+            "views": item.get("viewCountInt", item.get("viewCount", item.get("views", 0))) or 0,
+            "likes": item.get("likeCountInt", item.get("likeCount", item.get("likes", 0))) or 0,
+            "comments": item.get("commentCountInt", item.get("commentCount", item.get("comments", 0))) or 0,
             "duration": item.get("lengthText", item.get("duration", "")),
         }
 
