@@ -12,7 +12,8 @@ from database import get_db, Competitor, YouTubeData, User
 from models.schemas import YouTubeDataResponse, TrendResponse
 from services.youtube_api import youtube_api
 from core.trends import calculate_trend
-from core.auth import get_optional_user
+from core.auth import get_current_user
+from core.permissions import verify_competitor_ownership, get_user_competitors
 
 router = APIRouter()
 
@@ -25,9 +26,11 @@ router = APIRouter()
 async def get_youtube_history(
     competitor_id: int,
     limit: int = 30,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get historical YouTube data for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     return (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -40,9 +43,11 @@ async def get_youtube_history(
 @router.get("/latest/{competitor_id}")
 async def get_latest_youtube_data(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get the latest YouTube data for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     data = (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -57,12 +62,11 @@ async def get_latest_youtube_data(
 @router.post("/fetch/{competitor_id}")
 async def fetch_youtube_data(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Fetch and store current YouTube data for a competitor."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     if not competitor.youtube_channel_id:
         raise HTTPException(status_code=400, detail="No YouTube channel ID configured")
@@ -107,16 +111,13 @@ async def fetch_youtube_data(
 async def compare_youtube_channels(
     days: int = 7,
     db: Session = Depends(get_db),
-    user: User | None = Depends(get_optional_user),
+    user: User = Depends(get_current_user),
 ):
     """Compare YouTube metrics across all tracked competitors."""
-    query = (
-        db.query(Competitor)
-        .filter(Competitor.youtube_channel_id.isnot(None), Competitor.is_active == True)
-    )
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-    competitors = query.all()
+    competitors = [
+        c for c in get_user_competitors(db, user)
+        if c.youtube_channel_id
+    ]
 
     comparison = []
     for competitor in competitors:
@@ -167,9 +168,11 @@ async def compare_youtube_channels(
 @router.get("/trends/{competitor_id}")
 async def get_youtube_trends(
     competitor_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get YouTube trends and variations for a competitor."""
+    verify_competitor_ownership(db, competitor_id, user)
     recent_data = (
         db.query(YouTubeData)
         .filter(YouTubeData.competitor_id == competitor_id)
@@ -216,12 +219,11 @@ async def get_youtube_trends(
 async def get_recent_videos(
     competitor_id: int,
     limit: int = 10,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Get recent YouTube videos for a competitor."""
-    competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if not competitor:
-        raise HTTPException(status_code=404, detail="Competitor not found")
+    competitor = verify_competitor_ownership(db, competitor_id, user)
 
     if not competitor.youtube_channel_id:
         raise HTTPException(status_code=400, detail="No YouTube channel ID configured")
@@ -238,7 +240,11 @@ async def get_recent_videos(
 
 
 @router.get("/search")
-async def search_youtube_channels(query: str, limit: int = 10):
+async def search_youtube_channels(
+    query: str,
+    limit: int = 10,
+    user: User = Depends(get_current_user),
+):
     """Search for YouTube channels."""
     result = await youtube_api.search_channels(query, max_results=limit)
 
@@ -249,7 +255,10 @@ async def search_youtube_channels(query: str, limit: int = 10):
 
 
 @router.get("/channel/{channel_id}")
-async def get_channel_info(channel_id: str):
+async def get_channel_info(
+    channel_id: str,
+    user: User = Depends(get_current_user),
+):
     """Get detailed information about a YouTube channel."""
     result = await youtube_api.get_channel_analytics(channel_id)
 
