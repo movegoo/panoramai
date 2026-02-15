@@ -185,22 +185,55 @@ export default function SocialPage() {
     setContentStatus(null);
     try {
       // Step 1: Collect
-      setContentStatus("Collecte des posts...");
+      setContentStatus("Collecte des posts sociaux en cours...");
       const collectResult = await socialContentAPI.collectAll();
-      setContentStatus(`${collectResult.new} nouveaux posts collectes. Analyse en cours...`);
 
-      // Step 2: Analyze
-      const analyzeResult = await socialContentAPI.analyzeAll(20);
-      setContentStatus(
-        `${analyzeResult.analyzed} posts analyses, ${analyzeResult.errors} erreurs, ${analyzeResult.remaining} restants`
-      );
+      // Build detailed status
+      const details: string[] = [];
+      if (collectResult.by_competitor && collectResult.by_competitor.length > 0) {
+        const hasContent = collectResult.by_competitor.some(
+          (c: any) => (c.tiktok || 0) + (c.youtube || 0) + (c.instagram || 0) > 0
+        );
+        if (hasContent) {
+          for (const c of collectResult.by_competitor) {
+            const parts = [];
+            if (c.tiktok) parts.push(`${c.tiktok} TikTok`);
+            if (c.youtube) parts.push(`${c.youtube} YouTube`);
+            if (c.instagram) parts.push(`${c.instagram} Instagram`);
+            if (parts.length > 0) details.push(`${c.competitor}: ${parts.join(", ")}`);
+          }
+        }
+      }
+
+      const errCount = collectResult.errors?.length || 0;
+      const scanned = collectResult.competitors_scanned || 0;
+      const collectMsg = collectResult.new > 0
+        ? `${collectResult.new} nouveaux posts collectes${collectResult.updated ? `, ${collectResult.updated} mis a jour` : ""} (${scanned} concurrents scannes). Analyse IA en cours...`
+        : collectResult.total_in_db > 0
+          ? `Aucun nouveau post (${collectResult.total_in_db} en base, ${scanned} concurrents scannes). Analyse IA en cours...`
+          : scanned > 0
+            ? `Aucun post collecte sur ${scanned} concurrents scannes.${errCount > 0 ? ` ${errCount} erreur(s) API.` : " Verifiez les comptes sociaux de vos concurrents."}`
+            : `Aucun concurrent trouve. Ajoutez des concurrents dans "Mon enseigne".`;
+      setContentStatus(details.length > 0 ? `${collectMsg}\n${details.join(" | ")}` : collectMsg);
+
+      // Step 2: Analyze (only if there are posts)
+      if (collectResult.total_in_db > 0 || collectResult.new > 0) {
+        const analyzeResult = await socialContentAPI.analyzeAll(20);
+        if (analyzeResult.analyzed > 0) {
+          setContentStatus(
+            `${analyzeResult.analyzed} posts analyses${analyzeResult.errors > 0 ? `, ${analyzeResult.errors} erreurs` : ""}${analyzeResult.remaining > 0 ? `, ${analyzeResult.remaining} restants` : ""}`
+          );
+        } else if (analyzeResult.remaining === 0) {
+          setContentStatus("Tous les posts sont deja analyses.");
+        }
+      }
 
       // Step 3: Refresh insights
       const insights = await socialContentAPI.getInsights(contentPlatform || undefined);
       setContentInsights(insights);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Content analysis failed:", err);
-      setContentStatus("Erreur lors de l'analyse");
+      setContentStatus(`Erreur: ${err.message || "Echec de l'analyse"}`);
     } finally {
       setContentLoading(false);
     }
@@ -1096,9 +1129,12 @@ export default function SocialPage() {
                 <Brain className="h-6 w-6 text-emerald-500" />
               </div>
             </div>
-            <h3 className="text-base font-semibold text-foreground mb-1">Aucune analyse de contenu</h3>
+            <h3 className="text-base font-semibold text-foreground mb-1">
+              Aucune analyse de contenu{contentPlatform ? ` ${contentPlatform === "instagram" ? "Instagram" : contentPlatform === "tiktok" ? "TikTok" : "YouTube"}` : ""}
+            </h3>
             <p className="text-sm text-muted-foreground max-w-md mx-auto mb-4">
               Cliquez sur &quot;Analyser le contenu&quot; pour collecter les posts sociaux et les analyser avec l&apos;IA.
+              {contentPlatform && " Essayez aussi la vue globale pour voir les donnees de toutes les plateformes."}
             </p>
           </div>
         )}

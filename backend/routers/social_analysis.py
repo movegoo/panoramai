@@ -33,11 +33,12 @@ async def collect_all_social_posts(
     competitors = query.all()
 
     if not competitors:
-        return {"message": "No competitors found", "collected": 0}
+        return {"message": "No competitors found", "new": 0, "updated": 0, "total_in_db": 0, "by_competitor": [], "errors": []}
 
     total_new = 0
     total_updated = 0
     results = []
+    errors_list = []
 
     for comp in competitors:
         comp_result = {"competitor": comp.name, "tiktok": 0, "youtube": 0, "instagram": 0}
@@ -83,6 +84,7 @@ async def collect_all_social_posts(
                 await asyncio.sleep(0.3)
             except Exception as e:
                 logger.error(f"TikTok collect error for {comp.name}: {e}")
+                errors_list.append(f"TikTok/{comp.name}: {str(e)[:100]}")
 
         # YouTube videos
         if comp.youtube_channel_id:
@@ -121,6 +123,7 @@ async def collect_all_social_posts(
                 await asyncio.sleep(0.3)
             except Exception as e:
                 logger.error(f"YouTube collect error for {comp.name}: {e}")
+                errors_list.append(f"YouTube/{comp.name}: {str(e)[:100]}")
 
         # Instagram posts (from profile endpoint)
         if comp.instagram_username:
@@ -174,18 +177,24 @@ async def collect_all_social_posts(
                 await asyncio.sleep(0.3)
             except Exception as e:
                 logger.error(f"Instagram collect error for {comp.name}: {e}")
+                errors_list.append(f"Instagram/{comp.name}: {str(e)[:100]}")
 
         results.append(comp_result)
 
     db.commit()
 
     total_posts = db.query(SocialPost).count()
+    if user:
+        total_posts = db.query(SocialPost).join(Competitor).filter(Competitor.user_id == user.id).count()
+
     return {
         "message": f"Collected {total_new} new posts, updated {total_updated}",
         "new": total_new,
         "updated": total_updated,
         "total_in_db": total_posts,
         "by_competitor": results,
+        "errors": errors_list,
+        "competitors_scanned": len(competitors),
     }
 
 

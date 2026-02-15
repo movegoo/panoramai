@@ -956,7 +956,7 @@ export const geoTrackingAPI = {
 
 export const socialContentAPI = {
   collectAll: () =>
-    fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[] }>(
+    fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(
       "/social-content/collect-all",
       { method: "POST" }
     ),

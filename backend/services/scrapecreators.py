@@ -158,43 +158,51 @@ class ScrapeCreatorsAPI:
             logger.error(f"Error parsing TikTok response for {handle}: {e}")
             return {"success": False, "error": f"Parse error: {e}"}
 
+    def _parse_tiktok_video_item(self, item: dict) -> dict:
+        """Parse a TikTok video item from any response format."""
+        stats = item.get("stats", {})
+        return {
+            "id": item.get("id", item.get("video_id", "")),
+            "description": item.get("desc", item.get("description", "")),
+            "create_time": item.get("createTime", item.get("create_time")),
+            "views": stats.get("playCount", item.get("playCount", item.get("views", 0))) or 0,
+            "likes": stats.get("diggCount", item.get("diggCount", item.get("likes", 0))) or 0,
+            "comments": stats.get("commentCount", item.get("commentCount", item.get("comments", 0))) or 0,
+            "shares": stats.get("shareCount", item.get("shareCount", item.get("shares", 0))) or 0,
+        }
+
     async def fetch_tiktok_videos(self, handle: str, limit: int = 10) -> Dict:
-        """Fetch recent TikTok videos for a user."""
+        """Fetch recent TikTok videos for a user. Falls back to profile endpoint."""
         handle = handle.lstrip("@")
+
+        # Try dedicated videos endpoint first
         data = await self._get("/v1/tiktok/profile/videos", {
             "handle": handle,
             "limit": limit
         })
 
-        if not data.get("success"):
-            return data
+        if data.get("success"):
+            items = data.get("videos", data.get("items", []))
+            if items:
+                try:
+                    videos = [self._parse_tiktok_video_item(item) for item in items[:limit]]
+                    return {"success": True, "username": handle, "videos": videos, "count": len(videos)}
+                except Exception as e:
+                    logger.error(f"Error parsing TikTok videos for {handle}: {e}")
 
-        try:
-            videos = []
-            for item in data.get("videos", data.get("items", []))[:limit]:
-                videos.append({
-                    "id": item.get("id"),
-                    "description": item.get("desc", item.get("description", "")),
-                    "create_time": item.get("createTime"),
-                    "views": item.get("stats", {}).get("playCount",
-                             item.get("playCount", 0)),
-                    "likes": item.get("stats", {}).get("diggCount",
-                             item.get("diggCount", 0)),
-                    "comments": item.get("stats", {}).get("commentCount",
-                                item.get("commentCount", 0)),
-                    "shares": item.get("stats", {}).get("shareCount",
-                              item.get("shareCount", 0)),
-                })
+        # Fallback: try profile endpoint which may embed recent videos
+        logger.info(f"TikTok videos endpoint failed for {handle}, trying profile fallback")
+        fallback = await self._get("/v1/tiktok/profile", {"handle": handle})
+        if fallback.get("success"):
+            items = fallback.get("items", fallback.get("videos", fallback.get("itemList", [])))
+            if items:
+                try:
+                    videos = [self._parse_tiktok_video_item(item) for item in items[:limit]]
+                    return {"success": True, "username": handle, "videos": videos, "count": len(videos)}
+                except Exception as e:
+                    logger.error(f"Error parsing TikTok profile videos for {handle}: {e}")
 
-            return {
-                "success": True,
-                "username": handle,
-                "videos": videos,
-                "count": len(videos),
-            }
-        except Exception as e:
-            logger.error(f"Error parsing TikTok videos for {handle}: {e}")
-            return {"success": False, "error": str(e)}
+        return data if not data.get("success") else {"success": True, "username": handle, "videos": [], "count": 0}
 
     # =========================================================================
     # YouTube
@@ -238,8 +246,22 @@ class ScrapeCreatorsAPI:
             logger.error(f"Error parsing YouTube response: {e}")
             return {"success": False, "error": f"Parse error: {e}"}
 
+    def _parse_youtube_video_item(self, item: dict) -> dict:
+        """Parse a YouTube video item from any response format."""
+        return {
+            "video_id": item.get("videoId", item.get("video_id", "")),
+            "title": item.get("title", "")[:1000],
+            "description": item.get("description", "")[:500],
+            "published_at": item.get("publishedTimeText", item.get("published_at", "")),
+            "thumbnail_url": item.get("thumbnail", item.get("thumbnail_url", "")),
+            "views": item.get("viewCount", item.get("views", 0)) or 0,
+            "likes": item.get("likeCount", item.get("likes", 0)) or 0,
+            "comments": item.get("commentCount", item.get("comments", 0)) or 0,
+            "duration": item.get("lengthText", item.get("duration", "")),
+        }
+
     async def fetch_youtube_videos(self, handle: str = None, channel_id: str = None, limit: int = 10) -> Dict:
-        """Fetch recent YouTube videos for a channel."""
+        """Fetch recent YouTube videos for a channel. Falls back to channel endpoint."""
         params = {}
         if handle:
             params["handle"] = handle.lstrip("@")
@@ -248,34 +270,31 @@ class ScrapeCreatorsAPI:
         else:
             return {"success": False, "error": "Provide handle or channel_id"}
 
+        # Try dedicated videos endpoint
         data = await self._get("/v1/youtube/channel-videos", params)
 
-        if not data.get("success"):
-            return data
+        if data.get("success"):
+            items = data.get("videos", data.get("items", []))
+            if items:
+                try:
+                    videos = [self._parse_youtube_video_item(item) for item in items[:limit]]
+                    return {"success": True, "videos": videos, "count": len(videos)}
+                except Exception as e:
+                    logger.error(f"Error parsing YouTube videos: {e}")
 
-        try:
-            videos = []
-            for item in data.get("videos", [])[:limit]:
-                videos.append({
-                    "video_id": item.get("videoId", ""),
-                    "title": item.get("title", ""),
-                    "description": item.get("description", "")[:500],
-                    "published_at": item.get("publishedTimeText", ""),
-                    "thumbnail_url": item.get("thumbnail", ""),
-                    "views": item.get("viewCount", 0),
-                    "likes": item.get("likeCount", 0),
-                    "comments": item.get("commentCount", 0),
-                    "duration": item.get("lengthText", ""),
-                })
+        # Fallback: try channel endpoint which may embed recent videos
+        logger.info(f"YouTube videos endpoint failed, trying channel fallback")
+        fallback = await self._get("/v1/youtube/channel", params)
+        if fallback.get("success"):
+            items = fallback.get("videos", fallback.get("items", fallback.get("latestVideos", [])))
+            if items:
+                try:
+                    videos = [self._parse_youtube_video_item(item) for item in items[:limit]]
+                    return {"success": True, "videos": videos, "count": len(videos)}
+                except Exception as e:
+                    logger.error(f"Error parsing YouTube channel videos: {e}")
 
-            return {
-                "success": True,
-                "videos": videos,
-                "count": len(videos),
-            }
-        except Exception as e:
-            logger.error(f"Error parsing YouTube videos: {e}")
-            return {"success": False, "error": str(e)}
+        return data if not data.get("success") else {"success": True, "videos": [], "count": 0}
 
     # =========================================================================
     # Facebook

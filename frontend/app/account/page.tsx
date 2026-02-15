@@ -487,14 +487,14 @@ function ConnectorsSection() {
         </div>
 
         {/* Connector grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map(connector => {
             const Icon = connector.icon;
             const isConnecting = connectingId === connector.id;
             return (
               <div
                 key={connector.id}
-                className={`relative rounded-xl border p-4 transition-all ${
+                className={`rounded-xl border p-4 transition-all ${
                   connector.status === "connected"
                     ? `${connector.bg} ${connector.border} border-2`
                     : connector.status === "coming_soon"
@@ -502,25 +502,7 @@ function ConnectorsSection() {
                     : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
                 }`}
               >
-                {/* Status badge */}
-                {connector.status === "connected" && (
-                  <div className="absolute top-3 right-3">
-                    <span className="flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Connecte
-                    </span>
-                  </div>
-                )}
-                {connector.status === "coming_soon" && (
-                  <div className="absolute top-3 right-3">
-                    <span className="flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                      <Clock className="h-2.5 w-2.5" />
-                      Bientot
-                    </span>
-                  </div>
-                )}
-
-                {/* Icon + Info */}
+                {/* Icon + Info + Status badge */}
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${
                     connector.status === "connected" ? "bg-white shadow-sm" : connector.bg
@@ -528,11 +510,25 @@ function ConnectorsSection() {
                     <Icon className={`h-5 w-5 ${connector.color}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-semibold ${
-                      connector.status === "coming_soon" ? "text-gray-500" : "text-foreground"
-                    }`}>
-                      {connector.name}
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className={`text-sm font-semibold ${
+                        connector.status === "coming_soon" ? "text-gray-500" : "text-foreground"
+                      }`}>
+                        {connector.name}
+                      </p>
+                      {connector.status === "connected" && (
+                        <span className="flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Connecte
+                        </span>
+                      )}
+                      {connector.status === "coming_soon" && (
+                        <span className="flex items-center gap-1 rounded-full bg-gray-100 border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 shrink-0">
+                          <Clock className="h-2.5 w-2.5" />
+                          Bientot
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
                       {connector.description}
                     </p>
@@ -790,7 +786,7 @@ export default function AccountPage() {
   const remainingCount = suggestions.filter((s) => !s.already_tracked).length;
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6">
       {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
@@ -964,7 +960,7 @@ export default function AccountPage() {
             /* ── Profile display ── */
             <div className="space-y-4">
               {/* Info grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Nom</p>
                   <p className="font-semibold">{profile.company_name}</p>
