@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List, Optional, Dict
 
-from database import get_db, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
+import json
+from database import get_db, Ad, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
 from core.trends import calculate_trend, TrendDirection
 from core.auth import get_current_user
@@ -647,6 +648,76 @@ async def enrich_competitor(
     return {
         "message": f"Enrichissement terminé pour '{comp.name}'",
         "results": results,
+    }
+
+
+@router.post("/{competitor_id}/suggest-child-pages")
+async def suggest_child_pages(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Analyze existing ads to find potential child pages (pages filles).
+    A child page is a Facebook page with a different page_id but a similar
+    page_name to the competitor (e.g. regional or product sub-pages).
+    """
+    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
+
+    # Get the main page_id
+    main_page_id = comp.facebook_page_id
+
+    # Find all distinct page_ids in this competitor's ads
+    ads = db.query(Ad).filter(Ad.competitor_id == competitor_id, Ad.page_id.isnot(None)).all()
+    page_map: dict[str, dict] = {}
+    for ad in ads:
+        pid = ad.page_id
+        if pid and pid not in page_map:
+            page_map[pid] = {"page_id": pid, "page_name": ad.page_name or "Inconnu", "ad_count": 0}
+        if pid:
+            page_map[pid]["ad_count"] += 1
+
+    # Already tracked child pages
+    existing_children = set()
+    if comp.child_page_ids:
+        try:
+            existing_children = set(json.loads(comp.child_page_ids))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Also look for ads from all competitors that share a similar page name
+    comp_name = comp.name.lower()
+    similar_ads = db.query(Ad.page_id, Ad.page_name).filter(
+        Ad.page_id.isnot(None),
+        Ad.page_name.isnot(None),
+    ).distinct().all()
+
+    for pid, pname in similar_ads:
+        if pid and pname and pid not in page_map:
+            pname_lower = pname.lower()
+            # Check if page_name contains the competitor name or vice versa
+            if (comp_name in pname_lower or pname_lower.startswith(comp_name[:4])) and pid != main_page_id:
+                page_map[pid] = {"page_id": pid, "page_name": pname, "ad_count": 0}
+
+    # Filter: exclude main page, mark already tracked
+    suggestions = []
+    for pid, info in page_map.items():
+        if pid == main_page_id:
+            continue
+        info["already_tracked"] = pid in existing_children
+        suggestions.append(info)
+
+    suggestions.sort(key=lambda x: x["ad_count"], reverse=True)
+
+    return {
+        "competitor_id": competitor_id,
+        "competitor_name": comp.name,
+        "main_page_id": main_page_id,
+        "suggestions": suggestions,
+        "existing_children": sorted(existing_children),
     }
 
 

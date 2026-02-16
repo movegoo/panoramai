@@ -250,10 +250,35 @@ def _seed_prompt_templates():
         db.close()
 
 
+def _backfill_ad_types():
+    """Classify existing ads that have no ad_type."""
+    from database import Ad
+    from routers.facebook import _classify_ad_type
+
+    db = SessionLocal()
+    try:
+        ads = db.query(Ad).filter(Ad.ad_type.is_(None)).all()
+        if not ads:
+            return
+        for ad in ads:
+            ad.ad_type = _classify_ad_type(ad.link_url, ad.creative_concept, ad.cta, ad.display_format)
+        db.commit()
+        logger.info(f"Backfilled ad_type for {len(ads)} ads")
+    except Exception as e:
+        logger.warning(f"Ad type backfill warning: {e}")
+    finally:
+        db.close()
+
+
 async def _deferred_startup():
     """Run slow startup tasks in background so healthcheck passes fast."""
     import asyncio
     await asyncio.sleep(2)  # Let the server start first
+
+    try:
+        _backfill_ad_types()
+    except Exception as e:
+        logger.error(f"Ad type backfill failed (non-fatal): {e}")
 
     try:
         _refresh_logo_urls()

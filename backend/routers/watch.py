@@ -794,9 +794,21 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             for pp in pps:
                 comp_platforms.add(pp)
 
-        # Estimated spend
-        spend_min = sum(a.estimated_spend_min or 0 for a in ads)
-        spend_max = sum(a.estimated_spend_max or 0 for a in ads)
+        # Estimated spend (priority: declared > impressions x CPM > reach x CPM)
+        spend_min = 0
+        spend_max = 0
+        for a in ads:
+            if a.estimated_spend_min and a.estimated_spend_min > 0:
+                spend_min += a.estimated_spend_min
+                spend_max += a.estimated_spend_max or a.estimated_spend_min
+            elif a.impressions_min and a.impressions_min > 0:
+                cpm = 3.0  # Default CPM for Meta FR
+                spend_min += (a.impressions_min / 1000) * cpm
+                spend_max += ((a.impressions_max or a.impressions_min) / 1000) * cpm
+            elif a.eu_total_reach and a.eu_total_reach > 100:
+                cpm = 3.0
+                spend_min += (a.eu_total_reach / 1000) * cpm * 0.7
+                spend_max += (a.eu_total_reach / 1000) * cpm * 1.3
 
         competitor_ad_summary.append({
             "id": cid,
@@ -828,8 +840,20 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         competitor_ad_summary, format_counts, platform_counts, brand_name
     )
 
-    total_spend_min = sum(a.estimated_spend_min or 0 for a in all_ads)
-    total_spend_max = sum(a.estimated_spend_max or 0 for a in all_ads)
+    total_spend_min = 0
+    total_spend_max = 0
+    for a in all_ads:
+        if a.estimated_spend_min and a.estimated_spend_min > 0:
+            total_spend_min += a.estimated_spend_min
+            total_spend_max += a.estimated_spend_max or a.estimated_spend_min
+        elif a.impressions_min and a.impressions_min > 0:
+            cpm = 3.0
+            total_spend_min += (a.impressions_min / 1000) * cpm
+            total_spend_max += ((a.impressions_max or a.impressions_min) / 1000) * cpm
+        elif a.eu_total_reach and a.eu_total_reach > 100:
+            cpm = 3.0
+            total_spend_min += (a.eu_total_reach / 1000) * cpm * 0.7
+            total_spend_max += (a.eu_total_reach / 1000) * cpm * 1.3
 
     return {
         "total_ads": len(all_ads),

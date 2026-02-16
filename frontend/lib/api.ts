@@ -127,6 +127,8 @@ export interface Ad {
   creative_tags?: string[];
   creative_summary?: string;
   creative_analyzed_at?: string;
+  // Ad type segmentation
+  ad_type?: string;  // "branding" | "performance" | "dts"
 }
 
 export interface InstagramData {
@@ -487,6 +489,11 @@ export const competitorsAPI = {
 
   enrich: (id: number) =>
     fetchAPI<{ message: string; results: Record<string, any> }>(`/competitors/${id}/enrich`, {
+      method: "POST",
+    }),
+
+  suggestChildPages: (id: number) =>
+    fetchAPI<{ competitor_id: number; competitor_name: string; main_page_id: string; suggestions: any[]; existing_children: string[] }>(`/competitors/${id}/suggest-child-pages`, {
       method: "POST",
     }),
 };

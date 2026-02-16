@@ -131,6 +131,7 @@ def _serialize_ad(ad: Ad) -> dict:
         "creative_tags": _parse_json(ad.creative_tags),
         "creative_summary": ad.creative_summary,
         "creative_analyzed_at": ad.creative_analyzed_at.isoformat() if ad.creative_analyzed_at else None,
+        "ad_type": ad.ad_type,
     }
 
 
@@ -334,9 +335,13 @@ async def fetch_competitor_ads(
             competitor.facebook_page_id = page_id
             logger.info(f"Auto-filled facebook_page_id={page_id} for {competitor.name} from ad data")
 
+        # Classify ad type
+        ad_type = _classify_ad_type(link_url, None, cta, display_format)
+
         # Common fields dict
         enriched = dict(
             platform=platform,
+            ad_type=ad_type,
             creative_url=creative_url,
             ad_text=ad_text,
             cta=cta,
@@ -377,11 +382,77 @@ async def fetch_competitor_ads(
 
     db.commit()
 
+    # Fetch child pages (pages filles) — aggregate into parent competitor
+    child_new = 0
+    child_page_ids_list = []
+    if competitor.child_page_ids:
+        try:
+            child_page_ids_list = json.loads(competitor.child_page_ids)
+        except (json.JSONDecodeError, TypeError):
+            child_page_ids_list = []
+
+    for child_id in child_page_ids_list:
+        child_id = str(child_id).strip()
+        if not child_id:
+            continue
+        try:
+            child_result = await scrapecreators.fetch_facebook_company_ads(page_id=child_id)
+            if not child_result.get("success"):
+                continue
+            for ad in child_result.get("ads", []):
+                ad_id = str(ad.get("ad_archive_id", ""))
+                if not ad_id:
+                    continue
+                if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                    continue
+                snapshot = ad.get("snapshot", {})
+                cards = snapshot.get("cards", [])
+                first_card = cards[0] if cards else {}
+                ad_text = first_card.get("body") or snapshot.get("body", {}).get("text", "") or ""
+                cta = first_card.get("cta_text") or snapshot.get("cta_text", "")
+                creative_url = first_card.get("original_image_url") or first_card.get("resized_image_url") or ""
+                start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+                end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+                link_url_val = first_card.get("link_url") or snapshot.get("link_url", "")
+                display_fmt = snapshot.get("display_format", "")
+                ad_type = _classify_ad_type(link_url_val, None, cta, display_fmt)
+                pubs = ad.get("publisher_platform", [])
+                if not isinstance(pubs, list):
+                    pubs = [pubs] if pubs else []
+                platform = "facebook"
+                for p in pubs:
+                    if "INSTAGRAM" in str(p).upper():
+                        platform = "instagram"
+                        break
+                new_ad = Ad(
+                    competitor_id=competitor_id,
+                    ad_id=ad_id,
+                    platform=platform,
+                    ad_type=ad_type,
+                    creative_url=creative_url,
+                    ad_text=ad_text,
+                    cta=cta,
+                    start_date=start_date,
+                    end_date=end_date,
+                    is_active=ad.get("is_active", not bool(end_date)),
+                    page_name=snapshot.get("page_name", "") or None,
+                    page_id=child_id,
+                    link_url=link_url_val or None,
+                    display_format=display_fmt or None,
+                    ad_library_url=ad.get("url", "") or None,
+                )
+                db.add(new_ad)
+                child_new += 1
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Child page {child_id} fetch failed: {e}")
+
     return {
-        "message": f"Fetched {len(ads_data)} ads for {competitor.name}",
+        "message": f"Fetched {len(ads_data)} ads for {competitor.name}" + (f" + {child_new} from child pages" if child_new else ""),
         "total_fetched": len(ads_data),
         "new_stored": new_count,
         "updated": updated_count,
+        "child_pages_new": child_new,
         "total_available": result.get("total_available", len(ads_data)),
         "method": "page_id" if use_page_id else "keyword_search",
         "facebook_page_id": page_id_used,
@@ -534,6 +605,56 @@ async def compare_competitors_ads(
 # =============================================================================
 # Helpers
 # =============================================================================
+
+import re
+
+def _classify_ad_type(link_url: str | None, creative_concept: str | None, cta: str | None, display_format: str | None) -> str:
+    """Classify an ad as branding, performance, or dts (drive-to-store)."""
+    link = (link_url or "").lower()
+    cta_lower = (cta or "").lower()
+    concept = (creative_concept or "").lower()
+    fmt = (display_format or "").upper()
+
+    # DPA = always performance
+    if fmt == "DPA":
+        return "performance"
+
+    # Drive-to-Store signals
+    dts_url_patterns = [
+        r"store.?locator", r"magasin", r"maps\.google", r"google\.com/maps",
+        r"trouver.?magasin", r"point.?de.?vente", r"boutique.?pres",
+    ]
+    dts_cta_patterns = [
+        r"trouver", r"itin[eé]raire", r"magasin", r"store",
+        r"get.?directions", r"find.?store", r"localiser",
+    ]
+    for pat in dts_url_patterns:
+        if re.search(pat, link):
+            return "dts"
+    for pat in dts_cta_patterns:
+        if re.search(pat, cta_lower):
+            return "dts"
+
+    # Performance signals
+    perf_url_patterns = [
+        r"/product", r"/shop", r"/cart", r"/panier", r"/checkout",
+        r"\?utm_", r"/collection", r"/catalogue", r"/promo",
+    ]
+    perf_cta_patterns = [
+        r"acheter", r"commander", r"shop.?now", r"buy",
+        r"ajouter.?au.?panier", r"add.?to.?cart", r"en.?savoir.?plus",
+        r"voir.?l.?offre", r"profiter", r"d[eé]couvrir.?l.?offre",
+    ]
+    for pat in perf_url_patterns:
+        if re.search(pat, link):
+            return "performance"
+    for pat in perf_cta_patterns:
+        if re.search(pat, cta_lower):
+            return "performance"
+
+    # Everything else = branding
+    return "branding"
+
 
 def _parse_json(value: str) -> list:
     """Parse a JSON string to list, or return empty list."""

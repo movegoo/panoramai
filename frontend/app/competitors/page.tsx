@@ -48,6 +48,7 @@ import {
   Clock,
   Zap,
   RefreshCw,
+  X,
   Info,
   ShieldCheck,
   Radar,
@@ -121,6 +122,9 @@ export default function CompetitorsPage() {
 
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [childPageIds, setChildPageIds] = useState<string[]>([]);
+  const [childSuggestions, setChildSuggestions] = useState<any[]>([]);
+  const [detectingChildren, setDetectingChildren] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,6 +206,8 @@ export default function CompetitorsPage() {
       appstore_app_id: "",
     });
     setEditingCompetitor(null);
+    setChildPageIds([]);
+    setChildSuggestions([]);
   }
 
   function handleEdit(competitor: Competitor) {
@@ -216,6 +222,12 @@ export default function CompetitorsPage() {
       playstore_app_id: competitor.playstore_app_id || "",
       appstore_app_id: competitor.appstore_app_id || "",
     });
+    // Load existing child page IDs
+    try {
+      const existing = (competitor as any).child_page_ids;
+      setChildPageIds(existing ? JSON.parse(existing) : []);
+    } catch { setChildPageIds([]); }
+    setChildSuggestions([]);
     setDialogOpen(true);
   }
 
@@ -223,7 +235,11 @@ export default function CompetitorsPage() {
     e.preventDefault();
     try {
       if (editingCompetitor) {
-        await competitorsAPI.update(editingCompetitor.id, formData);
+        const updateData = {
+          ...formData,
+          child_page_ids: childPageIds.length > 0 ? JSON.stringify(childPageIds) : null,
+        };
+        await competitorsAPI.update(editingCompetitor.id, updateData);
       } else {
         await competitorsAPI.create(formData);
       }
@@ -431,6 +447,79 @@ export default function CompetitorsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Child pages (pages filles) — only in edit mode */}
+              {editingCompetitor && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <Globe className="h-3.5 w-3.5 text-violet-500" />
+                      Pages filles (sous-pages Facebook)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      disabled={detectingChildren}
+                      onClick={async () => {
+                        setDetectingChildren(true);
+                        try {
+                          const res = await competitorsAPI.suggestChildPages(editingCompetitor.id);
+                          setChildSuggestions(res.suggestions || []);
+                        } catch (err) {
+                          console.error("Failed to detect child pages:", err);
+                        } finally {
+                          setDetectingChildren(false);
+                        }
+                      }}
+                    >
+                      {detectingChildren ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                      Detecter
+                    </Button>
+                  </div>
+                  {/* Current child pages */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {childPageIds.map((pid) => (
+                      <span key={pid} className="inline-flex items-center gap-1 text-xs bg-violet-50 text-violet-700 border border-violet-200 px-2 py-1 rounded-full">
+                        {pid}
+                        <button
+                          type="button"
+                          onClick={() => setChildPageIds(prev => prev.filter(id => id !== pid))}
+                          className="text-violet-400 hover:text-violet-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                    {childPageIds.length === 0 && <span className="text-xs text-muted-foreground">Aucune page fille configuree</span>}
+                  </div>
+                  {/* Suggestions */}
+                  {childSuggestions.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Suggestions</span>
+                      {childSuggestions.filter(s => !childPageIds.includes(s.page_id)).map((s) => (
+                        <div key={s.page_id} className="flex items-center justify-between text-xs bg-muted/50 rounded-lg px-3 py-2">
+                          <span>
+                            <span className="font-medium">{s.page_name}</span>
+                            <span className="text-muted-foreground ml-1.5">({s.page_id})</span>
+                            {s.ad_count > 0 && <span className="text-muted-foreground ml-1">- {s.ad_count} pubs</span>}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs gap-1 text-violet-600"
+                            onClick={() => setChildPageIds(prev => [...prev, s.page_id])}
+                          >
+                            <Plus className="h-3 w-3" /> Ajouter
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <DialogFooter className="gap-2">
                 <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>

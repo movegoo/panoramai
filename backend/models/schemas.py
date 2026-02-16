@@ -288,6 +288,7 @@ class CompetitorUpdate(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    child_page_ids: Optional[str] = None  # JSON array of child Facebook page IDs
 
 
 class CompetitorCard(BaseModel):

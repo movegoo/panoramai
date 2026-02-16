@@ -147,12 +147,9 @@ const CPM_BENCHMARKS: Record<string, { meta: number; tiktok: number; google: num
   DEFAULT: { meta: 3.0, tiktok: 2.0, google: 1.0 },
 };
 
-function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | null {
-  // If we already have spend data, skip estimation
+function estimateBudget(ad: AdWithCompetitor): { min: number; max: number; method: string } | null {
+  // Priority 1: Declared spend from Meta
   if (ad.estimated_spend_min && ad.estimated_spend_min > 0) return null;
-
-  const reach = ad.eu_total_reach;
-  if (!reach || reach < 100) return null;
 
   // Determine platform CPM
   const source = normalizeSource(ad.platform);
@@ -160,11 +157,26 @@ function estimateBudget(ad: AdWithCompetitor): { min: number; max: number } | nu
   const benchmark = CPM_BENCHMARKS[country] || CPM_BENCHMARKS.DEFAULT;
   const cpm = (benchmark as Record<string, number>)[source] || benchmark.meta;
 
-  // Budget = (reach / 1000) * CPM (with range +-30%)
+  // Priority 2: Impressions x CPM
+  if (ad.impressions_min && ad.impressions_min > 0) {
+    const minBudget = (ad.impressions_min / 1000) * cpm;
+    const maxBudget = ad.impressions_max ? (ad.impressions_max / 1000) * cpm : minBudget * 1.3;
+    return {
+      min: Math.round(minBudget),
+      max: Math.round(maxBudget),
+      method: "impressions",
+    };
+  }
+
+  // Priority 3: Reach x CPM (fallback)
+  const reach = ad.eu_total_reach;
+  if (!reach || reach < 100) return null;
+
   const estimated = (reach / 1000) * cpm;
   return {
     min: Math.round(estimated * 0.7),
     max: Math.round(estimated * 1.3),
+    method: "reach",
   };
 }
 
@@ -265,7 +277,7 @@ function InfoTooltip({ text, className = "", light = false }: { text: string; cl
 /* ─────────────── Methodology texts ─────────────── */
 
 const METHODOLOGY = {
-  budget: "Budget = (Reach EU / 1000) x CPM pays. CPM benchmarks FR : 3\u20AC Meta / 2\u20AC TikTok / 1\u20AC Google. Fourchette \u00B130%. Quand Meta fournit un budget d\u00E9clar\u00E9, celui-ci est utilis\u00E9 en priorit\u00E9.",
+  budget: "Budget estim\u00E9 : 1) Budget d\u00E9clar\u00E9 Meta si disponible, 2) Impressions x CPM, 3) Reach EU x CPM (fallback). CPM benchmarks FR : 3\u20AC Meta / 2\u20AC TikTok / 1\u20AC Google.",
   reach: "Couverture EU totale d\u00E9clar\u00E9e par Meta via l\u2019EU Ad Transparency Center. Nombre de personnes uniques ayant vu la pub dans l\u2019UE.",
   duration: "Dur\u00E9e moyenne = (date de fin - date de d\u00E9but) pour chaque pub termin\u00E9e. Les pubs encore actives (sans date de fin) sont exclues du calcul.",
   demographics: "Donn\u00E9es issues du Meta EU Ad Transparency Center. R\u00E9partition par \u00E2ge/genre/pays des personnes atteintes. Disponible uniquement pour les pubs Meta diffus\u00E9es dans l\u2019UE.",
@@ -495,6 +507,19 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
 
         {/* Quick metrics strip (always visible) */}
         <div className="flex items-center gap-2 flex-wrap">
+          {ad.ad_type && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+              ad.ad_type === "branding" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+              ad.ad_type === "performance" ? "bg-orange-50 text-orange-700 border-orange-200" :
+              ad.ad_type === "dts" ? "bg-blue-50 text-blue-700 border-blue-200" :
+              "bg-gray-50 text-gray-700 border-gray-200"
+            }`}>
+              {ad.ad_type === "branding" && <Megaphone className="h-2.5 w-2.5" />}
+              {ad.ad_type === "performance" && <TrendingUp className="h-2.5 w-2.5" />}
+              {ad.ad_type === "dts" && <MapPin className="h-2.5 w-2.5" />}
+              {ad.ad_type === "branding" ? "Branding" : ad.ad_type === "performance" ? "Performance" : ad.ad_type === "dts" ? "Drive-to-Store" : ad.ad_type}
+            </span>
+          )}
           {ad.eu_total_reach != null && ad.eu_total_reach > 0 && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
               <Target className="h-2.5 w-2.5" />{formatNumber(ad.eu_total_reach)}
@@ -1457,6 +1482,7 @@ export default function AdsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [filterGender, setFilterGender] = useState<"none" | "all" | "male" | "female">("none");
+  const [filterAdType, setFilterAdType] = useState<"all" | "branding" | "performance" | "dts">("all");
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
   const [showAllPayers, setShowAllPayers] = useState(false);
@@ -1720,9 +1746,19 @@ export default function AdsPage() {
     return counts;
   }, [allAds]);
 
+  const adTypeCounts = useMemo(() => {
+    const counts = { branding: 0, performance: 0, dts: 0 };
+    allAds.forEach(a => {
+      if (a.ad_type === "branding") counts.branding++;
+      else if (a.ad_type === "performance") counts.performance++;
+      else if (a.ad_type === "dts") counts.dts++;
+    });
+    return counts;
+  }, [allAds]);
+
   // Apply filters
   const filteredAds = useMemo(() => {
-    return allAds.filter(ad => {
+    let result = allAds.filter(ad => {
       if (filterSource.size > 0 && !filterSource.has(normalizeSource(ad.platform))) return false;
       if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
       if (filterPlatforms.size > 0 && !getPublisherPlatforms(ad).some(p => filterPlatforms.has(p))) return false;
@@ -1737,6 +1773,7 @@ export default function AdsPage() {
         const adLocs = (ad.location_audience || []).map(l => l.name.split(":")[0].trim());
         if (!adLocs.some(l => filterLocations.has(l))) return false;
       }
+      if (filterAdType !== "all" && ad.ad_type !== filterAdType) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const match = (ad.title || "").toLowerCase().includes(q)
@@ -1747,10 +1784,20 @@ export default function AdsPage() {
       }
       return true;
     });
-  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+    // Sort: ads with creative_url first, then by start_date descending
+    result.sort((a, b) => {
+      const aHasVisual = a.creative_url ? 1 : 0;
+      const bHasVisual = b.creative_url ? 1 : 0;
+      if (aHasVisual !== bHasVisual) return bHasVisual - aHasVisual;
+      const aDate = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const bDate = b.start_date ? new Date(b.start_date).getTime() : 0;
+      return bDate - aDate;
+    });
+    return result;
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, searchQuery]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, searchQuery]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
@@ -1758,7 +1805,8 @@ export default function AdsPage() {
   // Filtered stats
   const activeFilters = filterSource.size + filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
-    + (filterGender !== "none" ? 1 : 0) + filterLocations.size;
+    + (filterGender !== "none" ? 1 : 0) + filterLocations.size
+    + (filterAdType !== "all" ? 1 : 0);
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -2144,6 +2192,19 @@ export default function AdsPage() {
                   </div>
                 </div>
               )}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Type de pub</span>
+                  <InfoTooltip text="Segmentation automatique : Branding (notoriete), Performance (conversion/achat), Drive-to-Store (trafic en magasin)." />
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <FilterChip label="Tous" active={filterAdType === "all"} onClick={() => setFilterAdType("all")} />
+                  <FilterChip label="Branding" active={filterAdType === "branding"} onClick={() => setFilterAdType(filterAdType === "branding" ? "all" : "branding")} count={adTypeCounts.branding} icon={<Megaphone className="h-3 w-3" />} />
+                  <FilterChip label="Performance" active={filterAdType === "performance"} onClick={() => setFilterAdType(filterAdType === "performance" ? "all" : "performance")} count={adTypeCounts.performance} icon={<TrendingUp className="h-3 w-3" />} />
+                  <FilterChip label="Drive-to-Store" active={filterAdType === "dts"} onClick={() => setFilterAdType(filterAdType === "dts" ? "all" : "dts")} count={adTypeCounts.dts} icon={<MapPin className="h-3 w-3" />} />
+                </div>
+              </div>
             </div>
 
             {/* Row 2: Concurrent + Platform + Format (bounded) */}

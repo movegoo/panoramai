@@ -52,6 +52,7 @@ class Competitor(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_brand = Column(Boolean, default=False)
+    child_page_ids = Column(Text)  # JSON array of child Facebook page IDs
 
     user = relationship("User", back_populates="competitors")
 
@@ -124,6 +125,9 @@ class Ad(Base):
     creative_tags = Column(Text)                   # JSON: ["promo","lifestyle","bold-text"]
     creative_summary = Column(Text)                # 1-2 sentence AI description
     creative_analyzed_at = Column(DateTime)
+
+    # Ad type segmentation
+    ad_type = Column(String(20))  # branding, performance, dts
 
     competitor = relationship("Competitor", back_populates="ads")
 
@@ -518,6 +522,8 @@ def _run_migrations(engine):
             ("geo_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
             ("serp_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
             ("stores", "gps_verified", "BOOLEAN DEFAULT FALSE"),
+            ("ads", "ad_type", "VARCHAR(20)"),
+            ("competitors", "child_page_ids", "TEXT"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
