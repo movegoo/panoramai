@@ -1043,19 +1043,33 @@ export default function AccountPage() {
                   <Globe className="h-3.5 w-3.5 inline mr-1" />
                   Site web
                 </Label>
-                <div className="relative">
-                  <Input
-                    id="website"
-                    value={form.website}
-                    onChange={(e) => updateForm("website", e.target.value)}
-                    onBlur={handleWebsiteBlur}
-                    placeholder="https://www.auchan.fr"
-                    className={detectingSocials ? "pr-10" : ""}
-                  />
-                  {detectingSocials && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
-                    </div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="website"
+                      value={form.website}
+                      onChange={(e) => updateForm("website", e.target.value)}
+                      onBlur={handleWebsiteBlur}
+                      placeholder="https://www.auchan.fr"
+                      className={detectingSocials ? "pr-10" : ""}
+                    />
+                    {detectingSocials && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                      </div>
+                    )}
+                  </div>
+                  {form.website && !detectingSocials && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 shrink-0 text-violet-600 border-violet-200 hover:bg-violet-50"
+                      onClick={handleWebsiteBlur}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1" />
+                      Detecter
+                    </Button>
                   )}
                 </div>
                 {detectingSocials && (
