@@ -889,9 +889,111 @@ async def get_aso_analysis(
     # Generate recommendations
     recommendations = _generate_aso_recommendations(competitor_scores, brand_name)
 
-    return {
+    # AI diagnostic (optional, from editable prompt in DB)
+    ai_diagnostic = None
+    try:
+        ai_diagnostic = await _generate_ai_diagnostic(
+            competitor_scores, brand_name, brand.sector if brand else ""
+        )
+    except Exception as e:
+        logger.warning(f"ASO AI diagnostic skipped: {e}")
+
+    result = {
         "competitors": competitor_scores,
         "recommendations": recommendations,
         "brand_name": brand_name,
         "weights": WEIGHTS,
     }
+    if ai_diagnostic:
+        result["ai_diagnostic"] = ai_diagnostic
+    return result
+
+
+async def _generate_ai_diagnostic(
+    competitor_scores: list, brand_name: str | None, sector: str
+) -> dict | None:
+    """Generate an AI-powered ASO diagnostic using the editable prompt template."""
+    import httpx
+    import os
+    from core.config import settings
+
+    api_key = (
+        os.getenv("ANTHROPIC_API_KEY", "")
+        or os.getenv("CLAUDE_KEY", "")
+        or settings.ANTHROPIC_API_KEY
+    )
+    if not api_key:
+        return None
+
+    # Load prompt from DB
+    from database import SessionLocal, PromptTemplate
+    db = SessionLocal()
+    try:
+        row = db.query(PromptTemplate).filter(PromptTemplate.key == "aso_analysis").first()
+        if not row:
+            return None
+        prompt_text = row.prompt_text
+        model_id = row.model_id or "claude-haiku-4-5-20251001"
+        max_tokens = row.max_tokens or 1024
+    finally:
+        db.close()
+
+    # Build summary data for the prompt (strip heavy detail)
+    aso_summary = []
+    for cs in competitor_scores:
+        entry = {
+            "name": cs["competitor_name"],
+            "is_brand": cs.get("is_brand", False),
+            "aso_score_avg": cs.get("aso_score_avg", 0),
+        }
+        for store in ["playstore", "appstore"]:
+            if store in cs:
+                sd = cs[store]
+                entry[store] = {
+                    "aso_score": sd.get("aso_score", 0),
+                    "rating": sd.get("rating"),
+                    "reviews_count": sd.get("reviews_count"),
+                    "metadata_score": sd.get("metadata_score", {}).get("total", 0),
+                    "visual_score": sd.get("visual_score", {}).get("total", 0),
+                    "rating_score": sd.get("rating_score", {}).get("total", 0),
+                    "freshness_score": sd.get("freshness_score", {}).get("total", 0),
+                }
+        aso_summary.append(entry)
+
+    import json
+    prompt = prompt_text.format(
+        brand_name=brand_name or "",
+        sector=sector or "",
+        aso_data=json.dumps(aso_summary, ensure_ascii=False, indent=2),
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model_id,
+                    "max_tokens": max_tokens,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        if response.status_code != 200:
+            logger.warning(f"ASO AI diagnostic API error: {response.status_code}")
+            return None
+
+        text = response.json().get("content", [{}])[0].get("text", "")
+        # Parse JSON response
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.warning(f"ASO AI diagnostic parse error: {e}")
+        return None

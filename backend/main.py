@@ -179,35 +179,71 @@ async def _enrich_empty_competitors():
         db.close()
 
 
+ASO_ANALYSIS_PROMPT = """Tu es un expert ASO (App Store Optimization) pour les apps retail et grande distribution en France.
+A partir des scores ASO ci-dessous, genere un diagnostic strategique et des recommandations actionnables.
+
+Contexte : enseigne="{brand_name}", secteur="{sector}"
+
+Donnees ASO par concurrent :
+{aso_data}
+
+Retourne UNIQUEMENT un JSON valide (pas de markdown, pas de ```) :
+{{
+  "diagnostic": "<3-5 phrases de synthese strategique : positionnement ASO de l'enseigne vs concurrents, forces et faiblesses>",
+  "priorities": [
+    {{
+      "action": "<action concrete a mener>",
+      "impact": "<high|medium|low>",
+      "effort": "<high|medium|low>",
+      "store": "<playstore|appstore|both>",
+      "detail": "<1-2 phrases expliquant pourquoi et comment>"
+    }}
+  ],
+  "quick_wins": ["<action rapide 1>", "<action rapide 2>", "<action rapide 3>"],
+  "benchmark_insight": "<1 phrase sur ce que le leader fait mieux>"
+}}"""
+
+
 def _seed_prompt_templates():
-    """Seed default AI prompt templates if not already in DB."""
+    """Seed default AI prompt templates if not already in DB (by key)."""
     from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
     from services.social_content_analyzer import ANALYSIS_PROMPT as SOCIAL_PROMPT
 
+    defaults = [
+        {
+            "key": "creative_analysis",
+            "label": "Analyse creative publicitaire",
+            "prompt_text": CREATIVE_PROMPT,
+            "model_id": "claude-sonnet-4-5-20250929",
+            "max_tokens": 1024,
+        },
+        {
+            "key": "social_content",
+            "label": "Analyse contenu social media",
+            "prompt_text": SOCIAL_PROMPT,
+            "model_id": "claude-haiku-4-5-20251001",
+            "max_tokens": 512,
+        },
+        {
+            "key": "aso_analysis",
+            "label": "Diagnostic ASO (App Store Optimization)",
+            "prompt_text": ASO_ANALYSIS_PROMPT,
+            "model_id": "claude-haiku-4-5-20251001",
+            "max_tokens": 1024,
+        },
+    ]
+
     db = SessionLocal()
     try:
-        existing = db.query(PromptTemplate).count()
-        if existing > 0:
-            return
-        defaults = [
-            PromptTemplate(
-                key="creative_analysis",
-                label="Analyse creative publicitaire",
-                prompt_text=CREATIVE_PROMPT,
-                model_id="claude-sonnet-4-5-20250929",
-                max_tokens=1024,
-            ),
-            PromptTemplate(
-                key="social_content",
-                label="Analyse contenu social media",
-                prompt_text=SOCIAL_PROMPT,
-                model_id="claude-haiku-4-5-20251001",
-                max_tokens=512,
-            ),
-        ]
-        db.add_all(defaults)
-        db.commit()
-        logger.info("Seeded 2 default prompt templates")
+        existing_keys = {p.key for p in db.query(PromptTemplate.key).all()}
+        added = 0
+        for d in defaults:
+            if d["key"] not in existing_keys:
+                db.add(PromptTemplate(**d))
+                added += 1
+        if added:
+            db.commit()
+            logger.info(f"Seeded {added} new prompt template(s)")
     except Exception as e:
         logger.warning(f"Prompt template seed warning: {e}")
     finally:
