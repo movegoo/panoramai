@@ -546,17 +546,38 @@ class SocialSuggestRequest(BaseModel):
 async def suggest_socials(data: SocialSuggestRequest):
     """
     Auto-detect social media handles from the brand's website.
-    Scrapes the website HTML for links to Instagram, TikTok, YouTube,
-    Play Store, and App Store.
+    1. Scrapes the website HTML for links to social profiles.
+    2. Falls back to the built-in sector database if scraping yields no results.
     """
     suggestions = {}
+    source = "none"
 
     # 1. Scrape website for social links
     if data.website:
         suggestions = await _detect_socials_from_website(data.website)
+        if suggestions:
+            source = "website"
+
+    # 2. Fallback: look up company_name in sector database
+    if not suggestions and data.company_name:
+        name_lower = data.company_name.strip().lower()
+        for sector_data in SECTORS.values():
+            for comp in sector_data.get("competitors", []):
+                if comp["name"].lower() == name_lower:
+                    field_keys = [
+                        "instagram_username", "tiktok_username", "youtube_channel_id",
+                        "playstore_app_id", "appstore_app_id",
+                    ]
+                    for key in field_keys:
+                        if comp.get(key):
+                            suggestions[key] = comp[key]
+                    source = "sector_database"
+                    break
+            if suggestions:
+                break
 
     return {
         "suggestions": suggestions,
         "detected": len(suggestions),
-        "source": "website" if suggestions else "none",
+        "source": source,
     }
