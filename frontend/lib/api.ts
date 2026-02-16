@@ -803,6 +803,12 @@ export const brandAPI = {
       { method: "POST" }
     ),
 
+  suggestSocials: (companyName: string, website: string) =>
+    fetchAPI<{ suggestions: Record<string, string>; detected: number; source: string }>(
+      "/brand/suggest-socials",
+      { method: "POST", body: JSON.stringify({ company_name: companyName, website }) }
+    ),
+
   uploadLogo: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
