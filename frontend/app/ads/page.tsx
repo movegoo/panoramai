@@ -313,6 +313,12 @@ const FORMAT_LABELS: Record<string, { label: string; icon: string }> = {
 
 const AGE_ORDER = ["13-17", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"];
 
+const COUNTRY_LABELS: Record<string, string> = {
+  FR: "France", ES: "Espagne", IT: "Italie", DE: "Allemagne", PT: "Portugal",
+  BE: "Belgique", NL: "Pays-Bas", PL: "Pologne", RO: "Roumanie", CH: "Suisse",
+  AT: "Autriche", GB: "Royaume-Uni", US: "Etats-Unis", BR: "Bresil",
+};
+
 type AdWithCompetitor = Ad & { competitor_name: string };
 
 /* ─────────────── Sub-components ─────────────── */
@@ -1483,6 +1489,7 @@ export default function AdsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filterGender, setFilterGender] = useState<"none" | "all" | "male" | "female">("none");
   const [filterAdType, setFilterAdType] = useState<"all" | "branding" | "performance" | "dts">("all");
+  const [filterCountry, setFilterCountry] = useState<Set<string>>(new Set());
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
   const [showAllPayers, setShowAllPayers] = useState(false);
@@ -1756,6 +1763,35 @@ export default function AdsPage() {
     return counts;
   }, [allAds]);
 
+  const availableCountries = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      // Primary: targeted_countries
+      const countries = a.targeted_countries || [];
+      if (countries.length > 0) {
+        countries.forEach(c => map.set(c, (map.get(c) || 0) + 1));
+      } else if (a.page_name) {
+        // Fallback: extract country hint from page_name (e.g. "Decathlon France" → "FR")
+        const pageLower = a.page_name.toLowerCase();
+        const COUNTRY_HINTS: Record<string, string> = {
+          france: "FR", españa: "ES", espana: "ES", spain: "ES",
+          italia: "IT", italy: "IT", deutschland: "DE", germany: "DE",
+          portugal: "PT", romania: "RO", românia: "RO", belgique: "BE",
+          belgium: "BE", nederland: "NL", netherlands: "NL", polska: "PL",
+          poland: "PL", schweiz: "CH", suisse: "CH", österreich: "AT",
+          austria: "AT", uk: "GB", "united kingdom": "GB",
+        };
+        for (const [hint, code] of Object.entries(COUNTRY_HINTS)) {
+          if (pageLower.includes(hint)) {
+            map.set(code, (map.get(code) || 0) + 1);
+            break;
+          }
+        }
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
   // Apply filters
   const filteredAds = useMemo(() => {
     let result = allAds.filter(ad => {
@@ -1774,6 +1810,24 @@ export default function AdsPage() {
         if (!adLocs.some(l => filterLocations.has(l))) return false;
       }
       if (filterAdType !== "all" && ad.ad_type !== filterAdType) return false;
+      if (filterCountry.size > 0) {
+        const adCountries = ad.targeted_countries || [];
+        let matched = adCountries.some(c => filterCountry.has(c));
+        // Fallback: check page_name for country hint
+        if (!matched && ad.page_name) {
+          const pl = ad.page_name.toLowerCase();
+          const HINTS: Record<string, string> = {
+            france: "FR", españa: "ES", espana: "ES", italia: "IT",
+            deutschland: "DE", portugal: "PT", romania: "RO", românia: "RO",
+            belgique: "BE", nederland: "NL", polska: "PL", schweiz: "CH",
+            suisse: "CH", österreich: "AT", uk: "GB",
+          };
+          for (const [hint, code] of Object.entries(HINTS)) {
+            if (pl.includes(hint) && filterCountry.has(code)) { matched = true; break; }
+          }
+        }
+        if (!matched) return false;
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const match = (ad.title || "").toLowerCase().includes(q)
@@ -1794,10 +1848,10 @@ export default function AdsPage() {
       return bDate - aDate;
     });
     return result;
-  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, searchQuery]);
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, searchQuery]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, searchQuery]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
@@ -1806,7 +1860,7 @@ export default function AdsPage() {
   const activeFilters = filterSource.size + filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size
-    + (filterAdType !== "all" ? 1 : 0);
+    + (filterAdType !== "all" ? 1 : 0) + filterCountry.size;
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -2206,6 +2260,22 @@ export default function AdsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Country filter */}
+            {availableCountries.length > 1 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Pays</span>
+                  <InfoTooltip text="Pays cible des publicites (targeted_countries Meta) ou detecte depuis le nom de la page (ex: Decathlon France = FR)." />
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {availableCountries.map(([code, count]) => (
+                    <FilterChip key={code} label={COUNTRY_LABELS[code] || code} count={count} active={filterCountry.has(code)} onClick={() => toggleFilter(filterCountry, code, setFilterCountry)} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Row 2: Concurrent + Platform + Format (bounded) */}
             <div className="grid gap-4 sm:grid-cols-3">
