@@ -876,6 +876,45 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ── RECOMMANDATIONS ─────────────────────────────── */}
+      {adI.recommendations.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100">
+              <Lightbulb className="h-4 w-4 text-amber-600" />
+            </div>
+            <h2 className="text-[13px] font-semibold text-foreground">
+              Recommandations strategiques
+            </h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {adI.recommendations.map((rec, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-3 p-4 rounded-xl border text-[13px] leading-relaxed ${PRIORITY_STYLE[rec.priority] || "bg-muted/30 border-border"}`}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {rec.priority === "high" ? <AlertTriangle className="h-4 w-4" /> :
+                   rec.priority === "medium" ? <Lightbulb className="h-4 w-4" /> :
+                   <Zap className="h-4 w-4" />}
+                </div>
+                <div>
+                  <div className="font-medium mb-0.5">{rec.text}</div>
+                  {rec.market_share_pct > 0 && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="h-1.5 w-20 rounded-full bg-black/10 overflow-hidden">
+                        <div className="h-full rounded-full bg-current" style={{ width: `${Math.min(rec.market_share_pct, 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] tabular-nums">{rec.market_share_pct}% du marche</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Rankings + Ad Intelligence ── */}
       <div className="space-y-6">
 
@@ -1130,45 +1169,6 @@ export default function DashboardPage() {
           </div>{/* end ad intelligence grid */}
         </div>
       </div>
-
-      {/* ── RECOMMANDATIONS ─────────────────────────────── */}
-      {adI.recommendations.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100">
-              <Lightbulb className="h-4 w-4 text-amber-600" />
-            </div>
-            <h2 className="text-[13px] font-semibold text-foreground">
-              Recommandations stratégiques
-            </h2>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {adI.recommendations.map((rec, i) => (
-              <div
-                key={i}
-                className={`flex items-start gap-3 p-4 rounded-xl border text-[13px] leading-relaxed ${PRIORITY_STYLE[rec.priority] || "bg-muted/30 border-border"}`}
-              >
-                <div className="mt-0.5 shrink-0">
-                  {rec.priority === "high" ? <AlertTriangle className="h-4 w-4" /> :
-                   rec.priority === "medium" ? <Lightbulb className="h-4 w-4" /> :
-                   <Zap className="h-4 w-4" />}
-                </div>
-                <div>
-                  <div className="font-medium mb-0.5">{rec.text}</div>
-                  {rec.market_share_pct > 0 && (
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <div className="h-1.5 w-20 rounded-full bg-black/10 overflow-hidden">
-                        <div className="h-full rounded-full bg-current" style={{ width: `${Math.min(rec.market_share_pct, 100)}%` }} />
-                      </div>
-                      <span className="text-[10px] tabular-nums">{rec.market_share_pct}% du marche</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Insights strip ─────────────────────────────── */}
       {insights.length > 0 && (
