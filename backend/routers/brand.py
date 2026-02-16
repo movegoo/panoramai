@@ -142,6 +142,12 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         comp.tiktok_username = brand.tiktok_username
         comp.youtube_channel_id = brand.youtube_channel_id
         db.commit()
+        db.refresh(comp)
+
+        # Re-enrich after field updates
+        import asyncio
+        from routers.competitors import _auto_enrich_competitor
+        asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
 
     return comp
 
@@ -207,7 +213,7 @@ async def setup_brand(
     db.commit()
     db.refresh(brand)
 
-    # Create a mirror Competitor for the brand so its data gets enriched
+    # Create a mirror Competitor for the brand so its data gets enriched + auto-enrich
     _sync_brand_competitor(db, brand, user)
 
     suggestions = []
@@ -300,7 +306,7 @@ async def update_brand_profile(
     db.commit()
     db.refresh(brand)
 
-    # Sync to competitor mirror
+    # Sync to competitor mirror (triggers re-enrichment automatically)
     _sync_brand_competitor(db, brand, user)
 
     competitors_count = db.query(Competitor).filter(
