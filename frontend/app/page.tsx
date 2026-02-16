@@ -427,9 +427,12 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
                 <Sparkles className="h-6 w-6 text-white" />
               </div>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight mb-2">
+            <h1 className="text-2xl font-bold tracking-tight mb-1">
               Bienvenue sur panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
             </h1>
+            <p className="text-[11px] text-muted-foreground mb-2">
+              by <span className="font-semibold">mobsuccess</span>
+            </p>
             <p className="text-muted-foreground text-sm">
               Configurez votre enseigne pour lancer la veille concurrentielle
             </p>

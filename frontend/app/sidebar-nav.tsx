@@ -89,7 +89,7 @@ export function SidebarNav({ onClose }: { onClose?: () => void }) {
               panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
             </span>
             <span className="text-[10px] text-muted-foreground leading-none mt-0.5">
-              Veille concurrentielle
+              by <span className="font-semibold">mobsuccess</span>
             </span>
           </div>
         </div>

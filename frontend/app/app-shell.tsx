@@ -96,9 +96,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 shadow-sm">
                 <span className="text-[10px] font-bold text-white">P</span>
               </div>
-              <span className="text-[14px] font-bold tracking-tight text-foreground">
-                panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
-              </span>
+              <div className="flex flex-col">
+                <span className="text-[14px] font-bold tracking-tight text-foreground leading-none">
+                  panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
+                </span>
+                <span className="text-[9px] text-muted-foreground leading-none mt-0.5">
+                  by <span className="font-semibold">mobsuccess</span>
+                </span>
+              </div>
             </div>
           </div>
 

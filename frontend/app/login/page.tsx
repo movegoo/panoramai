@@ -47,7 +47,10 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight">
             panoram<span className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">AI</span>
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-[11px] text-muted-foreground">
+            by <span className="font-semibold">mobsuccess</span>
+          </p>
+          <p className="text-muted-foreground text-sm mt-2">
             {mode === "login" ? "Connectez-vous a votre compte" : "Creez votre compte"}
           </p>
         </div>
