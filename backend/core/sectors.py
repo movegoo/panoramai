@@ -23,6 +23,7 @@ SECTORS = {
                 "appstore_app_id": "756693888",
                 "instagram_username": "e.leclerc",
                 "tiktok_username": "e.leclerc",
+                "youtube_channel_id": "UCEIuUjFT_M_-ZA72h8LxgvQ",
             },
             {
                 "name": "Auchan",
@@ -31,6 +32,7 @@ SECTORS = {
                 "appstore_app_id": "393068659",
                 "instagram_username": "auchan_france",
                 "tiktok_username": "auchan",
+                "youtube_channel_id": "UCmciQZyg87a2bz9OYP8Lpdg",
             },
             {
                 "name": "Intermarché",
@@ -39,6 +41,7 @@ SECTORS = {
                 "appstore_app_id": "1447048498",
                 "instagram_username": "intermarche",
                 "tiktok_username": "intermarche",
+                "youtube_channel_id": "UC2pAIqBgaTxNbNRLPfsZdnw",
             },
             {
                 "name": "Lidl",
@@ -47,6 +50,7 @@ SECTORS = {
                 "appstore_app_id": "1238611143",
                 "instagram_username": "lidlfrance",
                 "tiktok_username": "lidlfrance",
+                "youtube_channel_id": "UCRMu2Bs7litn7jfnrh-STXA",
             },
             {
                 "name": "Monoprix",
@@ -55,6 +59,7 @@ SECTORS = {
                 "appstore_app_id": "966459890",
                 "instagram_username": "monoprix",
                 "tiktok_username": "monoprix",
+                "youtube_channel_id": "UCUFmvsGtcpYpEBoW04rm5Gw",
             },
             {
                 "name": "Casino",
@@ -63,6 +68,7 @@ SECTORS = {
                 "appstore_app_id": "1273195340",
                 "instagram_username": "groupecasino",
                 "tiktok_username": "casino_france",
+                "youtube_channel_id": "UC8rEGNIeih9VLNpaUjkypXA",
             },
             {
                 "name": "Système U",
@@ -80,6 +86,7 @@ SECTORS = {
                 "appstore_app_id": "6463642642",
                 "instagram_username": "franprix",
                 "tiktok_username": "franprix_fr",
+                "youtube_channel_id": "UCoOvNRuTeMyIQUSvoc8T1-g",
             },
             {
                 "name": "Picard",
@@ -95,6 +102,7 @@ SECTORS = {
                 "website": "https://www.grandfrais.com",
                 "instagram_username": "grandfrais_officiel",
                 "tiktok_username": "grandfraisfr",
+                "youtube_channel_id": "UCy_xVTDSgxFrqr4Yx35is3g",
             },
             {
                 "name": "Aldi",
@@ -103,6 +111,7 @@ SECTORS = {
                 "appstore_app_id": "579350544",
                 "instagram_username": "aldi_france",
                 "tiktok_username": "aldi.france",
+                "youtube_channel_id": "UCH6ncdjBHRkTiuaSq2pkvSQ",
             },
         ],
     },
@@ -156,6 +165,7 @@ SECTORS = {
                 "playstore_app_id": "com.canda.app",
                 "appstore_app_id": "1462636376",
                 "instagram_username": "ca",
+                "tiktok_username": "ca",
             },
             {
                 "name": "Jules",
@@ -219,11 +229,13 @@ SECTORS = {
                 "playstore_app_id": "com.douglas.nocibe",
                 "appstore_app_id": "1123649654",
                 "instagram_username": "nocibe_france",
+                "tiktok_username": "nocibe_france",
             },
             {
                 "name": "Yves Rocher",
                 "website": "https://www.yves-rocher.fr",
                 "playstore_app_id": "com.yvesrocher.yvesrocher",
+                "appstore_app_id": "485296924",
                 "instagram_username": "yvesrocherusa",
                 "tiktok_username": "yvesrocher",
                 "youtube_channel_id": "UCYCEvnHr3OH-WAUI8xWjU3w",
@@ -418,6 +430,7 @@ SECTORS = {
                 "appstore_app_id": "1079647629",
                 "instagram_username": "decathlon",
                 "tiktok_username": "decathlon",
+                "youtube_channel_id": "UCUq8JEJ0_NV_izL0xth4IiA",
             },
             {
                 "name": "Intersport",
@@ -426,6 +439,7 @@ SECTORS = {
                 "appstore_app_id": "6474043527",
                 "instagram_username": "intersport_fr",
                 "tiktok_username": "intersportfr",
+                "youtube_channel_id": "UCDS_mA4bqfkCp1OqoMh_lGA",
             },
             {
                 "name": "Go Sport",
@@ -441,6 +455,7 @@ SECTORS = {
                 "appstore_app_id": "1584144369",
                 "instagram_username": "sport2000france",
                 "tiktok_username": "sport2000france",
+                "youtube_channel_id": "UCEYk7XT0qB5A8Ih4NsQVcSA",
             },
             {
                 "name": "Nike",
@@ -449,6 +464,7 @@ SECTORS = {
                 "appstore_app_id": "484790225",
                 "instagram_username": "nike",
                 "tiktok_username": "nike",
+                "youtube_channel_id": "UCUFgkRb0ZHc4Rpq15VRCICA",
             },
             {
                 "name": "Adidas",
@@ -457,6 +473,7 @@ SECTORS = {
                 "appstore_app_id": "1001487498",
                 "instagram_username": "adidas",
                 "tiktok_username": "adidas",
+                "youtube_channel_id": "UCuLUOxd7ezJ8c6NSLBNRRfg",
             },
             {
                 "name": "JD Sports",
@@ -465,6 +482,7 @@ SECTORS = {
                 "appstore_app_id": "690602681",
                 "instagram_username": "jdsportsfr",
                 "tiktok_username": "jdsports",
+                "youtube_channel_id": "UCA3oGAAHcYVK3I55G7xY67A",
             },
             {
                 "name": "Courir",
@@ -472,6 +490,7 @@ SECTORS = {
                 "playstore_app_id": "com.courir.app",
                 "instagram_username": "courir",
                 "tiktok_username": "courir_sneakers",
+                "youtube_channel_id": "UCLYo5hQ4G5iR-CzU71oOr6Q",
             },
         ],
     },
@@ -547,6 +566,7 @@ SECTORS = {
                 "appstore_app_id": "922103212",
                 "instagram_username": "mcdonaldsfrance",
                 "tiktok_username": "mcdonaldsfrance",
+                "youtube_channel_id": "UC2_6yNdzqnTG8QxaeOdD_0g",
             },
             {
                 "name": "Burger King",
@@ -555,13 +575,16 @@ SECTORS = {
                 "appstore_app_id": "1045656548",
                 "instagram_username": "burgerkingfr",
                 "tiktok_username": "burgerkingfr",
+                "youtube_channel_id": "UC7xkj-B5JURNClrvM0EsUNA",
             },
             {
                 "name": "KFC",
                 "website": "https://www.kfc.fr",
                 "playstore_app_id": "com.yum.kfc.fr",
+                "appstore_app_id": "1622002883",
                 "instagram_username": "kfcfrance",
                 "tiktok_username": "kfc_france",
+                "youtube_channel_id": "UCnDx5LooMLSxV5CHzDYus7A",
             },
             {
                 "name": "Subway",
@@ -570,6 +593,7 @@ SECTORS = {
                 "appstore_app_id": "901941015",
                 "instagram_username": "subwayfrance",
                 "tiktok_username": "subwayfrance",
+                "youtube_channel_id": "UC4dRakuUqCjRVhBXdMj82eQ",
             },
             {
                 "name": "Domino's Pizza",
@@ -578,6 +602,7 @@ SECTORS = {
                 "appstore_app_id": "596817115",
                 "instagram_username": "dominosfrance",
                 "tiktok_username": "dominosfrance",
+                "youtube_channel_id": "UCQGt3HttTUgez4RCJnqf5lg",
             },
             {
                 "name": "Five Guys",
@@ -594,6 +619,7 @@ SECTORS = {
                 "appstore_app_id": "1510837681",
                 "instagram_username": "otacos",
                 "tiktok_username": "otacos_officiel",
+                "youtube_channel_id": "UC81poO9501wV6jr83JgxYaA",
             },
             {
                 "name": "Starbucks",
@@ -602,6 +628,7 @@ SECTORS = {
                 "appstore_app_id": "331177714",
                 "instagram_username": "starbucksfrance",
                 "tiktok_username": "starbucks",
+                "youtube_channel_id": "UCaNgxgi8tasCh-MZKhegeGw",
             },
         ],
     },
@@ -913,6 +940,7 @@ SECTORS = {
                 "appstore_app_id": "1478199462",
                 "instagram_username": "louisvuitton",
                 "tiktok_username": "louisvuitton",
+                "youtube_channel_id": "UC5q0PIKGr2lGOsiT14AlEYg",
             },
             {
                 "name": "Dior",
@@ -920,18 +948,22 @@ SECTORS = {
                 "playstore_app_id": "com.dior.app",
                 "instagram_username": "dior",
                 "tiktok_username": "dior",
+                "youtube_channel_id": "UC6xD-jKli-_qIYXDTsNv4dw",
             },
             {
                 "name": "Chanel",
                 "website": "https://www.chanel.com/fr",
+                "appstore_app_id": "409934435",
                 "instagram_username": "chanelofficial",
                 "tiktok_username": "chanel",
+                "youtube_channel_id": "UCclHSnngVTZK7LEOQAzcg1w",
             },
             {
                 "name": "Hermès",
                 "website": "https://www.hermes.com/fr/fr",
                 "playstore_app_id": "com.hermes.app",
                 "instagram_username": "hermes",
+                "youtube_channel_id": "UCmFOnqrNg-YHLXfdB3GexBg",
             },
             {
                 "name": "Gucci",
@@ -940,23 +972,30 @@ SECTORS = {
                 "appstore_app_id": "1534634798",
                 "instagram_username": "gucci",
                 "tiktok_username": "gucci",
+                "youtube_channel_id": "UCo6fjlKg6GuCmEMeqYbGJng",
             },
             {
                 "name": "Cartier",
                 "website": "https://www.cartier.com/fr-fr",
                 "instagram_username": "cartier",
                 "tiktok_username": "cartier",
+                "youtube_channel_id": "UCu16y62LPCwTknfV5_7Zalg",
             },
             {
                 "name": "Saint Laurent",
                 "website": "https://www.ysl.com/fr-fr",
+                "playstore_app_id": "com.kering.slp.saintlaurent",
+                "appstore_app_id": "1623343549",
                 "instagram_username": "ysl",
                 "tiktok_username": "ysl",
+                "youtube_channel_id": "UCPKgOkL5T1HiWpdp8de0U4g",
             },
             {
                 "name": "Balenciaga",
                 "website": "https://www.balenciaga.com/fr-fr",
                 "instagram_username": "balenciaga",
+                "tiktok_username": "balenciaga",
+                "youtube_channel_id": "UC08-C3TjnbKb6MPnfJd3IVQ",
             },
         ],
     },
