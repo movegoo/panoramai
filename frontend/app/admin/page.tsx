@@ -57,6 +57,7 @@ export default function AdminPage() {
   const router = useRouter();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Prompts state
@@ -93,8 +94,8 @@ export default function AdminPage() {
         .catch((e) => setError(e.message));
       adminAPI
         .getUsers()
-        .then(setUsers)
-        .catch(() => {});
+        .then((data) => { setUsers(data); setUsersError(null); })
+        .catch((e) => setUsersError(e.message));
       loadPrompts();
       loadGps();
     }
@@ -470,7 +471,9 @@ export default function AdminPage() {
                   {users.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                        Aucun utilisateur
+                        {usersError
+                          ? <span className="text-red-500">Erreur : {usersError}</span>
+                          : "Aucun utilisateur"}
                       </td>
                     </tr>
                   )}

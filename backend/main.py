@@ -125,6 +125,60 @@ def _patch_missing_social_handles():
         db.close()
 
 
+async def _enrich_empty_competitors():
+    """Auto-enrich competitors that have social handles configured but zero data records.
+
+    Fixes the case where:
+    1. Brand was created without handles
+    2. Handles were patched later by _patch_missing_social_handles()
+    3. But enrichment never re-ran because it only triggers on creation
+    """
+    from database import InstagramData, TikTokData, YouTubeData, AppData
+
+    db = SessionLocal()
+    try:
+        competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+        to_enrich = []
+
+        for comp in competitors:
+            has_any_handle = any([
+                comp.instagram_username,
+                comp.tiktok_username,
+                comp.youtube_channel_id,
+                comp.playstore_app_id,
+                comp.appstore_app_id,
+            ])
+            if not has_any_handle:
+                continue
+
+            # Check if competitor has ANY data records at all
+            has_data = (
+                db.query(InstagramData.id).filter(InstagramData.competitor_id == comp.id).first() is not None
+                or db.query(TikTokData.id).filter(TikTokData.competitor_id == comp.id).first() is not None
+                or db.query(YouTubeData.id).filter(YouTubeData.competitor_id == comp.id).first() is not None
+                or db.query(AppData.id).filter(AppData.competitor_id == comp.id).first() is not None
+            )
+            if not has_data:
+                to_enrich.append(comp)
+
+        if not to_enrich:
+            logger.info("All competitors with handles already have data")
+            return
+
+        logger.info(f"Auto-enriching {len(to_enrich)} competitors with handles but no data: "
+                     f"{[c.name for c in to_enrich]}")
+
+        from routers.competitors import _auto_enrich_competitor
+        for comp in to_enrich:
+            try:
+                results = await _auto_enrich_competitor(comp.id, comp)
+                logger.info(f"Auto-enriched '{comp.name}': {results}")
+            except Exception as e:
+                logger.error(f"Auto-enrichment failed for '{comp.name}': {e}")
+    finally:
+        db.close()
+
+
 def _seed_prompt_templates():
     """Seed default AI prompt templates if not already in DB."""
     from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
@@ -174,6 +228,12 @@ async def _deferred_startup():
         _patch_missing_social_handles()
     except Exception as e:
         logger.error(f"Social handles patch failed (non-fatal): {e}")
+
+    # Auto-enrich competitors that have handles but 0 data records
+    try:
+        await _enrich_empty_competitors()
+    except Exception as e:
+        logger.error(f"Empty competitor enrichment failed (non-fatal): {e}")
 
     try:
         await scheduler.start()
