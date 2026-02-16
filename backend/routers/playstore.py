@@ -20,9 +20,9 @@ router = APIRouter()
 
 def _auto_patch_from_db(competitor, db):
     """Auto-fill missing fields from the built-in competitor database."""
-    from routers.advertiser import COMPETITORS_BY_SECTOR
-    for comps in COMPETITORS_BY_SECTOR.values():
-        for ref in comps:
+    from core.sectors import SECTORS as SECTORS_DB
+    for sector_data in SECTORS_DB.values():
+        for ref in sector_data.get("competitors", []):
             if ref["name"].lower() == competitor.name.lower():
                 changed = False
                 for f in ["playstore_app_id", "appstore_app_id", "instagram_username",

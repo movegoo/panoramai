@@ -81,10 +81,10 @@ def _refresh_logo_urls():
 
 def _patch_missing_social_handles():
     """Auto-patch competitors with missing social handles from the sector database."""
-    from routers.advertiser import COMPETITORS_BY_SECTOR
+    from core.sectors import SECTORS as SECTORS_DB
     known = {}
-    for sector_comps in COMPETITORS_BY_SECTOR.values():
-        for comp in sector_comps:
+    for sector_data in SECTORS_DB.values():
+        for comp in sector_data.get("competitors", []):
             known[comp["name"].lower()] = comp
 
     db = SessionLocal()

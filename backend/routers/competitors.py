@@ -100,7 +100,7 @@ async def lookup_competitor(q: str = ""):
     Returns matching competitors with pre-filled social handles and app IDs.
     Used by the frontend to auto-suggest fields when adding a competitor.
     """
-    from routers.advertiser import COMPETITORS_BY_SECTOR
+    from core.sectors import SECTORS as SECTORS_DB
 
     if not q or len(q) < 2:
         return []
@@ -108,8 +108,8 @@ async def lookup_competitor(q: str = ""):
     q_lower = q.lower().strip()
     results = []
     seen = set()
-    for sector, comps in COMPETITORS_BY_SECTOR.items():
-        for comp in comps:
+    for sector, sector_data in SECTORS_DB.items():
+        for comp in sector_data.get("competitors", []):
             name_lower = comp["name"].lower()
             if q_lower in name_lower and name_lower not in seen:
                 seen.add(name_lower)
@@ -203,10 +203,10 @@ async def list_competitors(
         claim_orphans(db, user)
 
     # Auto-patch missing handles from built-in competitor database
-    from routers.advertiser import COMPETITORS_BY_SECTOR
+    from core.sectors import SECTORS as SECTORS_DB
     known = {}
-    for sector_comps in COMPETITORS_BY_SECTOR.values():
-        for comp in sector_comps:
+    for sector_data in SECTORS_DB.values():
+        for comp in sector_data.get("competitors", []):
             known[comp["name"].lower()] = comp
 
     all_comps = _scoped_competitor_query(db, user, x_advertiser_id, include_brand=True).all()
