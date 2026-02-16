@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import logging
 from datetime import datetime
 
-from database import init_db, engine, User, Advertiser, Competitor
+from database import init_db, engine, User, Advertiser, Competitor, PromptTemplate
 from database import SessionLocal
 from fastapi import Depends, HTTPException
 from core.auth import get_current_user
@@ -125,6 +125,41 @@ def _patch_missing_social_handles():
         db.close()
 
 
+def _seed_prompt_templates():
+    """Seed default AI prompt templates if not already in DB."""
+    from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
+    from services.social_content_analyzer import ANALYSIS_PROMPT as SOCIAL_PROMPT
+
+    db = SessionLocal()
+    try:
+        existing = db.query(PromptTemplate).count()
+        if existing > 0:
+            return
+        defaults = [
+            PromptTemplate(
+                key="creative_analysis",
+                label="Analyse creative publicitaire",
+                prompt_text=CREATIVE_PROMPT,
+                model_id="claude-sonnet-4-5-20250929",
+                max_tokens=1024,
+            ),
+            PromptTemplate(
+                key="social_content",
+                label="Analyse contenu social media",
+                prompt_text=SOCIAL_PROMPT,
+                model_id="claude-haiku-4-5-20251001",
+                max_tokens=512,
+            ),
+        ]
+        db.add_all(defaults)
+        db.commit()
+        logger.info("Seeded 2 default prompt templates")
+    except Exception as e:
+        logger.warning(f"Prompt template seed warning: {e}")
+    finally:
+        db.close()
+
+
 async def _deferred_startup():
     """Run slow startup tasks in background so healthcheck passes fast."""
     import asyncio
@@ -160,6 +195,11 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database init failed (non-fatal): {e}")
+
+    try:
+        _seed_prompt_templates()
+    except Exception as e:
+        logger.warning(f"Prompt seed failed (non-fatal): {e}")
 
     # Defer slow tasks so the server starts responding immediately
     asyncio.create_task(_deferred_startup())

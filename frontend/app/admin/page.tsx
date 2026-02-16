@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { adminAPI, AdminStats, AdminUser } from "@/lib/api";
+import { adminAPI, AdminStats, AdminUser, PromptTemplateData, GpsConflict, GpsConflictsResponse } from "@/lib/api";
 import {
   Users,
   Store,
@@ -18,6 +18,11 @@ import {
   CheckCircle,
   XCircle,
   Shield,
+  Sparkles,
+  Save,
+  X,
+  Navigation,
+  AlertTriangle,
 } from "lucide-react";
 
 function StatCard({
@@ -54,11 +59,31 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Prompts state
+  const [prompts, setPrompts] = useState<PromptTemplateData[]>([]);
+  const [editingPrompt, setEditingPrompt] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editModel, setEditModel] = useState("");
+  const [editMaxTokens, setEditMaxTokens] = useState(1024);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+
+  // GPS conflicts state
+  const [gpsData, setGpsData] = useState<GpsConflictsResponse | null>(null);
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/");
     }
   }, [user, loading, router]);
+
+  const loadPrompts = useCallback(() => {
+    adminAPI.getPrompts().then(setPrompts).catch(() => {});
+  }, []);
+
+  const loadGps = useCallback(() => {
+    adminAPI.getGpsConflicts().then(setGpsData).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -70,8 +95,10 @@ export default function AdminPage() {
         .getUsers()
         .then(setUsers)
         .catch(() => {});
+      loadPrompts();
+      loadGps();
     }
-  }, [user]);
+  }, [user, loadPrompts, loadGps]);
 
   if (loading) {
     return (
@@ -168,6 +195,224 @@ export default function AdminPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Prompts IA */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              Prompts IA
+            </h2>
+            {prompts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun prompt configure</p>
+            ) : (
+              <div className="space-y-3">
+                {prompts.map((p) => (
+                  <div key={p.key} className="rounded-lg border border-border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className="text-sm font-medium text-foreground">{p.label}</span>
+                        <span className="ml-2 text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">{p.key}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="font-mono">{p.model_id}</span>
+                        <span>|</span>
+                        <span>{p.max_tokens} tokens</span>
+                        {p.updated_at && (
+                          <>
+                            <span>|</span>
+                            <span>{new Date(p.updated_at).toLocaleDateString("fr-FR")}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {editingPrompt === p.key ? (
+                      <div className="space-y-3 mt-3">
+                        <textarea
+                          className="w-full h-48 rounded-lg border border-border bg-muted/30 p-3 text-xs font-mono text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                        />
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block mb-1">Modele</label>
+                            <select
+                              className="text-xs rounded border border-border bg-background px-2 py-1.5"
+                              value={editModel}
+                              onChange={(e) => setEditModel(e.target.value)}
+                            >
+                              <option value="claude-opus-4-6">Opus 4.6</option>
+                              <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
+                              <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground block mb-1">Max tokens</label>
+                            <input
+                              type="number"
+                              className="w-24 text-xs rounded border border-border bg-background px-2 py-1.5"
+                              value={editMaxTokens}
+                              onChange={(e) => setEditMaxTokens(Number(e.target.value))}
+                            />
+                          </div>
+                          <div className="flex-1" />
+                          <button
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                            disabled={savingPrompt}
+                            onClick={async () => {
+                              setSavingPrompt(true);
+                              try {
+                                await adminAPI.updatePrompt(p.key, {
+                                  prompt_text: editText,
+                                  model_id: editModel,
+                                  max_tokens: editMaxTokens,
+                                });
+                                loadPrompts();
+                                setEditingPrompt(null);
+                              } catch (e) {
+                                alert("Erreur lors de la sauvegarde");
+                              } finally {
+                                setSavingPrompt(false);
+                              }
+                            }}
+                          >
+                            <Save className="h-3 w-3" />
+                            {savingPrompt ? "..." : "Sauvegarder"}
+                          </button>
+                          <button
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:bg-muted"
+                            onClick={() => setEditingPrompt(null)}
+                          >
+                            <X className="h-3 w-3" />
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 mt-2">
+                        <pre className="flex-1 text-[11px] text-muted-foreground font-mono whitespace-pre-wrap line-clamp-3 bg-muted/30 rounded p-2">
+                          {p.prompt_text.slice(0, 200)}...
+                        </pre>
+                        <button
+                          className="shrink-0 px-3 py-1.5 text-xs rounded-lg border border-border text-foreground hover:bg-muted"
+                          onClick={() => {
+                            setEditingPrompt(p.key);
+                            setEditText(p.prompt_text);
+                            setEditModel(p.model_id);
+                            setEditMaxTokens(p.max_tokens);
+                          }}
+                        >
+                          Modifier
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* GPS Conflicts */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+              <Navigation className="h-4 w-4 text-blue-500" />
+              Verification GPS BANCO
+            </h2>
+            {gpsData && (
+              <p className="text-xs text-muted-foreground mb-4">
+                {gpsData.conflicts_count} conflit{gpsData.conflicts_count !== 1 ? "s" : ""} detecte{gpsData.conflicts_count !== 1 ? "s" : ""} sur {gpsData.total_stores} magasins (seuil : {gpsData.threshold_m}m)
+              </p>
+            )}
+            {!gpsData ? (
+              <div className="flex items-center justify-center h-20">
+                <div className="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+              </div>
+            ) : gpsData.conflicts.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-green-600">
+                <CheckCircle className="h-4 w-4" />
+                Aucun conflit GPS detecte
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="px-3 py-2 font-medium">Magasin</th>
+                      <th className="px-3 py-2 font-medium">Ville</th>
+                      <th className="px-3 py-2 font-medium text-center">Distance</th>
+                      <th className="px-3 py-2 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gpsData.conflicts.map((c) => (
+                      <tr key={c.store_id} className="border-b border-border/50 last:border-0">
+                        <td className="px-3 py-2.5">
+                          <span className="font-medium text-foreground text-xs">{c.store_name}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                          {c.city} ({c.postal_code})
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              c.distance_m > 500
+                                ? "bg-red-50 text-red-700"
+                                : c.distance_m > 100
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-green-50 text-green-700"
+                            }`}
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            {c.distance_m}m
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          {c.gps_verified ? (
+                            <span className="text-[11px] text-green-600 flex items-center gap-1 justify-end">
+                              <CheckCircle className="h-3 w-3" /> Resolu
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1.5 justify-end">
+                              <button
+                                className="px-2 py-1 text-[11px] rounded border border-border text-foreground hover:bg-muted disabled:opacity-50"
+                                disabled={resolvingId === c.store_id}
+                                onClick={async () => {
+                                  setResolvingId(c.store_id);
+                                  try {
+                                    await adminAPI.resolveGpsConflict(c.store_id, "store");
+                                    loadGps();
+                                  } finally {
+                                    setResolvingId(null);
+                                  }
+                                }}
+                              >
+                                Garder ma position
+                              </button>
+                              <button
+                                className="px-2 py-1 text-[11px] rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                                disabled={resolvingId === c.store_id}
+                                onClick={async () => {
+                                  setResolvingId(c.store_id);
+                                  try {
+                                    await adminAPI.resolveGpsConflict(c.store_id, "banco");
+                                    loadGps();
+                                  } finally {
+                                    setResolvingId(null);
+                                  }
+                                }}
+                              >
+                                Utiliser BANCO
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

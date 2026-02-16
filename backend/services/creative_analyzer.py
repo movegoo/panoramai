@@ -99,8 +99,24 @@ class CreativeAnalyzer:
         # Encode to base64
         b64_image = base64.standard_b64encode(image_data).decode("utf-8")
 
+        # Load prompt from DB (fallback to hardcoded)
+        db_prompt_text = ANALYSIS_PROMPT
+        db_model_id = "claude-sonnet-4-5-20250929"
+        db_max_tokens = 1024
+        try:
+            from database import SessionLocal, PromptTemplate
+            _db = SessionLocal()
+            row = _db.query(PromptTemplate).filter(PromptTemplate.key == "creative_analysis").first()
+            if row:
+                db_prompt_text = row.prompt_text
+                db_model_id = row.model_id or db_model_id
+                db_max_tokens = row.max_tokens or db_max_tokens
+            _db.close()
+        except Exception:
+            pass
+
         # Build prompt
-        prompt = ANALYSIS_PROMPT.format(
+        prompt = db_prompt_text.format(
             platform=platform,
             ad_text=(ad_text or "")[:500],
         )
@@ -118,8 +134,8 @@ class CreativeAnalyzer:
                             "content-type": "application/json",
                         },
                         json={
-                            "model": "claude-sonnet-4-5-20250929",
-                            "max_tokens": 1024,
+                            "model": db_model_id,
+                            "max_tokens": db_max_tokens,
                             "messages": [
                                 {
                                     "role": "user",

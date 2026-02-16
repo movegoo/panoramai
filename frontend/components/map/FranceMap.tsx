@@ -936,7 +936,7 @@ export default function FranceMap() {
           `${store.city}${store.postal_code ? ` (${store.postal_code})` : ""}`;
 
         if (store.google_rating != null) {
-          popupHtml += `<br><span style="font-size:13px">⭐ <b>${store.google_rating}</b>/5</span>`;
+          popupHtml += `<br><span style="font-size:13px"><img src="/google-logo.svg" style="height:14px;width:14px;vertical-align:middle;display:inline-block;margin-right:3px"> <b>${store.google_rating}</b>/5</span>`;
           if (store.google_reviews_count != null) {
             popupHtml += ` <span style="color:#666;font-size:12px">(${store.google_reviews_count.toLocaleString()} avis)</span>`;
           }

@@ -92,7 +92,23 @@ class SocialContentAnalyzer:
             logger.warning("No text content to analyze")
             return None
 
-        prompt = ANALYSIS_PROMPT.format(
+        # Load prompt from DB (fallback to hardcoded)
+        db_prompt_text = ANALYSIS_PROMPT
+        db_model_id = "claude-haiku-4-5-20251001"
+        db_max_tokens = 512
+        try:
+            from database import SessionLocal, PromptTemplate
+            _db = SessionLocal()
+            row = _db.query(PromptTemplate).filter(PromptTemplate.key == "social_content").first()
+            if row:
+                db_prompt_text = row.prompt_text
+                db_model_id = row.model_id or db_model_id
+                db_max_tokens = row.max_tokens or db_max_tokens
+            _db.close()
+        except Exception:
+            pass
+
+        prompt = db_prompt_text.format(
             platform=platform,
             competitor_name=(competitor_name or "")[:100],
             title=(title or "")[:500],
@@ -115,8 +131,8 @@ class SocialContentAnalyzer:
                             "content-type": "application/json",
                         },
                         json={
-                            "model": "claude-haiku-4-5-20251001",
-                            "max_tokens": 512,
+                            "model": db_model_id,
+                            "max_tokens": db_max_tokens,
                             "messages": [
                                 {
                                     "role": "user",

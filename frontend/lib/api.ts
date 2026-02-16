@@ -854,9 +854,52 @@ export interface AdminUser {
   competitors_count: number;
 }
 
+export interface PromptTemplateData {
+  key: string;
+  label: string;
+  prompt_text: string;
+  model_id: string;
+  max_tokens: number;
+  updated_at: string | null;
+}
+
+export interface GpsConflict {
+  store_id: number;
+  store_name: string;
+  city: string;
+  postal_code: string;
+  store_lat: number;
+  store_lng: number;
+  banco_lat: number;
+  banco_lng: number;
+  banco_name: string;
+  distance_m: number;
+  gps_verified: boolean;
+}
+
+export interface GpsConflictsResponse {
+  total_stores: number;
+  conflicts_count: number;
+  threshold_m: number;
+  conflicts: GpsConflict[];
+}
+
 export const adminAPI = {
   getStats: () => fetchAPI<AdminStats>("/admin/stats"),
   getUsers: () => fetchAPI<AdminUser[]>("/admin/users"),
+  getPrompts: () => fetchAPI<PromptTemplateData[]>("/admin/prompts"),
+  updatePrompt: (key: string, data: { prompt_text: string; model_id?: string; max_tokens?: number }) =>
+    fetchAPI<PromptTemplateData>(`/admin/prompts/${key}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  getGpsConflicts: (threshold = 200) =>
+    fetchAPI<GpsConflictsResponse>(`/admin/gps-conflicts?threshold=${threshold}`),
+  resolveGpsConflict: (storeId: number, chosen: "store" | "banco") =>
+    fetchAPI<{ message: string; store_id: number }>(`/admin/gps-conflicts/${storeId}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ chosen }),
+    }),
 };
 
 // Creative Analysis API

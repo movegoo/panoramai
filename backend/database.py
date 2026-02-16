@@ -302,6 +302,7 @@ class Store(Base):
     surface_m2 = Column(Integer)
     opening_date = Column(DateTime)
     is_active = Column(Boolean, default=True)
+    gps_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     advertiser = relationship("Advertiser", back_populates="stores")
@@ -467,6 +468,19 @@ class SystemSetting(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PromptTemplate(Base):
+    """Editable AI prompt templates for creative/social analysis."""
+    __tablename__ = "prompt_templates"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(50), unique=True, index=True)
+    label = Column(String(100))
+    prompt_text = Column(Text, nullable=False)
+    model_id = Column(String(100))
+    max_tokens = Column(Integer, default=1024)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def _run_migrations(engine):
     """Add missing columns and indexes to existing tables."""
     try:
@@ -503,6 +517,7 @@ def _run_migrations(engine):
             # Advertiser scoping for GEO/SEO results
             ("geo_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
             ("serp_results", "advertiser_id", "INTEGER REFERENCES advertisers(id)"),
+            ("stores", "gps_verified", "BOOLEAN DEFAULT FALSE"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
