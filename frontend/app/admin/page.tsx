@@ -23,6 +23,9 @@ import {
   X,
   Navigation,
   AlertTriangle,
+  BookOpen,
+  ChevronDown,
+  Globe,
 } from "lucide-react";
 
 function StatCard({
@@ -72,6 +75,10 @@ export default function AdminPage() {
   const [gpsData, setGpsData] = useState<GpsConflictsResponse | null>(null);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
 
+  // Methodologies state
+  const [methodologies, setMethodologies] = useState<{ module: string; icon: string; fields: { key: string; label: string; description: string }[] }[]>([]);
+  const [openModule, setOpenModule] = useState<string | null>(null);
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/");
@@ -86,6 +93,10 @@ export default function AdminPage() {
     adminAPI.getGpsConflicts().then(setGpsData).catch(() => {});
   }, []);
 
+  const loadMethodologies = useCallback(() => {
+    adminAPI.getMethodologies().then(setMethodologies).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (user) {
       adminAPI
@@ -98,8 +109,9 @@ export default function AdminPage() {
         .catch((e) => setUsersError(e.message));
       loadPrompts();
       loadGps();
+      loadMethodologies();
     }
-  }, [user, loadPrompts, loadGps]);
+  }, [user, loadPrompts, loadGps, loadMethodologies]);
 
   if (loading) {
     return (
@@ -417,6 +429,61 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+
+          {/* Methodologies */}
+          {methodologies.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-5">
+              <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-indigo-500" />
+                Methodologie d&apos;analyse
+              </h2>
+              <div className="space-y-2">
+                {methodologies.map((mod) => {
+                  const isOpen = openModule === mod.module;
+                  const iconMap: Record<string, any> = {
+                    Globe, Sparkles, Smartphone, Megaphone, MapPin,
+                  };
+                  const ModIcon = iconMap[mod.icon] || BookOpen;
+                  const colorMap: Record<string, string> = {
+                    Globe: "text-blue-500",
+                    Sparkles: "text-teal-500",
+                    Smartphone: "text-violet-500",
+                    Megaphone: "text-amber-500",
+                    MapPin: "text-emerald-500",
+                  };
+                  const iconColor = colorMap[mod.icon] || "text-gray-500";
+                  return (
+                    <div key={mod.module} className="rounded-lg border border-border overflow-hidden">
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+                        onClick={() => setOpenModule(isOpen ? null : mod.module)}
+                      >
+                        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <ModIcon className={`h-4 w-4 ${iconColor}`} />
+                          {mod.module}
+                          <span className="text-[10px] text-muted-foreground font-normal">({mod.fields.length} metriques)</span>
+                        </span>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+                          {mod.fields.map((f) => (
+                            <div key={f.key} className="rounded-lg bg-muted/30 px-4 py-3">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-semibold text-foreground">{f.label}</span>
+                                <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1 py-0.5 rounded">{f.key}</span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{f.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Users table */}
           <div className="rounded-xl border border-border bg-card">

@@ -707,7 +707,19 @@ async def get_insights(
         best_keywords, missing_keywords, top_domains
     )
 
-    return {
+    # --- AI Analysis (optional) ---
+    ai_analysis = None
+    try:
+        ai_analysis = await _generate_ai_analysis(
+            brand.company_name if brand else None,
+            sector,
+            share_of_voice, avg_position,
+            best_keywords, missing_keywords,
+        )
+    except Exception as e:
+        logger.warning(f"SEO AI analysis skipped: {e}")
+
+    result = {
         "total_keywords": total_keywords,
         "last_tracked": latest.isoformat(),
         "brand_name": brand.company_name if brand else None,
@@ -719,6 +731,9 @@ async def get_insights(
         "top_domains": top_domains,
         "recommendations": recommendations,
     }
+    if ai_analysis:
+        result["ai_analysis"] = ai_analysis
+    return result
 
 
 def _generate_recommendations(
@@ -775,3 +790,76 @@ def _generate_recommendations(
         )
 
     return recs[:5]
+
+
+async def _generate_ai_analysis(
+    brand_name: str | None, sector: str,
+    share_of_voice: list, avg_position: list,
+    best_keywords: list, missing_keywords: list,
+) -> dict | None:
+    """Generate AI-powered SEO analysis using the editable prompt template."""
+    import httpx
+    import os
+    import json
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("CLAUDE_KEY", "")
+    if not api_key:
+        return None
+
+    from database import SessionLocal, PromptTemplate
+    db = SessionLocal()
+    try:
+        row = db.query(PromptTemplate).filter(PromptTemplate.key == "seo_analysis").first()
+        if not row:
+            return None
+        prompt_text = row.prompt_text
+        model_id = row.model_id or "claude-haiku-4-5-20251001"
+        max_tokens = row.max_tokens or 1024
+    finally:
+        db.close()
+
+    seo_summary = {
+        "share_of_voice": share_of_voice[:6],
+        "avg_position": avg_position[:6],
+        "best_keywords": best_keywords[:10],
+        "missing_keywords": [
+            {"competitor": m["competitor"], "count": len(m["keywords"]), "examples": m["keywords"][:5]}
+            for m in missing_keywords[:6]
+        ],
+    }
+
+    prompt = prompt_text.format(
+        brand_name=brand_name or "",
+        sector=sector or "",
+        seo_data=json.dumps(seo_summary, ensure_ascii=False, indent=2),
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model_id,
+                    "max_tokens": max_tokens,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        if response.status_code != 200:
+            logger.warning(f"SEO AI analysis API error: {response.status_code}")
+            return None
+
+        text = response.json().get("content", [{}])[0].get("text", "")
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.warning(f"SEO AI analysis parse error: {e}")
+        return None

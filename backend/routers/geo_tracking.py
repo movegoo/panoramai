@@ -424,7 +424,20 @@ async def get_insights(
         recommendation_rate, missing_keywords, seo_vs_geo,
     )
 
-    return {
+    # --- AI Analysis (optional) ---
+    ai_analysis = None
+    try:
+        ai_analysis = await _generate_ai_analysis(
+            brand.company_name if brand else None,
+            brand.sector if brand else "",
+            share_of_voice, avg_position,
+            recommendation_rate, sentiment,
+            seo_vs_geo,
+        )
+    except Exception as e:
+        logger.warning(f"GEO AI analysis skipped: {e}")
+
+    result = {
         "total_queries": total_queries,
         "platforms": active_platforms or ["mistral", "claude", "gemini", "chatgpt"],
         "last_tracked": latest.isoformat(),
@@ -440,6 +453,9 @@ async def get_insights(
         "seo_vs_geo": seo_vs_geo,
         "recommendations": recommendations,
     }
+    if ai_analysis:
+        result["ai_analysis"] = ai_analysis
+    return result
 
 
 def _generate_recommendations(
@@ -506,3 +522,74 @@ def _generate_recommendations(
         )
 
     return recs[:5]
+
+
+async def _generate_ai_analysis(
+    brand_name: str | None, sector: str,
+    share_of_voice: list, avg_position: list,
+    recommendation_rate: list, sentiment: list,
+    seo_vs_geo: list,
+) -> dict | None:
+    """Generate AI-powered GEO analysis using the editable prompt template."""
+    import httpx
+    import os
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("CLAUDE_KEY", "")
+    if not api_key:
+        return None
+
+    from database import SessionLocal, PromptTemplate
+    db = SessionLocal()
+    try:
+        row = db.query(PromptTemplate).filter(PromptTemplate.key == "geo_analysis").first()
+        if not row:
+            return None
+        prompt_text = row.prompt_text
+        model_id = row.model_id or "claude-haiku-4-5-20251001"
+        max_tokens = row.max_tokens or 1024
+    finally:
+        db.close()
+
+    geo_summary = {
+        "share_of_voice": share_of_voice[:6],
+        "avg_position": avg_position[:6],
+        "recommendation_rate": recommendation_rate[:6],
+        "sentiment": sentiment[:6],
+        "seo_vs_geo": seo_vs_geo[:6],
+    }
+
+    prompt = prompt_text.format(
+        brand_name=brand_name or "",
+        sector=sector or "",
+        geo_data=json.dumps(geo_summary, ensure_ascii=False, indent=2),
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model_id,
+                    "max_tokens": max_tokens,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        if response.status_code != 200:
+            logger.warning(f"GEO AI analysis API error: {response.status_code}")
+            return None
+
+        text = response.json().get("content", [{}])[0].get("text", "")
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return json.loads(text.strip())
+    except Exception as e:
+        logger.warning(f"GEO AI analysis parse error: {e}")
+        return None

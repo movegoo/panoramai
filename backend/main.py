@@ -179,6 +179,54 @@ async def _enrich_empty_competitors():
         db.close()
 
 
+SEO_ANALYSIS_PROMPT = """Tu es un expert SEO pour le retail et la grande distribution en France.
+A partir des donnees SEO ci-dessous, genere un diagnostic strategique et des recommandations actionnables.
+
+Contexte : enseigne="{brand_name}", secteur="{sector}"
+
+Donnees SEO :
+{seo_data}
+
+Retourne UNIQUEMENT un JSON valide (pas de markdown, pas de ```) :
+{{
+  "diagnostic": "<3-5 phrases de synthese strategique : positionnement SEO de l'enseigne vs concurrents, forces et faiblesses>",
+  "priorities": [
+    {{
+      "action": "<action concrete a mener>",
+      "impact": "<high|medium|low>",
+      "effort": "<high|medium|low>",
+      "detail": "<1-2 phrases expliquant pourquoi et comment>"
+    }}
+  ],
+  "quick_wins": ["<action rapide 1>", "<action rapide 2>", "<action rapide 3>"],
+  "benchmark_insight": "<1 phrase sur ce que le leader fait mieux>"
+}}"""
+
+
+GEO_ANALYSIS_PROMPT = """Tu es un expert en GEO (Generative Engine Optimization) et visibilite IA pour le retail en France.
+A partir des donnees de visibilite IA ci-dessous, genere un diagnostic strategique et des recommandations actionnables.
+
+Contexte : enseigne="{brand_name}", secteur="{sector}"
+
+Donnees GEO (visibilite dans les reponses IA) :
+{geo_data}
+
+Retourne UNIQUEMENT un JSON valide (pas de markdown, pas de ```) :
+{{
+  "diagnostic": "<3-5 phrases de synthese strategique : visibilite IA de l'enseigne vs concurrents, forces et faiblesses>",
+  "priorities": [
+    {{
+      "action": "<action concrete a mener>",
+      "impact": "<high|medium|low>",
+      "effort": "<high|medium|low>",
+      "detail": "<1-2 phrases expliquant pourquoi et comment>"
+    }}
+  ],
+  "quick_wins": ["<action rapide 1>", "<action rapide 2>", "<action rapide 3>"],
+  "benchmark_insight": "<1 phrase sur ce que le leader fait mieux en GEO>"
+}}"""
+
+
 ASO_ANALYSIS_PROMPT = """Tu es un expert ASO (App Store Optimization) pour les apps retail et grande distribution en France.
 A partir des scores ASO ci-dessous, genere un diagnostic strategique et des recommandations actionnables.
 
@@ -228,6 +276,20 @@ def _seed_prompt_templates():
             "key": "aso_analysis",
             "label": "Diagnostic ASO (App Store Optimization)",
             "prompt_text": ASO_ANALYSIS_PROMPT,
+            "model_id": "claude-haiku-4-5-20251001",
+            "max_tokens": 1024,
+        },
+        {
+            "key": "seo_analysis",
+            "label": "Diagnostic SEO (positionnement Google)",
+            "prompt_text": SEO_ANALYSIS_PROMPT,
+            "model_id": "claude-haiku-4-5-20251001",
+            "max_tokens": 1024,
+        },
+        {
+            "key": "geo_analysis",
+            "label": "Diagnostic GEO (visibilite IA)",
+            "prompt_text": GEO_ANALYSIS_PROMPT,
             "model_id": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
         },

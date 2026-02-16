@@ -337,8 +337,57 @@ export default function SeoPage() {
             </div>
           </div>
 
-          {/* Recommendations */}
-          {insights.recommendations.length > 0 && (
+          {/* AI Analysis */}
+          {insights.ai_analysis ? (
+            <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 space-y-5">
+              <h2 className="text-base font-semibold text-blue-800 flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Diagnostic IA — SEO
+              </h2>
+              <p className="text-sm text-blue-900 leading-relaxed">{insights.ai_analysis.diagnostic}</p>
+
+              {insights.ai_analysis.priorities?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-3">Priorites</h3>
+                  <div className="space-y-2">
+                    {insights.ai_analysis.priorities.map((p, i) => (
+                      <div key={i} className="rounded-xl bg-white/80 border border-blue-100 p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-blue-900">{p.action}</span>
+                          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                            p.impact === "high" ? "bg-red-100 text-red-700" : p.impact === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                          }`}>Impact {p.impact}</span>
+                          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                            p.effort === "low" ? "bg-green-100 text-green-700" : p.effort === "medium" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                          }`}>Effort {p.effort}</span>
+                        </div>
+                        <p className="text-xs text-blue-800/80">{p.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {insights.ai_analysis.quick_wins?.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">Quick wins</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {insights.ai_analysis.quick_wins.map((qw, i) => (
+                      <span key={i} className="inline-flex items-center rounded-lg bg-white/80 border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-800">
+                        {qw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {insights.ai_analysis.benchmark_insight && (
+                <div className="rounded-lg bg-indigo-100/60 border border-indigo-200 px-4 py-3 text-xs text-indigo-800">
+                  <span className="font-semibold">Benchmark :</span> {insights.ai_analysis.benchmark_insight}
+                </div>
+              )}
+            </div>
+          ) : insights.recommendations.length > 0 ? (
             <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
               <h2 className="text-base font-semibold text-blue-800 mb-4 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
@@ -352,7 +401,7 @@ export default function SeoPage() {
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

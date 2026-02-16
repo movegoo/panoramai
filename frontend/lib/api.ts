@@ -907,6 +907,10 @@ export const adminAPI = {
       method: "POST",
       body: JSON.stringify({ chosen }),
     }),
+  getMethodologies: () =>
+    fetchAPI<{ module: string; icon: string; fields: { key: string; label: string; description: string }[] }[]>(
+      "/admin/methodologies"
+    ),
 };
 
 // Creative Analysis API
@@ -1026,6 +1030,12 @@ export interface SeoInsights {
   missing_keywords: { competitor: string; competitor_id: number; keywords: string[] }[];
   top_domains: { domain: string; count: number }[];
   recommendations: string[];
+  ai_analysis?: {
+    diagnostic: string;
+    priorities: { action: string; impact: string; effort: string; detail: string }[];
+    quick_wins: string[];
+    benchmark_insight: string;
+  };
 }
 
 export const seoAPI = {
@@ -1077,6 +1087,12 @@ export interface GeoInsights {
   missing_keywords: { competitor: string; competitor_id: number; keywords: string[] }[];
   seo_vs_geo: { competitor: string; competitor_id: number; seo_pct: number; geo_pct: number; gap: number }[];
   recommendations: string[];
+  ai_analysis?: {
+    diagnostic: string;
+    priorities: { action: string; impact: string; effort: string; detail: string }[];
+    quick_wins: string[];
+    benchmark_insight: string;
+  };
 }
 
 export const geoTrackingAPI = {

@@ -22,6 +22,74 @@ from services.scheduler import scheduler
 router = APIRouter()
 
 
+# ── Methodologies ─────────────────────────────────────────────────────────────
+
+METHODOLOGIES = [
+    {
+        "module": "SEO",
+        "icon": "Globe",
+        "fields": [
+            {"key": "share_of_voice", "label": "Part de voix SEO", "description": "Pourcentage d'apparitions d'un concurrent dans le top 10 Google par rapport au total des resultats trackes. Formule : (apparitions du concurrent / total des slots top 10) x 100."},
+            {"key": "avg_position", "label": "Position moyenne", "description": "Moyenne des positions obtenues par un concurrent dans le top 10 Google, sur l'ensemble des mots-cles ou il apparait. Plus la valeur est basse, meilleur est le positionnement."},
+            {"key": "best_keywords", "label": "Meilleurs mots-cles", "description": "Liste des mots-cles ou un concurrent se positionne dans le top 3 (positions 1, 2 ou 3). Indicateur de domination editoriale sur les requetes strategiques."},
+            {"key": "missing_keywords", "label": "Mots-cles manquants", "description": "Mots-cles du secteur sur lesquels un concurrent n'apparait dans aucun resultat du top 10. Identifie les opportunites de contenu a creer."},
+            {"key": "top_domains", "label": "Top domaines", "description": "Classement des domaines les plus frequemment presents dans le top 10 Google, tous mots-cles confondus. Permet d'identifier les acteurs dominants du secteur."},
+        ],
+    },
+    {
+        "module": "GEO",
+        "icon": "Sparkles",
+        "fields": [
+            {"key": "share_of_voice_ia", "label": "Part de voix IA", "description": "Pourcentage de mentions d'un concurrent dans les reponses des moteurs IA (Mistral, Claude, Gemini, ChatGPT). Formule : (mentions du concurrent / total des mentions) x 100."},
+            {"key": "avg_position_ia", "label": "Position moyenne IA", "description": "Position moyenne dans l'ordre de citation des reponses IA. Position 1 = premiere marque citee. Calcule sur toutes les reponses ou la marque est mentionnee."},
+            {"key": "recommendation_rate", "label": "Taux de recommandation", "description": "Pourcentage de reponses IA ou la marque est explicitement recommandee (pas juste mentionnee). Formule : (reponses avec recommandation / reponses avec mention) x 100."},
+            {"key": "sentiment", "label": "Sentiment IA", "description": "Analyse du ton utilise par les moteurs IA lorsqu'ils mentionnent la marque : positif, neutre ou negatif. Base sur l'analyse semantique du contexte de citation."},
+            {"key": "seo_vs_geo", "label": "Ecart SEO / GEO", "description": "Difference entre la part de voix SEO (Google) et la part de voix GEO (moteurs IA). Un ecart negatif indique que la marque est moins visible dans les IA que dans Google classique."},
+            {"key": "platform_comparison", "label": "Comparaison par plateforme", "description": "Repartition des mentions par moteur IA (Mistral, Claude, Gemini, ChatGPT). Permet d'identifier sur quelle plateforme la marque est la plus ou la moins visible."},
+        ],
+    },
+    {
+        "module": "ASO",
+        "icon": "Smartphone",
+        "fields": [
+            {"key": "aso_score", "label": "Score ASO global", "description": "Score composite 0-100 evaluant l'optimisation App Store. Moyenne ponderee : Metadata 25%, Visuel 20%, Note 25%, Avis 15%, Fraicheur 15%."},
+            {"key": "metadata_score", "label": "Score Metadata", "description": "Evaluation de la qualite des metadonnees (titre, description, changelog). Poids : 25% du score ASO. Criteres : longueur du titre (ideal 25-30 car), richesse de la description, presence de changelog."},
+            {"key": "visual_score", "label": "Score Visuel", "description": "Evaluation des assets visuels : nombre de screenshots (ideal 6+), presence d'une video de preview, qualite de l'icone. Poids : 20% du score ASO."},
+            {"key": "rating_score", "label": "Score Note", "description": "Note moyenne de l'app normalisee sur 100. Formule : (note / 5) x 100. Poids : 25% du score ASO."},
+            {"key": "freshness_score", "label": "Score Fraicheur", "description": "Mesure de la frequence des mises a jour. 100 = mise a jour < 30 jours, 0 = > 180 jours. Poids : 15% du score ASO."},
+        ],
+    },
+    {
+        "module": "Publicites",
+        "icon": "Megaphone",
+        "fields": [
+            {"key": "total_ads", "label": "Total publicites", "description": "Nombre total de publicites detectees dans la Meta Ad Library pour l'ensemble des concurrents trackes."},
+            {"key": "format_breakdown", "label": "Repartition par format", "description": "Distribution des publicites par format (image, video, carrousel, etc.). Permet d'identifier les formats privilegies par le secteur."},
+            {"key": "estimated_spend", "label": "Budget estime", "description": "Fourchette de budget publicitaire estimee par Meta pour chaque annonceur. Basee sur les donnees de transparence EU de la Ad Library."},
+            {"key": "creative_score", "label": "Score creatif", "description": "Score 0-100 evaluant la qualite creative d'une publicite via analyse IA (concept, accroche, ton, composition visuelle, CTA)."},
+            {"key": "ad_type", "label": "Type de publicite", "description": "Classification automatique : Branding (notoriete), Performance (conversion/drive), DTS (Drive-to-Store). Basee sur le CTA, l'URL de destination et le concept creatif."},
+        ],
+    },
+    {
+        "module": "Geographie",
+        "icon": "MapPin",
+        "fields": [
+            {"key": "store_locations", "label": "Localisations magasins", "description": "Positions GPS des magasins issues de la base BANCO (Base Nationale du Commerce) de data.gouv.fr ou importees manuellement."},
+            {"key": "zone_analysis", "label": "Analyse de zone", "description": "Analyse concurrentielle d'une zone geographique definie (rayon ou isochrone). Compte les magasins de chaque enseigne dans le perimetre."},
+            {"key": "banco_matching", "label": "Matching BANCO", "description": "Correspondance entre les magasins de l'enseigne et les donnees BANCO. Detecte les ecarts GPS et permet de corriger les positions."},
+        ],
+    },
+]
+
+
+@router.get("/methodologies")
+async def get_methodologies(
+    user: User = Depends(get_current_user),
+):
+    """Return analysis methodology for each module."""
+    return METHODOLOGIES
+
+
 # ── Prompt Templates ──────────────────────────────────────────────────────────
 
 class PromptUpdateRequest(BaseModel):
