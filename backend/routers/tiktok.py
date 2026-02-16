@@ -152,7 +152,7 @@ async def compare_tiktok_accounts(
 ):
     """Compare TikTok metrics across all tracked competitors."""
     competitors = get_user_competitors(db, user, advertiser_id=int(x_advertiser_id) if x_advertiser_id else None)
-    competitors = [c for c in competitors if c.tiktok_username]
+    competitors = [c for c in competitors if c.tiktok_username or getattr(c, "is_brand", False)]
 
     comparison = []
     for competitor in competitors:
@@ -191,6 +191,20 @@ async def compare_tiktok_accounts(
                 "engagement_rate": calculate_engagement_rate(latest),
                 "follower_growth_7d": round(follower_growth, 2),
                 "recorded_at": latest.recorded_at.isoformat(),
+            })
+        elif getattr(competitor, "is_brand", False):
+            # Always include the brand even without data
+            comparison.append({
+                "competitor_id": competitor.id,
+                "competitor_name": competitor.name,
+                "username": competitor.tiktok_username,
+                "followers": 0,
+                "following": 0,
+                "likes": 0,
+                "videos_count": 0,
+                "engagement_rate": 0,
+                "follower_growth_7d": 0,
+                "recorded_at": None,
             })
 
     comparison.sort(key=lambda x: x["followers"] or 0, reverse=True)

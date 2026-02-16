@@ -121,7 +121,7 @@ async def compare_youtube_channels(
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = [
         c for c in get_user_competitors(db, user, advertiser_id=adv_id)
-        if c.youtube_channel_id
+        if c.youtube_channel_id or getattr(c, "is_brand", False)
     ]
 
     comparison = []
@@ -164,6 +164,23 @@ async def compare_youtube_channels(
                 "engagement_rate": latest.engagement_rate,
                 "subscriber_growth_7d": round(subscriber_growth, 2),
                 "recorded_at": latest.recorded_at.isoformat(),
+            })
+        elif getattr(competitor, "is_brand", False):
+            # Always include the brand even without data
+            comparison.append({
+                "competitor_id": competitor.id,
+                "competitor_name": competitor.name,
+                "channel_id": competitor.youtube_channel_id,
+                "channel_name": competitor.name,
+                "subscribers": 0,
+                "total_views": 0,
+                "videos_count": 0,
+                "avg_views": 0,
+                "avg_likes": 0,
+                "avg_comments": 0,
+                "engagement_rate": 0,
+                "subscriber_growth_7d": 0,
+                "recorded_at": None,
             })
 
     comparison.sort(key=lambda x: x["subscribers"] or 0, reverse=True)

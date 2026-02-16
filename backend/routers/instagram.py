@@ -117,7 +117,7 @@ async def compare_instagram_accounts(
     """Compare Instagram metrics across all tracked competitors"""
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
-    competitors = [c for c in competitors if c.instagram_username]
+    competitors = [c for c in competitors if c.instagram_username or getattr(c, "is_brand", False)]
 
     comparison = []
     for competitor in competitors:
@@ -148,6 +148,20 @@ async def compare_instagram_accounts(
                 "avg_comments": latest.avg_comments,
                 "follower_growth_7d": round(follower_growth, 2),
                 "last_updated": latest.recorded_at.isoformat()
+            })
+        elif getattr(competitor, "is_brand", False):
+            # Always include the brand even without data
+            comparison.append({
+                "competitor_id": competitor.id,
+                "competitor_name": competitor.name,
+                "username": competitor.instagram_username,
+                "followers": 0,
+                "engagement_rate": 0,
+                "posts_count": 0,
+                "avg_likes": 0,
+                "avg_comments": 0,
+                "follower_growth_7d": 0,
+                "last_updated": None,
             })
 
     # Sort by followers descending
