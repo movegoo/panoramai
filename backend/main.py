@@ -256,6 +256,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Database init failed (non-fatal): {e}")
 
+    # Auto-promote first user to admin if no admin exists
+    try:
+        _db = SessionLocal()
+        admin_exists = _db.query(User).filter(User.is_admin == True).first()
+        if not admin_exists:
+            first_user = _db.query(User).order_by(User.id).first()
+            if first_user:
+                first_user.is_admin = True
+                _db.commit()
+                logger.info(f"Auto-promoted '{first_user.email}' to admin (first user)")
+        _db.close()
+    except Exception as e:
+        logger.warning(f"Admin auto-promote warning: {e}")
+
     try:
         _seed_prompt_templates()
     except Exception as e:
