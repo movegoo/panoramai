@@ -306,6 +306,8 @@ SECTORS = {
                 "playstore_app_id": "com.darty.app",
                 "appstore_app_id": "352210890",
                 "instagram_username": "darty_officiel",
+                "tiktok_username": "darty_officiel",
+                "youtube_channel_id": "UC_zgf8leGKSXNLLyCYP9PeQ",
             },
             {
                 "name": "Boulanger",
@@ -352,6 +354,8 @@ SECTORS = {
                 "website": "https://www.apple.com/fr",
                 "appstore_app_id": "375380948",
                 "instagram_username": "apple",
+                "tiktok_username": "apple",
+                "youtube_channel_id": "UCE_M8A5yxnLfW0KghEeajjw",
             },
             {
                 "name": "Electro Dépôt",
@@ -381,6 +385,8 @@ SECTORS = {
                 "playstore_app_id": "com.castorama.selfcare",
                 "appstore_app_id": "1163490666",
                 "instagram_username": "castoramafrance",
+                "tiktok_username": "castorama",
+                "youtube_channel_id": "UCKFpWQOvBT2GNNG05xCs9GA",
             },
             {
                 "name": "Bricomarché",
@@ -396,6 +402,7 @@ SECTORS = {
                 "appstore_app_id": "6466879378",
                 "instagram_username": "bricodepot_france",
                 "tiktok_username": "bricodepot",
+                "youtube_channel_id": "UC7GZ6NqxeqHz0MnsllLEhbw",
             },
             {
                 "name": "Mr Bricolage",
@@ -409,6 +416,7 @@ SECTORS = {
                 "appstore_app_id": "643238535",
                 "instagram_username": "weldom_officiel",
                 "tiktok_username": "weldomfrance",
+                "youtube_channel_id": "UC5ZflZDaJi4pKCjGaa-5MLQ",
             },
             {
                 "name": "Point P",
@@ -543,6 +551,7 @@ SECTORS = {
                 "appstore_app_id": "393136788",
                 "instagram_username": "laredoute",
                 "tiktok_username": "laredoute",
+                "youtube_channel_id": "UC2pLRq0rtiQQku0YxntO2xw",
             },
             {
                 "name": "Habitat",
@@ -741,6 +750,7 @@ SECTORS = {
                 "appstore_app_id": "422590767",
                 "instagram_username": "bouyguestelecom",
                 "tiktok_username": "bouyguestelecom",
+                "youtube_channel_id": "UCfcVlVplwcHZNrQpeXmeHTQ",
             },
             {
                 "name": "Free",
@@ -846,6 +856,7 @@ SECTORS = {
                 "appstore_app_id": "382583742",
                 "instagram_username": "jardiland",
                 "tiktok_username": "jardiland_officiel",
+                "youtube_channel_id": "UCFZXu_nYO74ZZKTiOezmdCw",
             },
             {
                 "name": "Truffaut",
@@ -865,6 +876,7 @@ SECTORS = {
                 "website": "https://www.botanic.com",
                 "instagram_username": "botanic_officiel",
                 "tiktok_username": "botanic_france",
+                "youtube_channel_id": "UC3mMTjiDsiP1q_cGAUuZWBA",
             },
             {
                 "name": "Animalis",
@@ -881,6 +893,7 @@ SECTORS = {
                 "appstore_app_id": "1555501888",
                 "instagram_username": "maxizoo_france",
                 "tiktok_username": "maxizoo.france",
+                "youtube_channel_id": "UC6BqpnOrrPTue5Pk20qLgMQ",
             },
         ],
     },
@@ -894,6 +907,7 @@ SECTORS = {
                 "appstore_app_id": "6466821065",
                 "instagram_username": "joueclub",
                 "tiktok_username": "joueclub",
+                "youtube_channel_id": "UCgzACnbHsOfi7kGfk_dFSxg",
             },
             {
                 "name": "King Jouet",
@@ -913,6 +927,7 @@ SECTORS = {
                 "website": "https://www.lagranderecre.fr",
                 "playstore_app_id": "fr.lagranderecre.magrandefamille",
                 "instagram_username": "lagranderecre",
+                "youtube_channel_id": "UCy2IPyHPapI6tEX2VB-ngSg",
             },
             {
                 "name": "LEGO",
@@ -1026,6 +1041,7 @@ SECTORS = {
                 "appstore_app_id": "343889987",
                 "instagram_username": "sncfconnect",
                 "tiktok_username": "sncf",
+                "youtube_channel_id": "UC5vn9mGosXDigQuXXE4I9Pw",
             },
             {
                 "name": "Lastminute",
@@ -1040,6 +1056,7 @@ SECTORS = {
                 "appstore_app_id": "284876795",
                 "instagram_username": "tripadvisor",
                 "tiktok_username": "tripadvisor",
+                "youtube_channel_id": "UCS9S86BryT1on_qhDT2Jwig",
             },
             {
                 "name": "Expedia",
@@ -1047,6 +1064,7 @@ SECTORS = {
                 "playstore_app_id": "com.expedia.bookings",
                 "appstore_app_id": "427916203",
                 "instagram_username": "expedia",
+                "youtube_channel_id": "UCGaOvAFinZ7BCN_FDmw74fQ",
             },
             {
                 "name": "Pierre & Vacances",
@@ -1079,11 +1097,13 @@ SECTORS = {
                 "website": "https://www.naturalia.fr",
                 "playstore_app_id": "com.naturalia.app",
                 "instagram_username": "naturalia_magasins_bio",
+                "youtube_channel_id": "UCGzDECCw_UGtKOwFH_bhBGQ",
             },
             {
                 "name": "La Vie Claire",
                 "website": "https://www.lavieclaire.com",
                 "instagram_username": "lavieclaire_bio",
+                "youtube_channel_id": "UCLgUFrMFrcVOXs6i1A8Y4hA",
             },
             {
                 "name": "Bio c' Bon",
@@ -1099,6 +1119,7 @@ SECTORS = {
                 "name": "L'Eau Vive",
                 "website": "https://www.eau-vive.com",
                 "instagram_username": "leauvive_bio",
+                "youtube_channel_id": "UC7Uq88LrJE2WxYaUM0h4xow",
             },
         ],
     },
@@ -1159,6 +1180,7 @@ SECTORS = {
                 "website": "https://www.mercedes-benz.fr",
                 "playstore_app_id": "com.daimler.ris.mercedesme.ece",
                 "instagram_username": "mercedesbenzfr",
+                "youtube_channel_id": "UClj0L8WZrVydk5xKOscI6-A",
             },
         ],
     },
