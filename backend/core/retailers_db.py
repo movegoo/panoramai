@@ -35,6 +35,7 @@ RETAILERS = {
                 "playstore_app_id": "com.auchan.retail.android.customers.france",
                 "appstore_app_id": "541227977",
                 "instagram_username": "auchan_france",
+                "tiktok_username": "auchan_fr",
                 "stores_count": 600,
             },
             "intermarche": {
@@ -42,7 +43,8 @@ RETAILERS = {
                 "website": "https://www.intermarche.com",
                 "playstore_app_id": "com.intermarche.mobile.courses",
                 "appstore_app_id": "1447048498",
-                "instagram_username": "interaborateur",
+                "instagram_username": "intermarche",
+                "tiktok_username": "intermarche_france",
                 "stores_count": 1800,
             },
             "lidl": {
@@ -59,7 +61,7 @@ RETAILERS = {
                 "website": "https://www.aldi.fr",
                 "playstore_app_id": "com.aldi.mobile.android.france",
                 "appstore_app_id": "1525458498",
-                "instagram_username": "aldi_france",
+                "instagram_username": "aldi.france",
                 "stores_count": 1300,
             },
             "monoprix": {
@@ -83,7 +85,9 @@ RETAILERS = {
                 "website": "https://www.supercasino.fr",
                 "playstore_app_id": "com.casino.casinomax",
                 "appstore_app_id": "1508465296",
-                "instagram_username": "supermarchescasino",
+                "instagram_username": "casinosupermarches",
+                "tiktok_username": "casino_france",
+                "youtube_channel_id": "UCf9Q100FQEx5cPSF9VWOuLQ",
                 "stores_count": 400,
             },
             "systeme_u": {
@@ -91,7 +95,8 @@ RETAILERS = {
                 "website": "https://www.magasins-u.com",
                 "playstore_app_id": "com.systemu.coursesu",
                 "appstore_app_id": "1437084256",
-                "instagram_username": "magasins_u",
+                "instagram_username": "ulescommercants",
+                "tiktok_username": "ulescommercants",
                 "stores_count": 1600,
             },
         },
