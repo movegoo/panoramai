@@ -99,6 +99,7 @@ class MetaAPIService:
                 "ad_delivery_start_time",
                 "ad_delivery_stop_time",
                 "ad_snapshot_url",
+                "beneficiary_payers",
                 "bylines",
                 "currency",
                 "estimated_audience_size",

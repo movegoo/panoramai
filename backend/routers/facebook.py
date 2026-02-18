@@ -577,6 +577,100 @@ async def get_ad_detail_raw(
     return data
 
 
+@router.post("/enrich-payers")
+async def enrich_payers(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Enrich Meta ads with payer/beneficiary data from the official Meta Ad Library API.
+    ScrapeCreators doesn't return this data, but the official API provides it
+    via the 'beneficiary_payers' and 'bylines' fields (EU DSA requirement).
+    """
+    from services.meta_api import meta_api
+
+    if not meta_api.is_configured:
+        raise HTTPException(status_code=503, detail="META_ACCESS_TOKEN not configured. Set it in Railway env vars.")
+
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    user_comp_ids = get_user_competitor_ids(db, user, advertiser_id=adv_id)
+
+    # Get competitors with facebook_page_id
+    competitors = db.query(Competitor).filter(
+        Competitor.id.in_(user_comp_ids),
+        Competitor.facebook_page_id.isnot(None),
+    ).all()
+
+    if not competitors:
+        raise HTTPException(status_code=404, detail="No competitors with facebook_page_id found")
+
+    total_updated = 0
+    results = []
+
+    for comp in competitors:
+        try:
+            # Fetch ads from official Meta API (which includes beneficiary_payers)
+            api_result = await meta_api.search_ads_library(
+                page_id=comp.facebook_page_id,
+                countries="FR",
+                limit=100,
+            )
+
+            api_ads = api_result.get("data", [])
+            comp_updated = 0
+
+            for api_ad in api_ads:
+                ad_id = str(api_ad.get("id", ""))
+                if not ad_id:
+                    continue
+
+                # Find matching ad in our DB
+                db_ad = db.query(Ad).filter(Ad.ad_id == ad_id, Ad.competitor_id == comp.id).first()
+                if not db_ad:
+                    continue
+
+                # Extract payer from beneficiary_payers
+                bp = api_ad.get("beneficiary_payers", [])
+                if bp and isinstance(bp, list) and len(bp) > 0:
+                    first_bp = bp[0] if isinstance(bp[0], dict) else {}
+                    payer = first_bp.get("payer", "")
+                    beneficiary = first_bp.get("beneficiary", "")
+                    # Use payer first, fall back to beneficiary
+                    payer_name = payer or beneficiary
+                    if payer_name and not db_ad.byline:
+                        db_ad.byline = payer_name
+                        comp_updated += 1
+
+                # Also check bylines field
+                bylines = api_ad.get("bylines", [])
+                if bylines and isinstance(bylines, list) and not db_ad.disclaimer_label:
+                    db_ad.disclaimer_label = bylines[0] if bylines else None
+
+            if comp_updated:
+                db.commit()
+                total_updated += comp_updated
+
+            results.append({
+                "competitor": comp.name,
+                "page_id": comp.facebook_page_id,
+                "api_ads_found": len(api_ads),
+                "payers_updated": comp_updated,
+            })
+
+        except Exception as e:
+            results.append({
+                "competitor": comp.name,
+                "error": str(e),
+            })
+
+    return {
+        "message": f"Updated payer info for {total_updated} ads",
+        "total_updated": total_updated,
+        "details": results,
+    }
+
+
 @router.get("/stats/{competitor_id}")
 async def get_ads_stats(
     competitor_id: int,
