@@ -617,6 +617,14 @@ async def enrich_payers(
                 limit=100,
             )
 
+            # Check for API errors
+            if "error" in api_result:
+                results.append({
+                    "competitor": comp.name,
+                    "error": str(api_result["error"]),
+                })
+                continue
+
             api_ads = api_result.get("data", [])
             comp_updated = 0
 
