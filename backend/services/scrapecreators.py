@@ -348,9 +348,32 @@ class ScrapeCreatorsAPI:
         # Extract EU transparency data from aaa_info or eu_transparency
         eu = data.get("eu_transparency") or data.get("aaa_info") or {}
 
+        # Extract payer/beneficiary from snapshot or top-level
+        snapshot = data.get("snapshot", {})
+        byline = (
+            data.get("byline")
+            or snapshot.get("byline")
+            or data.get("disclaimerLabel")
+            or snapshot.get("disclaimer_label")
+            or data.get("disclaimer_label")
+        )
+        # Also check regionalRegulationData and fevInfo for payer info
+        reg_data = data.get("regionalRegulationData") or {}
+        fev_info = data.get("fevInfo") or {}
+        if not byline:
+            byline = (
+                reg_data.get("disclaimer_label")
+                or reg_data.get("byline")
+                or fev_info.get("disclaimer_label")
+                or fev_info.get("byline")
+                or fev_info.get("payer_name")
+                or fev_info.get("beneficiary_name")
+            )
+
         return {
             "success": True,
             "ad_archive_id": str(data.get("adArchiveID", ad_archive_id)),
+            "byline": byline,
             "age_min": eu.get("age_audience", {}).get("min") if isinstance(eu.get("age_audience"), dict) else None,
             "age_max": eu.get("age_audience", {}).get("max") if isinstance(eu.get("age_audience"), dict) else None,
             "gender_audience": eu.get("gender_audience"),
@@ -360,6 +383,10 @@ class ScrapeCreatorsAPI:
             "targets_eu": eu.get("targets_eu", False),
             "credits_remaining": data.get("credits_remaining"),
         }
+
+    async def get_facebook_ad_detail_raw(self, ad_archive_id: str) -> Dict:
+        """Return the raw API response for debugging."""
+        return await self._get("/v1/facebook/adLibrary/ad", {"id": ad_archive_id})
 
     async def search_facebook_companies(self, query: str) -> Dict:
         """

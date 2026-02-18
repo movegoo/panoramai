@@ -539,6 +539,10 @@ async def enrich_ads_transparency(
             breakdown = detail.get("age_country_gender_reach_breakdown", [])
             if breakdown:
                 ad.age_country_gender_reach = json.dumps(breakdown)
+            # Save payer/byline if available
+            byline = detail.get("byline")
+            if byline:
+                ad.byline = byline
             return True
         except Exception as e:
             logger.error(f"Error enriching ad {ad.ad_id}: {e}")
@@ -561,6 +565,16 @@ async def enrich_ads_transparency(
         "errors": errors,
         "total_meta_ads": len(ads_to_enrich),
     }
+
+
+@router.get("/ad-detail-raw/{ad_archive_id}")
+async def get_ad_detail_raw(
+    ad_archive_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Debug: return raw ScrapeCreators response for a single ad."""
+    data = await scrapecreators.get_facebook_ad_detail_raw(ad_archive_id)
+    return data
 
 
 @router.get("/stats/{competitor_id}")
