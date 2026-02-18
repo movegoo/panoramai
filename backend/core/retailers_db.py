@@ -25,8 +25,8 @@ RETAILERS = {
                 "website": "https://www.e.leclerc",
                 "playstore_app_id": "com.eleclerc.moneleclerc",
                 "appstore_app_id": "1193842898",
-                "instagram_username": "e.leclerc",
-                "tiktok_username": "e.leclerc",
+                "instagram_username": "leclerc",
+                "tiktok_username": "leclerc",
                 "stores_count": 700,
             },
             "auchan": {
