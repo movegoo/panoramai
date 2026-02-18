@@ -209,13 +209,26 @@ async def fetch_competitor_ads(
     use_page_id = False
     page_id_used = competitor.facebook_page_id
 
-    # Strategy 1: Use page_id if available (most reliable)
+    # Strategy 1: Use page_id if available (most reliable) — with pagination
     if page_id_used:
-        result = await scrapecreators.fetch_facebook_company_ads(
-            page_id=page_id_used,
-        )
-        if result.get("success"):
+        all_ads = []
+        cursor = None
+        max_pages = 30  # Safety limit (~300 ads max)
+        for _ in range(max_pages):
+            result = await scrapecreators.fetch_facebook_company_ads(
+                page_id=page_id_used,
+                cursor=cursor,
+            )
+            if not result.get("success"):
+                break
+            batch = result.get("ads", [])
+            all_ads.extend(batch)
+            cursor = result.get("cursor")
+            if not cursor or not batch:
+                break
+        if all_ads:
             use_page_id = True
+            result = {"success": True, "ads": all_ads}
 
     # Strategy 2: Auto-resolve page_id via company search
     if not use_page_id and not page_id_used:
@@ -239,11 +252,24 @@ async def fetch_competitor_ads(
                 db.commit()
                 logger.info(f"Auto-resolved facebook_page_id={resolved_id} for {competitor.name}")
 
-                result = await scrapecreators.fetch_facebook_company_ads(
-                    page_id=resolved_id,
-                )
-                if result.get("success"):
+                # Paginated fetch for resolved page too
+                all_ads = []
+                cursor = None
+                for _ in range(30):
+                    result = await scrapecreators.fetch_facebook_company_ads(
+                        page_id=resolved_id,
+                        cursor=cursor,
+                    )
+                    if not result.get("success"):
+                        break
+                    batch = result.get("ads", [])
+                    all_ads.extend(batch)
+                    cursor = result.get("cursor")
+                    if not cursor or not batch:
+                        break
+                if all_ads:
                     use_page_id = True
+                    result = {"success": True, "ads": all_ads}
 
     # Strategy 3: Fallback to keyword search
     if not use_page_id:
@@ -396,10 +422,19 @@ async def fetch_competitor_ads(
         if not child_id:
             continue
         try:
-            child_result = await scrapecreators.fetch_facebook_company_ads(page_id=child_id)
-            if not child_result.get("success"):
-                continue
-            for ad in child_result.get("ads", []):
+            # Paginated fetch for child pages too
+            child_ads = []
+            cursor = None
+            for _ in range(30):
+                child_result = await scrapecreators.fetch_facebook_company_ads(page_id=child_id, cursor=cursor)
+                if not child_result.get("success"):
+                    break
+                batch = child_result.get("ads", [])
+                child_ads.extend(batch)
+                cursor = child_result.get("cursor")
+                if not cursor or not batch:
+                    break
+            for ad in child_ads:
                 ad_id = str(ad.get("ad_archive_id", ""))
                 if not ad_id:
                     continue

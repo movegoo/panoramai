@@ -113,21 +113,41 @@ class DataCollectionScheduler:
             from routers.facebook import _name_matches, _parse_date
             import json
 
-            result = await scrapecreators.search_facebook_ads(
-                company_name=name, country="FR", limit=50
-            )
-            if not result.get("success"):
-                return
+            # Prefer page_id-based fetch with pagination
+            page_id = competitor.facebook_page_id
+            ads_list = []
+            use_page_id = False
+            if page_id:
+                cursor = None
+                for _ in range(30):
+                    result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id, cursor=cursor)
+                    if not result.get("success"):
+                        break
+                    batch = result.get("ads", [])
+                    ads_list.extend(batch)
+                    cursor = result.get("cursor")
+                    if not cursor or not batch:
+                        break
+                if ads_list:
+                    use_page_id = True
+
+            if not ads_list:
+                result = await scrapecreators.search_facebook_ads(
+                    company_name=name, country="FR", limit=50
+                )
+                if not result.get("success"):
+                    return
+                ads_list = result.get("ads", [])
 
             from database import Ad
             new_count = 0
-            for ad in result.get("ads", []):
+            for ad in ads_list:
                 ad_id = str(ad.get("ad_archive_id", ""))
                 if not ad_id:
                     continue
                 snapshot = ad.get("snapshot", {})
                 page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
-                if not _name_matches(name, page_name_val):
+                if not use_page_id and not _name_matches(name, page_name_val):
                     continue
                 if db.query(Ad).filter(Ad.ad_id == ad_id).first():
                     continue

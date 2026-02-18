@@ -232,11 +232,22 @@ async def _fetch_facebook_ads(competitor: Competitor, db: Session) -> dict:
                     competitor.facebook_page_id = page_id
                     db.commit()
 
-        # Fetch via page_id or keyword
+        # Fetch via page_id (with pagination) or keyword
         if page_id:
-            result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id)
-            if result.get("success"):
+            all_ads = []
+            cursor = None
+            for _ in range(30):  # max ~300 ads
+                result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id, cursor=cursor)
+                if not result.get("success"):
+                    break
+                batch = result.get("ads", [])
+                all_ads.extend(batch)
+                cursor = result.get("cursor")
+                if not cursor or not batch:
+                    break
+            if all_ads:
                 use_page_id = True
+                result = {"success": True, "ads": all_ads}
         if not use_page_id:
             result = await scrapecreators.search_facebook_ads(competitor.name, country="FR", limit=50)
 
