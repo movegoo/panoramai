@@ -481,7 +481,12 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
         </a>
       ) : (
         <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2 relative">
-          {imgError ? <ImageOff className="h-8 w-8 text-muted-foreground/20" /> : <Eye className="h-8 w-8 text-muted-foreground/20" />}
+          {imgError || ad.creative_url?.includes("tiktokcdn") ? (
+            <div className="flex flex-col items-center gap-1 text-muted-foreground/30">
+              <Play className="h-8 w-8" />
+              <span className="text-[9px] uppercase tracking-wider font-medium">Vidéo</span>
+            </div>
+          ) : <Eye className="h-8 w-8 text-muted-foreground/20" />}
           <div className="flex items-center gap-2">
             {advertiserLogo && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -1838,10 +1843,16 @@ export default function AdsPage() {
       }
       return true;
     });
-    // Sort: ads with creative_url first, then by start_date descending
+    // Sort: ads with reliable creative_url first, then by start_date descending
+    // TikTok signed URLs (tiktokcdn) expire quickly, treat them as no visual
+    const hasReliableVisual = (url: string | undefined | null) => {
+      if (!url) return false;
+      if (url.includes("tiktokcdn")) return false;
+      return true;
+    };
     result.sort((a, b) => {
-      const aHasVisual = a.creative_url ? 1 : 0;
-      const bHasVisual = b.creative_url ? 1 : 0;
+      const aHasVisual = hasReliableVisual(a.creative_url) ? 1 : 0;
+      const bHasVisual = hasReliableVisual(b.creative_url) ? 1 : 0;
       if (aHasVisual !== bHasVisual) return bHasVisual - aHasVisual;
       const aDate = a.start_date ? new Date(a.start_date).getTime() : 0;
       const bDate = b.start_date ? new Date(b.start_date).getTime() : 0;
