@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
 import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
@@ -29,40 +30,15 @@ function getRankColor(rank: number, total: number) {
 }
 
 export default function SeoPage() {
-  const [insights, setInsights] = useState<SeoInsights | null>(null);
-  const [rankings, setRankings] = useState<SerpRanking[]>([]);
-  const [lastTracked, setLastTracked] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState(false);
   const [trackResult, setTrackResult] = useState<string | null>(null);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [insData, rankData] = await Promise.all([
-        seoAPI.getInsights(),
-        seoAPI.getRankings(),
-      ]);
-      setInsights(insData);
-      setRankings(rankData.keywords);
-      setLastTracked(rankData.last_tracked || insData.last_tracked);
-    } catch (e) {
-      console.error("Failed to load SEO data:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: insights, isLoading: loadingInsights, mutate: refreshInsights } = useAPI<SeoInsights>("/seo/insights");
+  const { data: rankData, isLoading: loadingRankings, mutate: refreshRankings } = useAPI<{ keywords: SerpRanking[]; last_tracked: string | null }>("/seo/rankings");
 
-  const autoTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    loadData().then(() => {
-      // Will be called after state is set — check via ref below
-    });
-  }, []);
-
-  // Do NOT auto-trigger SEO tracking — it costs API credits
-  // User must click "Rafraichir les positions" manually
+  const loading = loadingInsights || loadingRankings;
+  const rankings = rankData?.keywords || [];
+  const lastTracked = rankData?.last_tracked || insights?.last_tracked || null;
 
   async function handleTrack() {
     setTracking(true);
@@ -70,7 +46,8 @@ export default function SeoPage() {
     try {
       const res = await seoAPI.track();
       setTrackResult(`${res.tracked_keywords} mots-cles trackes, ${res.total_results} resultats, ${res.matched_competitors} matchs concurrents`);
-      await loadData();
+      refreshInsights();
+      refreshRankings();
     } catch (e: any) {
       setTrackResult(`Erreur: ${e.message}`);
     } finally {

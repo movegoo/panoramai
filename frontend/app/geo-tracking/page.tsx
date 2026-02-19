@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
@@ -61,38 +62,15 @@ function getCellColor(value: number, allValues: number[]) {
 }
 
 export default function GeoTrackingPage() {
-  const [insights, setInsights] = useState<GeoInsights | null>(null);
-  const [results, setResults] = useState<GeoQueryResult[]>([]);
-  const [lastTracked, setLastTracked] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState(false);
   const [trackResult, setTrackResult] = useState<string | null>(null);
 
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [insData, resData] = await Promise.all([
-        geoTrackingAPI.getInsights(),
-        geoTrackingAPI.getResults(),
-      ]);
-      setInsights(insData);
-      setResults(resData.queries);
-      setLastTracked(resData.last_tracked || insData.last_tracked);
-    } catch (e) {
-      console.error("Failed to load GEO data:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: insights, isLoading: loadingInsights, mutate: refreshInsights } = useAPI<GeoInsights>("/geo-tracking/insights");
+  const { data: resData, isLoading: loadingResults, mutate: refreshResults } = useAPI<{ queries: GeoQueryResult[]; last_tracked: string | null }>("/geo-tracking/results");
 
-  const autoTrackedRef = React.useRef(false);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Do NOT auto-trigger GEO tracking — it costs API credits (Claude, Gemini, ChatGPT, Mistral)
-  // User must click "Rafraichir la visibilite" manually
+  const loading = loadingInsights || loadingResults;
+  const results = resData?.queries || [];
+  const lastTracked = resData?.last_tracked || insights?.last_tracked || null;
 
   async function handleTrack() {
     setTracking(true);
@@ -100,7 +78,8 @@ export default function GeoTrackingPage() {
     try {
       const res = await geoTrackingAPI.track();
       setTrackResult(`${res.tracked_queries} requetes analysees sur ${res.platforms.length} plateformes IA, ${res.total_mentions} mentions detectees`);
-      await loadData();
+      refreshInsights();
+      refreshResults();
     } catch (e: any) {
       setTrackResult(`Erreur: ${e.message}`);
     } finally {

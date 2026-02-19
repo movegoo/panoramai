@@ -10,7 +10,9 @@ import {
   brandAPI,
   AppData,
   CompetitorListItem,
+  BrandProfileData,
 } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 import { formatNumber, formatDate } from "@/lib/utils";
 import {
   RefreshCw,
@@ -122,69 +124,50 @@ function GrowthBadge({ value }: { value?: number | null }) {
 export default function AppsPage() {
   const [store, setStore] = useState<Store>("playstore");
   const [rankingView, setRankingView] = useState<RankingView>("rating");
-  const [competitors, setCompetitors] = useState<CompetitorListItem[]>([]);
   const [selectedCompetitor, setSelectedCompetitor] = useState<number | null>(null);
   const [appData, setAppData] = useState<AppData[]>([]);
-  const [psComparison, setPsComparison] = useState<any[]>([]);
-  const [asComparison, setAsComparison] = useState<any[]>([]);
   const [trends, setTrends] = useState<Record<string, any>>({});
-  const [brandName, setBrandName] = useState<string | null>(null);
-  const [asoData, setAsoData] = useState<any>(null);
-  const [asoLoading, setAsoLoading] = useState(true);
-  const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [trendsLoaded, setTrendsLoaded] = useState(false);
 
+  // SWR cached data
+  const { data: swrComp } = useAPI<CompetitorListItem[]>("/competitors/?include_brand=true");
+  const { data: swrPsComp, mutate: refreshPs } = useAPI<any[]>(`/playstore/comparison?days=${periodDays}`);
+  const { data: swrAsComp, mutate: refreshAs } = useAPI<any[]>(`/appstore/comparison?days=${periodDays}`);
+  const { data: swrBrand } = useAPI<BrandProfileData>("/brand/profile");
+  const { data: swrAso, isLoading: asoLoading } = useAPI<any>("/aso/analysis");
+
+  const competitors = useMemo(() => {
+    const allComp = swrComp || [];
+    return allComp.filter((c) => c.playstore_app_id || c.appstore_app_id);
+  }, [swrComp]);
+  const psComparison = swrPsComp || [];
+  const asComparison = swrAsComp || [];
+  const brandName = swrBrand?.company_name || null;
+  const asoData = swrAso || null;
+  const loading = !swrComp;
+
+  // Select first competitor when data arrives
   useEffect(() => {
-    async function loadAll() {
-      try {
-        const [comp, ps, as_, brand, aso] = await Promise.allSettled([
-          competitorsAPI.list({ includeBrand: true }),
-          playstoreAPI.getComparison(periodDays),
-          appstoreAPI.getComparison(periodDays),
-          brandAPI.getProfile(),
-          asoAPI.getAnalysis(),
-        ]);
-        const allComp = comp.status === "fulfilled" ? comp.value : [];
-        const withApps = allComp.filter((c) => c.playstore_app_id || c.appstore_app_id);
-        setCompetitors(withApps);
-        if (ps.status === "fulfilled") setPsComparison(ps.value);
-        if (as_.status === "fulfilled") setAsComparison(as_.value);
-        if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
-        if (aso.status === "fulfilled") setAsoData(aso.value);
-        setAsoLoading(false);
-        if (withApps.length > 0 && !selectedCompetitor) setSelectedCompetitor(withApps[0].id);
-
-        // Load trends for all competitors (only on first load)
-        if (initialLoad) {
-          const trendMap: Record<string, any> = {};
-          await Promise.allSettled(
-            withApps.map(async (c) => {
-              try {
-                if (c.playstore_app_id) {
-                  const t = await playstoreAPI.getTrends(c.id);
-                  trendMap[`ps_${c.id}`] = t;
-                }
-              } catch {}
-              try {
-                if (c.appstore_app_id) {
-                  const t = await appstoreAPI.getTrends(c.id);
-                  trendMap[`as_${c.id}`] = t;
-                }
-              } catch {}
-            })
-          );
-          setTrends(trendMap);
-        }
-      } catch (err) {
-        console.error("Failed to load:", err);
-      } finally {
-        if (initialLoad) { setLoading(false); setInitialLoad(false); }
-      }
+    if (competitors.length > 0 && !selectedCompetitor) {
+      setSelectedCompetitor(competitors[0].id);
     }
-    loadAll();
-  }, [periodDays]);
+  }, [competitors, selectedCompetitor]);
+
+  // Load trends once
+  useEffect(() => {
+    if (competitors.length > 0 && !trendsLoaded) {
+      setTrendsLoaded(true);
+      const trendMap: Record<string, any> = {};
+      Promise.allSettled(
+        competitors.map(async (c) => {
+          try { if (c.playstore_app_id) { trendMap[`ps_${c.id}`] = await playstoreAPI.getTrends(c.id); } } catch {}
+          try { if (c.appstore_app_id) { trendMap[`as_${c.id}`] = await appstoreAPI.getTrends(c.id); } } catch {}
+        })
+      ).then(() => setTrends({ ...trendMap }));
+    }
+  }, [competitors, trendsLoaded]);
 
   useEffect(() => {
     if (selectedCompetitor) {
@@ -205,12 +188,8 @@ export default function AppsPage() {
       for (const c of relevantCompetitors) {
         try { await api.fetch(c.id); } catch {}
       }
-      const [ps, as_] = await Promise.allSettled([
-        playstoreAPI.getComparison(),
-        appstoreAPI.getComparison(),
-      ]);
-      if (ps.status === "fulfilled") setPsComparison(ps.value);
-      if (as_.status === "fulfilled") setAsComparison(as_.value);
+      refreshPs();
+      refreshAs();
       if (selectedCompetitor) {
         const selApi = store === "playstore" ? playstoreAPI : appstoreAPI;
         selApi.getData(selectedCompetitor).then(setAppData).catch(() => {});
