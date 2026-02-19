@@ -12,6 +12,7 @@ import {
   CompetitorSuggestionData,
   SetupResponseData,
 } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
 import {
   TrendingUp,
@@ -641,49 +642,28 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
 /* ─────────────────────── Page ─────────────────────── */
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [activeRanking, setActiveRanking] = useState(0);
   const [showScoreInfo, setShowScoreInfo] = useState(false);
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [showAllAdvertisers, setShowAllAdvertisers] = useState(false);
 
-  function loadDashboard(isRefresh = false) {
-    if (!isRefresh) setLoading(true);
-    setError(null);
-    setNeedsOnboarding(false);
-    watchAPI
-      .getDashboard(periodDays)
-      .then((d) => {
-        if (!d.brand) {
-          setNeedsOnboarding(true);
-        } else {
-          setData(d);
-        }
-      })
-      .catch((err) => {
-        // 404 = no brand configured → show onboarding
-        // Other errors = actual API failure → show error
-        if ((err as any).status === 404) {
-          setNeedsOnboarding(true);
-        } else if (!isRefresh) {
-          setError("Le serveur est en cours de démarrage, veuillez patienter...");
-        }
-      })
-      .finally(() => { if (!isRefresh) setLoading(false); });
-  }
+  // SWR-cached dashboard fetch — survives page navigation
+  const { data: swrData, error: swrError, isLoading: loading, mutate: refreshDashboard } = useAPI<DashboardData>(
+    `/watch/dashboard?period_days=${periodDays}`
+  );
 
-  // Initial load shows spinner
-  useEffect(() => { loadDashboard(false); }, []);
-  // Period change just refreshes data silently
-  const firstMount = useState(true);
-  useEffect(() => {
-    if (firstMount[0]) { firstMount[1](false); return; }
-    loadDashboard(true);
-  }, [periodDays]);
+  const data = swrData?.brand ? swrData : null;
+  const needsOnboarding = swrData && !swrData.brand;
+  const error = swrError
+    ? (swrError as any).status === 404
+      ? null
+      : "Le serveur est en cours de démarrage, veuillez patienter..."
+    : null;
+
+  function loadDashboard() {
+    refreshDashboard();
+  }
 
   if (loading)
     return (

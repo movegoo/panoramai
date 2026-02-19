@@ -10,6 +10,7 @@ import {
   setCurrentAdvertiserId,
   clearCurrentAdvertiserId,
 } from "./api";
+import { invalidateAllCache } from "./use-api";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -86,8 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function switchAdvertiser(id: number) {
     setCurrentAdvertiserId(id);
     setCurrentAdvId(id);
-    // Force page reload to refetch all data with new advertiser
-    window.location.reload();
+    // Invalidate SWR cache so all pages refetch with new advertiser
+    invalidateAllCache();
   }
 
   return (

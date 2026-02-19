@@ -4,6 +4,7 @@ import "./globals.css";
 import "./win98.css";
 import "leaflet/dist/leaflet.css";
 import { AuthProvider } from "@/lib/auth";
+import { SWRProvider } from "@/lib/swr-provider";
 import { AppShell } from "./app-shell";
 
 const inter = Inter({
@@ -25,9 +26,11 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={inter.className}>
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        <SWRProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+        </SWRProvider>
       </body>
     </html>
   );

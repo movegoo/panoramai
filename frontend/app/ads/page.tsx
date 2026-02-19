@@ -14,6 +14,7 @@ import {
   Ad,
   CreativeInsights,
 } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 import { formatDate, formatNumber } from "@/lib/utils";
 import {
   RefreshCw,
@@ -1524,9 +1525,46 @@ export default function AdsPage() {
     });
   }
 
-  useEffect(() => { loadAll(); }, []);
+  // SWR-cached data fetches — survive page navigation
+  const { data: swrFbAds } = useAPI<(Ad & { competitor_name: string })[]>("/facebook/ads/all");
+  const { data: swrTtAds } = useAPI<(Ad & { competitor_name: string })[]>("/tiktok/ads/all");
+  const { data: swrGAds } = useAPI<(Ad & { competitor_name: string })[]>("/google/ads/all");
+  const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
+  const { data: swrBrand } = useAPI<any>("/brand/profile");
+  const { data: swrInsights } = useAPI<CreativeInsights>("/creative/insights");
+
+  // Merge SWR data into state when available
+  useEffect(() => {
+    const fb = swrFbAds || [];
+    const tt = swrTtAds || [];
+    const g = swrGAds || [];
+    if (fb.length || tt.length || g.length) {
+      setAllAds(deduplicateAds([...fb, ...tt, ...g]));
+      setLoading(false);
+    }
+  }, [swrFbAds, swrTtAds, swrGAds]);
+
+  useEffect(() => {
+    if (swrComps) setCompetitors(swrComps);
+  }, [swrComps]);
+
+  useEffect(() => {
+    if (swrBrand?.company_name) setBrandName(swrBrand.company_name);
+  }, [swrBrand]);
+
+  useEffect(() => {
+    if (swrInsights) setCreativeInsights(swrInsights);
+  }, [swrInsights]);
+
+  // If no ads at all after SWR load, loading is still false (empty state)
+  useEffect(() => {
+    if (swrFbAds !== undefined && swrTtAds !== undefined && swrGAds !== undefined) {
+      setLoading(false);
+    }
+  }, [swrFbAds, swrTtAds, swrGAds]);
 
   async function loadAll() {
+    setLoading(true);
     try {
       const [fbAdsRes, ttAdsRes, gAdsRes, compRes, brandRes] = await Promise.allSettled([
         facebookAPI.getAllAds(),
@@ -1543,54 +1581,6 @@ export default function AdsPage() {
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
       if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
-
-      // Auto-fetch missing platforms by checking actual platform values in returned ads
-      const allPlatforms = new Set(ads.map(a => a.platform));
-      const hasMeta = allPlatforms.has("facebook") || allPlatforms.has("instagram");
-      const hasTiktok = allPlatforms.has("tiktok");
-      const hasGoogle = allPlatforms.has("google");
-      // Check if Meta ads exist but lack enrichment data (no eu_total_reach)
-      const metaAds = ads.filter(a => a.platform === "facebook" || a.platform === "instagram");
-      const needsEnrichment = metaAds.length > 0 && metaAds.every(a => !a.eu_total_reach);
-      const missingPlatforms = comps.length > 0 && (!hasMeta || !hasTiktok || !hasGoogle);
-      if (missingPlatforms || needsEnrichment) {
-        setFetching(true);
-        try {
-          // Auto-resolve Facebook page IDs before fetching
-          if (!hasMeta) {
-            try { await facebookAPI.resolvePageIds(); } catch {}
-          }
-          if (!hasMeta || !hasTiktok || !hasGoogle) {
-            for (const c of comps) {
-              if (!hasMeta) try { await facebookAPI.fetchAds(c.id); } catch {}
-              if (!hasTiktok) try { await tiktokAPI.fetchAds(c.id); } catch {}
-              if (!hasGoogle) try { await googleAdsAPI.fetchAds(c.id); } catch {}
-            }
-          }
-          // Enrich Meta transparency in multiple rounds (API processes 25 ads at a time)
-          if (!hasMeta || needsEnrichment) {
-            for (let round = 0; round < 5; round++) {
-              try {
-                const r = await facebookAPI.enrichTransparency();
-                if (r.enriched === 0) break; // All done
-              } catch { break; }
-            }
-          }
-          const [freshFb, freshTt, freshG] = await Promise.allSettled([
-            facebookAPI.getAllAds(),
-            tiktokAPI.getAllAds(),
-            googleAdsAPI.getAllAds(),
-          ]);
-          setAllAds(deduplicateAds([
-            ...(freshFb.status === "fulfilled" ? freshFb.value : []),
-            ...(freshTt.status === "fulfilled" ? freshTt.value : []),
-            ...(freshG.status === "fulfilled" ? freshG.value : []),
-          ]));
-        } finally {
-          setFetching(false);
-        }
-      }
-      // Load creative insights (do NOT auto-analyze — costs Claude Vision credits)
       try {
         const ci = await creativeAPI.getInsights();
         setCreativeInsights(ci);

@@ -12,6 +12,7 @@ import {
   CompetitorListItem,
   ContentInsights,
 } from "@/lib/api";
+import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
 import {
   RefreshCw,
@@ -125,58 +126,56 @@ export default function SocialPage() {
   const autoCollectTriggered = useRef(false);
   const autoProfileTriggered = useRef(false);
 
+  // SWR-cached data fetches — survive page navigation
+  const { data: swrComps } = useAPI<CompetitorListItem[]>("/competitors/?include_brand=true");
+  const { data: swrIg } = useAPI<any[]>(`/instagram/comparison?period_days=${periodDays}`);
+  const { data: swrTt } = useAPI<any[]>(`/tiktok/comparison?period_days=${periodDays}`);
+  const { data: swrYt } = useAPI<any[]>(`/youtube/comparison?period_days=${periodDays}`);
+  const { data: swrBrand } = useAPI<any>("/brand/profile");
+  const { data: swrCi } = useAPI<ContentInsights>(`/social-content/insights${contentPlatform ? `?platform=${contentPlatform}` : ""}`);
+
+  // Merge SWR data into state
   useEffect(() => {
-    async function loadAll() {
-      try {
-        const [comp, ig, tt, yt, brand, ci] = await Promise.allSettled([
-          competitorsAPI.list({ includeBrand: true }),
-          instagramAPI.getComparison(periodDays),
-          tiktokAPI.getComparison(periodDays),
-          youtubeAPI.getComparison(periodDays),
-          brandAPI.getProfile(),
-          socialContentAPI.getInsights(contentPlatform || undefined),
-        ]);
-
-        const compList = comp.status === "fulfilled" ? comp.value : [];
-        const igData = ig.status === "fulfilled" ? ig.value : [];
-        const ttData = tt.status === "fulfilled" ? tt.value : [];
-        const ytData = yt.status === "fulfilled" ? yt.value : [];
-
-        setCompetitors(compList);
-        setIgComparison(igData);
-        setTtComparison(ttData);
-        setYtComparison(ytData);
-        if (brand.status === "fulfilled") setBrandName((brand.value as any).company_name || null);
-
-        if (ci.status === "fulfilled") {
-          setContentInsights(ci.value);
-          if (!autoCollectTriggered.current && (!ci.value || ci.value.total_analyzed === 0)) {
-            autoCollectTriggered.current = true;
-            runAutoCollect();
-          }
-        } else if (!autoCollectTriggered.current) {
-          autoCollectTriggered.current = true;
-          runAutoCollect();
-        }
-
-        // Auto-fetch profiles for platforms with no data
-        if (!autoProfileTriggered.current && compList.length > 0) {
-          const missingIg = igData.length === 0;
-          const missingTt = ttData.length === 0;
-          const missingYt = ytData.length === 0;
-          if (missingIg || missingTt || missingYt) {
-            autoProfileTriggered.current = true;
-            runAutoFetchProfiles(compList, missingIg, missingTt, missingYt);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load:", err);
-      } finally {
-        if (initialLoad) { setLoading(false); setInitialLoad(false); }
+    if (swrComps) setCompetitors(swrComps);
+  }, [swrComps]);
+  useEffect(() => {
+    if (swrIg) setIgComparison(swrIg);
+  }, [swrIg]);
+  useEffect(() => {
+    if (swrTt) setTtComparison(swrTt);
+  }, [swrTt]);
+  useEffect(() => {
+    if (swrYt) setYtComparison(swrYt);
+  }, [swrYt]);
+  useEffect(() => {
+    if (swrBrand?.company_name) setBrandName(swrBrand.company_name);
+  }, [swrBrand]);
+  useEffect(() => {
+    if (swrCi) {
+      setContentInsights(swrCi);
+      if (!autoCollectTriggered.current && (!swrCi || swrCi.total_analyzed === 0)) {
+        autoCollectTriggered.current = true;
+        runAutoCollect();
       }
     }
-    loadAll();
-  }, [periodDays]);
+  }, [swrCi]);
+
+  // Mark loading done when SWR data arrives
+  useEffect(() => {
+    if (swrComps !== undefined && swrIg !== undefined && swrTt !== undefined && swrYt !== undefined) {
+      if (initialLoad) { setLoading(false); setInitialLoad(false); }
+      // Auto-fetch profiles for platforms with no data
+      if (!autoProfileTriggered.current && swrComps && swrComps.length > 0) {
+        const missingIg = !swrIg || swrIg.length === 0;
+        const missingTt = !swrTt || swrTt.length === 0;
+        const missingYt = !swrYt || swrYt.length === 0;
+        if (missingIg || missingTt || missingYt) {
+          autoProfileTriggered.current = true;
+          runAutoFetchProfiles(swrComps, missingIg, missingTt, missingYt);
+        }
+      }
+    }
+  }, [swrComps, swrIg, swrTt, swrYt]);
 
   // Re-fetch insights when content platform filter changes (no re-collect)
   useEffect(() => {
