@@ -206,6 +206,7 @@ export default function GeoPage() {
                           <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
                           <span className={`text-xs font-medium truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
                             {g.competitor_name}
+                            {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -257,6 +258,7 @@ export default function GeoPage() {
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: comp.color }} />
                             <span className={`text-xs font-medium truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
                               {comp.competitor_name}
+                              {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
