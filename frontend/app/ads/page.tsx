@@ -411,12 +411,13 @@ function GenderBar({ male, female, unknown, compact = false }: { male: number; f
   );
 }
 
-function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetitor; expanded: boolean; onToggle: () => void; advertiserLogo?: string }) {
+function AdCard({ ad, expanded, onToggle, advertiserLogo, brandName }: { ad: AdWithCompetitor; expanded: boolean; onToggle: () => void; advertiserLogo?: string; brandName?: string }) {
+  const isBrand = !!(brandName && ad.competitor_name?.toLowerCase() === brandName.toLowerCase());
   const durationDays = (ad.start_date && ad.end_date) ? Math.ceil((new Date(ad.end_date).getTime() - new Date(ad.start_date).getTime()) / 86400000) : 0;
   const [imgError, setImgError] = useState(false);
   const linkHref = ad.ad_library_url || ad.link_url || ad.creative_url;
   return (
-    <div className="group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
+    <div className={`group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200" : ""}`}>
       {/* Image */}
       {ad.creative_url && !imgError ? (
         <a href={linkHref} target="_blank" rel="noopener noreferrer" className="block">
@@ -466,6 +467,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
               )}
               <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full sm:backdrop-blur-md bg-black/60 sm:bg-black/40 text-white">
                 {ad.competitor_name}
+                {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
               </span>
             </div>
             {/* Platform icons */}
@@ -495,6 +497,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo }: { ad: AdWithCompetit
             )}
             <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
               {ad.competitor_name}
+              {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
             </span>
           </div>
           {/* Source platform badge */}
@@ -1288,7 +1291,7 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
   );
 }
 
-function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds: AdWithCompetitor[]; stats: any; competitors: any[] }) {
+function CompetitorComparison({ filteredAds, stats, competitors, brandName }: { filteredAds: AdWithCompetitor[]; stats: any; competitors: any[]; brandName?: string }) {
   const data = useMemo(() => {
     const compLogoByName = new Map<string, string>();
     competitors.forEach((c: any) => { if (c.logo_url) compLogoByName.set(c.name.toLowerCase(), c.logo_url); });
@@ -1323,8 +1326,10 @@ function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds
         </div>
       </div>
       <div className="divide-y">
-        {data.map((c, i) => (
-          <div key={c.name} className="px-4 sm:px-5 py-4 hover:bg-muted/20 transition-colors">
+        {data.map((c, i) => {
+          const isBrand = !!(brandName && c.name.toLowerCase() === brandName.toLowerCase());
+          return (
+          <div key={c.name} className={`px-4 sm:px-5 py-4 hover:bg-muted/20 transition-colors ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200" : ""}`}>
             <div className="flex items-center gap-3 sm:gap-4">
               <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 ${i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-slate-100 text-slate-600" : "bg-orange-50 text-orange-600"}`}>
                 {i + 1}
@@ -1339,6 +1344,7 @@ function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds
                   </div>
                 )}
                 <span className="text-xs sm:text-sm font-semibold truncate">{c.name}</span>
+                {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
               </div>
               {/* Desktop: inline stats */}
               <div className="hidden md:grid flex-1 grid-cols-5 gap-4">
@@ -1408,7 +1414,7 @@ function CompetitorComparison({ filteredAds, stats, competitors }: { filteredAds
               </div>
             </div>
           </div>
-        ))}
+          ); })}
       </div>
     </div>
   );
@@ -2287,7 +2293,10 @@ export default function AdsPage() {
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {availableCompetitors.map(([name, count]) => (
-                    <FilterChip key={name} label={name} count={count} active={filterCompetitors.has(name)} onClick={() => toggleFilter(filterCompetitors, name, setFilterCompetitors)} />
+                    <span key={name} className="inline-flex items-center">
+                      <FilterChip label={name} count={count} active={filterCompetitors.has(name)} onClick={() => toggleFilter(filterCompetitors, name, setFilterCompetitors)} />
+                      {!!(brandName && name.toLowerCase() === brandName.toLowerCase()) && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -2479,7 +2488,7 @@ export default function AdsPage() {
       <InsightsSection filteredAds={filteredAds} stats={stats} />
 
       {/* ── Comparatif Concurrentiel ── */}
-      <CompetitorComparison filteredAds={filteredAds} stats={stats} competitors={competitors} />
+      <CompetitorComparison filteredAds={filteredAds} stats={stats} competitors={competitors} brandName={brandName} />
 
       {/* ── Creative Intelligence ─────────────────── */}
       <div className="rounded-2xl border bg-card overflow-hidden">
@@ -2601,16 +2610,18 @@ export default function AdsPage() {
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Score par concurrent</div>
                   <div className="space-y-2">
-                    {creativeInsights.by_competitor.map((c, i) => (
-                      <div key={c.competitor} className="flex items-center gap-3">
+                    {creativeInsights.by_competitor.map((c, i) => {
+                      const isBrand = !!(brandName && c.competitor.toLowerCase() === brandName.toLowerCase());
+                      return (
+                      <div key={c.competitor} className={`flex items-center gap-3 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200 rounded-lg px-2 py-1" : ""}`}>
                         <span className="text-[10px] font-bold text-muted-foreground/50 w-4">{i + 1}</span>
-                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}</span>
+                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}{isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
                         <span className="text-[10px] text-muted-foreground">{c.count} pubs</span>
                         <span className={`text-xs font-bold tabular-nums ${c.avg_score >= 70 ? "text-emerald-600" : c.avg_score >= 50 ? "text-blue-600" : "text-amber-600"}`}>
                           {c.avg_score}
                         </span>
                       </div>
-                    ))}
+                      ); })}
                   </div>
                 </div>
               )}
@@ -2641,7 +2652,7 @@ export default function AdsPage() {
                         </div>
                       )}
                       <div className="p-2">
-                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}</div>
+                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}{!!(brandName && p.competitor_name?.toLowerCase() === brandName.toLowerCase()) && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</div>
                         <div className="flex items-center gap-1 mt-0.5">
                           {p.concept && <span className="text-[9px] px-1.5 py-0 rounded bg-violet-100 text-violet-700">{p.concept}</span>}
                           {p.tone && <span className="text-[9px] px-1.5 py-0 rounded bg-pink-100 text-pink-700">{p.tone}</span>}
@@ -2949,6 +2960,7 @@ export default function AdsPage() {
                 expanded={expandedAds.has(ad.ad_id)}
                 onToggle={() => toggleExpand(ad.ad_id)}
                 advertiserLogo={ad.page_name ? advertiserLogos.get(ad.page_name) : undefined}
+                brandName={brandName}
               />
             ))}
           </div>
