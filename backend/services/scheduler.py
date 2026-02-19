@@ -33,6 +33,15 @@ class DataCollectionScheduler:
             replace_existing=True
         )
 
+        # Daily ad snapshots + signal detection (30 min after collection)
+        self.scheduler.add_job(
+            self.daily_snapshots_and_signals,
+            CronTrigger(hour=settings.SCHEDULER_HOUR, minute=settings.SCHEDULER_MINUTE + 30),
+            id="daily_signals",
+            name="Daily Snapshots & Signal Detection",
+            replace_existing=True
+        )
+
         # Weekly market data refresh (Sundays 3 AM)
         self.scheduler.add_job(
             self.weekly_market_data_refresh,
@@ -323,6 +332,25 @@ class DataCollectionScheduler:
                 logger.info(f"YouTube data fetched for {name}")
         except Exception as e:
             logger.error(f"YouTube fetch failed for {name}: {e}")
+
+    async def daily_snapshots_and_signals(self):
+        """Take ad snapshots and run signal detection after daily collection."""
+        logger.info(f"Starting daily snapshots & signals at {datetime.utcnow()}")
+        db = SessionLocal()
+        try:
+            from services.signals import snapshot_active_ads, detect_all_signals
+
+            # 1. Snapshot active ads
+            snap_count = snapshot_active_ads(db)
+            logger.info(f"Ad snapshots complete: {snap_count} ads")
+
+            # 2. Detect signals for all competitors
+            signals = detect_all_signals(db)
+            logger.info(f"Signal detection complete: {len(signals)} new signals")
+        except Exception as e:
+            logger.error(f"Snapshots & signals failed: {e}")
+        finally:
+            db.close()
 
     async def weekly_market_data_refresh(self):
         """Refresh market data from data.gouv.fr."""

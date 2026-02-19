@@ -463,6 +463,48 @@ class GeoResult(Base):
     competitor = relationship("Competitor", backref="geo_results")
 
 
+class AdSnapshot(Base):
+    """Daily snapshot of active ad metrics for trend tracking."""
+    __tablename__ = "ad_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ad_id = Column(String(100), index=True)  # References ads.ad_id
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    platform = Column(String(50))
+    is_active = Column(Boolean, default=True)
+    impressions_min = Column(Integer)
+    impressions_max = Column(Integer)
+    estimated_spend_min = Column(Float)
+    estimated_spend_max = Column(Float)
+    eu_total_reach = Column(BigInteger)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", backref="ad_snapshots")
+
+
+class Signal(Base):
+    """Detected signal (anomaly, trend change, competitive move)."""
+    __tablename__ = "signals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=True, index=True)
+    signal_type = Column(String(50), index=True)       # follower_spike, rating_drop, new_campaign, engagement_anomaly, etc.
+    severity = Column(String(20), index=True)           # info, warning, critical
+    platform = Column(String(50))                       # instagram, tiktok, youtube, playstore, appstore, meta_ads, google_ads
+    title = Column(String(500))                         # Human-readable title
+    description = Column(Text)                          # Detailed explanation
+    metric_name = Column(String(100))                   # followers, rating, engagement_rate, ad_count, etc.
+    previous_value = Column(Float)                      # Value before change
+    current_value = Column(Float)                       # Value after change
+    change_percent = Column(Float)                      # Percentage change
+    is_brand = Column(Boolean, default=False)           # Signal about own brand vs competitor
+    is_read = Column(Boolean, default=False, index=True)
+    detected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", backref="signals")
+
+
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"
