@@ -192,49 +192,6 @@ async def resolve_facebook_page_ids(
     }
 
 
-# Known sub-brand patterns for grande distribution
-CHILD_BRAND_PATTERNS: dict[str, list[str]] = {
-    "carrefour": [
-        "Carrefour City", "Carrefour Market", "Carrefour Express",
-        "Carrefour Bio", "Carrefour Drive", "Carrefour Banque",
-        "Carrefour Voyages", "Carrefour Spectacles", "Carrefour Assurance",
-        "Carrefour Location", "Atacadao",
-    ],
-    "leclerc": [
-        "E.Leclerc Drive", "Leclerc Voyages", "E.Leclerc Parapharmacie",
-        "E.Leclerc Station", "Leclerc Mobile", "E.Leclerc Optique",
-        "E.Leclerc Billetterie", "E.Leclerc Energies",
-    ],
-    "lidl": [
-        "Lidl Voyages", "Lidl Plus",
-    ],
-    "auchan": [
-        "Auchan Retail", "Auchan Drive", "My Auchan",
-        "Auchan Supermarche", "Auchan.fr",
-    ],
-    "intermarche": [
-        "Intermarche Express", "Intermarche Super", "Intermarche Hyper",
-        "Intermarche Contact", "Les Mousquetaires",
-    ],
-    "monoprix": [
-        "Monop'", "Naturalia", "Monoprix.fr",
-    ],
-    "casino": [
-        "Geant Casino", "Casino Supermarche", "Franprix",
-        "Leader Price", "Vival", "Spar France",
-    ],
-    "systeme u": [
-        "Super U", "Hyper U", "U Express", "Courses U",
-    ],
-    "picard": [
-        "Picard Surgeles",
-    ],
-    "aldi": [
-        "ALDI France",
-    ],
-}
-
-
 @router.post("/discover-child-pages")
 async def discover_child_pages(
     db: Session = Depends(get_db),
@@ -242,32 +199,34 @@ async def discover_child_pages(
     x_advertiser_id: str | None = Header(None),
 ):
     """
-    Auto-discover child/sub-brand Facebook pages for each competitor.
-    Searches known sub-brand names via ScrapeCreators and stores their page IDs.
+    Auto-discover child/local Facebook pages for each competitor.
+
+    Strategy 1: Mine existing ads in DB — any ad with a page_name containing
+    the competitor name but a different page_id is a child page (e.g. "Carrefour Laon").
+
+    Strategy 2: Search ScrapeCreators for "<Brand> <City>" patterns using
+    top French cities to find local pages.
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
 
+    # Top French cities for local page search
+    TOP_CITIES = [
+        "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes",
+        "Strasbourg", "Montpellier", "Bordeaux", "Lille", "Rennes",
+        "Reims", "Saint-Etienne", "Toulon", "Le Havre", "Grenoble",
+        "Dijon", "Angers", "Nimes", "Clermont-Ferrand", "Aix-en-Provence",
+        "Brest", "Tours", "Amiens", "Limoges", "Metz", "Perpignan",
+        "Besancon", "Orleans", "Rouen", "Caen", "Mulhouse", "Nancy",
+        "Argenteuil", "Montreuil", "Dunkerque", "Avignon", "Poitiers",
+        "Versailles", "Laon",
+    ]
+
     results = []
 
     for comp in competitors:
-        comp_lower = comp.name.lower().strip()
         parent_page_id = comp.facebook_page_id or ""
-
-        # Find matching pattern list
-        patterns = []
-        for key, variants in CHILD_BRAND_PATTERNS.items():
-            if key in comp_lower or comp_lower in key:
-                patterns = variants
-                break
-
-        # Also search generic variations
-        if not patterns:
-            patterns = [
-                f"{comp.name} France",
-                f"{comp.name} Drive",
-                f"{comp.name} Express",
-            ]
+        comp_lower = comp.name.lower().strip()
 
         # Load existing child page IDs
         existing_children = set()
@@ -279,9 +238,35 @@ async def discover_child_pages(
 
         found_children = []
 
-        for variant in patterns:
+        # ── Strategy 1: Mine existing ads in DB ──
+        # Find distinct page_ids from this competitor's ads that differ from parent
+        ads_with_pages = db.query(Ad.page_id, Ad.page_name).filter(
+            Ad.competitor_id == comp.id,
+            Ad.page_id.isnot(None),
+            Ad.page_name.isnot(None),
+        ).distinct().all()
+
+        for ad_page_id, ad_page_name in ads_with_pages:
+            if not ad_page_id or ad_page_id == parent_page_id:
+                continue
+            if ad_page_id in existing_children:
+                continue
+            # Check if it's a local page (name contains brand name)
+            if comp_lower in (ad_page_name or "").lower():
+                existing_children.add(ad_page_id)
+                found_children.append({
+                    "page_id": ad_page_id,
+                    "page_name": ad_page_name,
+                    "source": "ads_db",
+                })
+
+        # ── Strategy 2: Search for local pages via ScrapeCreators ──
+        # Search "<Brand> <City>" for top cities
+        search_queries = [f"{comp.name} {city}" for city in TOP_CITIES[:15]]
+
+        for query in search_queries:
             try:
-                search_result = await scrapecreators.search_facebook_companies(variant)
+                search_result = await scrapecreators.search_facebook_companies(query)
                 if not search_result.get("success"):
                     continue
 
@@ -294,21 +279,18 @@ async def discover_child_pages(
                     if page_id in existing_children:
                         continue
 
-                    # Verify relevance: page name must relate to the brand
-                    pn_lower = page_name.lower()
-                    variant_words = variant.lower().split()
-                    if any(w in pn_lower for w in variant_words[:1]):
+                    # Verify: page name must contain the brand name
+                    if comp_lower in page_name.lower():
                         existing_children.add(page_id)
                         found_children.append({
                             "page_id": page_id,
                             "page_name": page_name,
-                            "search_query": variant,
+                            "source": f"search:{query}",
                         })
 
-                # Rate limit between searches
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.3)
             except Exception as e:
-                logger.warning(f"Child page search failed for '{variant}': {e}")
+                logger.warning(f"Child page search failed for '{query}': {e}")
 
         # Save updated child_page_ids
         if existing_children:
@@ -318,7 +300,6 @@ async def discover_child_pages(
             "competitor_id": comp.id,
             "competitor_name": comp.name,
             "parent_page_id": parent_page_id,
-            "existing_children": len(existing_children) - len(found_children),
             "new_children_found": len(found_children),
             "children": found_children,
             "total_children": len(existing_children),
@@ -328,7 +309,7 @@ async def discover_child_pages(
 
     total_new = sum(r["new_children_found"] for r in results)
     return {
-        "message": f"Discovered {total_new} new child pages across {len(results)} competitors",
+        "message": f"Discovered {total_new} child/local pages across {len(results)} competitors",
         "results": results,
     }
 
