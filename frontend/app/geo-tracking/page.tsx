@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
+import { ExportMenu } from "@/components/export-menu";
 import { useAPI } from "@/lib/use-api";
 
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
@@ -280,10 +281,27 @@ export default function GeoTrackingPage() {
 
           {/* Platform Comparison */}
           <div className="rounded-2xl border border-border bg-card p-6">
-            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Bot className="h-4 w-4 text-cyan-500" />
-              Comparaison par plateforme IA
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Bot className="h-4 w-4 text-cyan-500" />
+                Comparaison par plateforme IA
+              </h2>
+              <ExportMenu
+                filename="geo_comparaison_ia"
+                data={insights.platform_comparison.map(row => {
+                  const r: Record<string, any> = { concurrent: row.competitor };
+                  platforms.forEach(p => { r[`${p}_pct`] = `${row[`${p}_pct`] ?? 0}%`; r[`${p}_mentions`] = row[`${p}_mentions`] ?? 0; });
+                  return r;
+                })}
+                columns={[
+                  { key: "concurrent", label: "Concurrent" },
+                  ...platforms.flatMap(p => [
+                    { key: `${p}_pct`, label: `${p} (%)` },
+                    { key: `${p}_mentions`, label: `${p} (mentions)` },
+                  ]),
+                ]}
+              />
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

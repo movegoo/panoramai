@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
 import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
+import { ExportMenu } from "@/components/export-menu";
 import { useAPI } from "@/lib/use-api";
 
 function formatDate(iso: string | null) {
@@ -236,10 +237,26 @@ export default function SeoPage() {
 
           {/* Rankings Grid */}
           <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
-            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Search className="h-4 w-4 text-blue-500" />
-              Positions par mot-cle
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Search className="h-4 w-4 text-blue-500" />
+                Positions par mot-cle
+              </h2>
+              {rankings.length > 0 && (
+                <ExportMenu
+                  filename="seo_positions"
+                  data={rankings.map(kw => {
+                    const row: Record<string, any> = { keyword: kw.keyword };
+                    kw.results.forEach(r => { if (r.competitor_name) row[r.competitor_name] = r.position; });
+                    return row;
+                  })}
+                  columns={[
+                    { key: "keyword", label: "Mot-cle" },
+                    ...competitorNames.map(n => ({ key: n, label: n })),
+                  ]}
+                />
+              )}
+            </div>
             {rankings.length > 0 && competitorNames.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>

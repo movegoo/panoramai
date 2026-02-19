@@ -53,6 +53,11 @@ def detect_all_signals(db: Session, advertiser_id: int = None) -> list[dict]:
         new_signals.extend(_detect_youtube_signals(db, comp))
         new_signals.extend(_detect_app_signals(db, comp))
         new_signals.extend(_detect_ad_signals(db, comp))
+        # Trend-based intelligence (multi-day patterns)
+        new_signals.extend(_detect_growth_trends(db, comp))
+        new_signals.extend(_detect_review_velocity(db, comp))
+        new_signals.extend(_detect_engagement_trends(db, comp))
+        new_signals.extend(_detect_posting_frequency(db, comp))
 
     logger.info(f"Signal detection complete: {len(new_signals)} new signals")
     return new_signals
@@ -332,5 +337,322 @@ def _detect_ad_signals(db: Session, comp: Competitor) -> list:
                 current_value=ad.eu_total_reach,
                 change_percent=0,
             ))
+
+    return signals
+
+
+# =============================================================================
+# Trend-based intelligence (multi-day pattern analysis)
+# =============================================================================
+
+def _get_series(db: Session, model, competitor_id: int, days: int = 7):
+    """Get the last N days of records for a competitor."""
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    return db.query(model).filter(
+        model.competitor_id == competitor_id,
+        model.recorded_at >= cutoff,
+    ).order_by(model.recorded_at).all()
+
+
+def _already_signaled(db: Session, comp_id: int, signal_type: str, hours: int = 24) -> bool:
+    """Check if we already created this type of signal recently."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    return db.query(Signal).filter(
+        Signal.competitor_id == comp_id,
+        Signal.signal_type == signal_type,
+        Signal.detected_at >= cutoff,
+    ).first() is not None
+
+
+def _linear_slope(values: list[float]) -> float:
+    """Simple linear regression slope (growth rate per day)."""
+    n = len(values)
+    if n < 3:
+        return 0.0
+    x_mean = (n - 1) / 2
+    y_mean = sum(values) / n
+    num = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
+    den = sum((i - x_mean) ** 2 for i in range(n))
+    return num / den if den != 0 else 0.0
+
+
+def _detect_growth_trends(db: Session, comp: Competitor) -> list:
+    """
+    Detect growth acceleration / deceleration over 7 days.
+    Compare first-half slope vs second-half slope.
+    If growth accelerates by 3x → signal.
+    """
+    signals = []
+
+    sources = [
+        (InstagramData, "followers", "instagram", "followers Instagram", THRESHOLDS["min_followers"]),
+        (TikTokData, "followers", "tiktok", "followers TikTok", THRESHOLDS["min_followers"]),
+        (YouTubeData, "subscribers", "youtube", "abonnes YouTube", THRESHOLDS["min_followers"]),
+    ]
+
+    for model, field, platform, label, min_val in sources:
+        sig_type = f"growth_trend_{platform}"
+        if _already_signaled(db, comp.id, sig_type):
+            continue
+
+        records = _get_series(db, model, comp.id, days=7)
+        values = [getattr(r, field) or 0 for r in records]
+        if len(values) < 5 or values[0] < min_val:
+            continue
+
+        mid = len(values) // 2
+        first_half = values[:mid]
+        second_half = values[mid:]
+
+        slope_first = _linear_slope(first_half)
+        slope_second = _linear_slope(second_half)
+
+        # Growth acceleration: second half growing 3x faster
+        if slope_first > 0 and slope_second > slope_first * 3 and slope_second > 10:
+            total_gain = values[-1] - values[0]
+            pct_gain = (total_gain / values[0]) * 100 if values[0] > 0 else 0
+            signals.append(_create_signal(db, comp,
+                signal_type=sig_type,
+                severity="warning",
+                platform=platform,
+                title=f"{platform.title()}: acceleration de croissance des {label} pour {comp.name}",
+                description=(
+                    f"Croissance en acceleration sur 7 jours: +{total_gain:,.0f} ({pct_gain:+.1f}%). "
+                    f"Rythme x{slope_second / slope_first:.1f} vs semaine precedente."
+                ),
+                metric_name=field,
+                previous_value=values[0],
+                current_value=values[-1],
+                change_percent=round(pct_gain, 2),
+            ))
+
+        # Growth deceleration / decline trend
+        elif slope_first > 0 and slope_second < -abs(slope_first) * 0.5:
+            total_change = values[-1] - values[0]
+            pct = (total_change / values[0]) * 100 if values[0] > 0 else 0
+            signals.append(_create_signal(db, comp,
+                signal_type=sig_type,
+                severity="warning",
+                platform=platform,
+                title=f"{platform.title()}: retournement de tendance des {label} pour {comp.name}",
+                description=(
+                    f"Apres une croissance, les {label} sont en baisse. "
+                    f"Variation totale: {total_change:+,.0f} ({pct:+.1f}%) sur 7 jours."
+                ),
+                metric_name=field,
+                previous_value=values[0],
+                current_value=values[-1],
+                change_percent=round(pct, 2),
+            ))
+
+        # Sustained decline: losing followers every day for 5+ days
+        if len(values) >= 5:
+            consecutive_drops = 0
+            for i in range(1, len(values)):
+                if values[i] < values[i - 1]:
+                    consecutive_drops += 1
+                else:
+                    consecutive_drops = 0
+            if consecutive_drops >= 5 and not _already_signaled(db, comp.id, f"sustained_decline_{platform}"):
+                total_loss = values[-1] - values[-consecutive_drops - 1]
+                pct = (total_loss / values[-consecutive_drops - 1]) * 100 if values[-consecutive_drops - 1] > 0 else 0
+                signals.append(_create_signal(db, comp,
+                    signal_type=f"sustained_decline_{platform}",
+                    severity="critical",
+                    platform=platform,
+                    title=f"{platform.title()}: baisse continue des {label} ({consecutive_drops}j) pour {comp.name}",
+                    description=(
+                        f"Les {label} baissent depuis {consecutive_drops} jours consecutifs. "
+                        f"Perte totale: {total_loss:+,.0f} ({pct:+.1f}%)."
+                    ),
+                    metric_name=field,
+                    previous_value=values[-consecutive_drops - 1],
+                    current_value=values[-1],
+                    change_percent=round(pct, 2),
+                ))
+
+    return signals
+
+
+def _detect_review_velocity(db: Session, comp: Competitor) -> list:
+    """
+    Detect sudden surges in app reviews (campaign or crisis indicator).
+    """
+    signals = []
+
+    for store in ["playstore", "appstore"]:
+        sig_type = f"review_surge_{store}"
+        if _already_signaled(db, comp.id, sig_type):
+            continue
+
+        records = _get_series(db, AppData, comp.id, days=7)
+        store_records = [r for r in records if r.store == store and r.reviews_count]
+        if len(store_records) < 3:
+            continue
+
+        review_counts = [r.reviews_count for r in store_records]
+        daily_gains = [review_counts[i] - review_counts[i - 1] for i in range(1, len(review_counts))]
+
+        if not daily_gains or len(daily_gains) < 2:
+            continue
+
+        avg_daily = sum(daily_gains[:-1]) / len(daily_gains[:-1]) if len(daily_gains) > 1 else daily_gains[0]
+        latest_gain = daily_gains[-1]
+
+        # 3x normal daily review gain
+        if avg_daily > 0 and latest_gain > avg_daily * 3 and latest_gain > 50:
+            store_label = "Play Store" if store == "playstore" else "App Store"
+            signals.append(_create_signal(db, comp,
+                signal_type=sig_type,
+                severity="warning",
+                platform=store,
+                title=f"{store_label}: afflux d'avis anormal pour {comp.name}",
+                description=(
+                    f"+{latest_gain} avis en 1 jour (moyenne: {avg_daily:.0f}/jour). "
+                    f"Velocite x{latest_gain / avg_daily:.1f}. Total: {review_counts[-1]:,} avis."
+                ),
+                metric_name="reviews_count",
+                previous_value=review_counts[-2],
+                current_value=review_counts[-1],
+                change_percent=round((latest_gain / avg_daily) * 100, 2) if avg_daily > 0 else 0,
+            ))
+
+        # Rating + reviews: detect review bombing (sudden bad reviews + rating drop)
+        ratings = [r.rating for r in store_records if r.rating]
+        if len(ratings) >= 3:
+            rating_drop = ratings[0] - ratings[-1]
+            if rating_drop >= 0.3 and latest_gain > avg_daily * 2:
+                store_label = "Play Store" if store == "playstore" else "App Store"
+                if not _already_signaled(db, comp.id, f"review_bombing_{store}"):
+                    signals.append(_create_signal(db, comp,
+                        signal_type=f"review_bombing_{store}",
+                        severity="critical",
+                        platform=store,
+                        title=f"{store_label}: possible review bombing pour {comp.name}",
+                        description=(
+                            f"Note en baisse ({ratings[0]:.1f} → {ratings[-1]:.1f}) "
+                            f"accompagnee d'un afflux d'avis ({latest_gain}/jour vs {avg_daily:.0f}/jour normal). "
+                            f"Possible campagne d'avis negatifs."
+                        ),
+                        metric_name="rating",
+                        previous_value=ratings[0],
+                        current_value=ratings[-1],
+                        change_percent=round(-rating_drop, 2),
+                    ))
+
+    return signals
+
+
+def _detect_engagement_trends(db: Session, comp: Competitor) -> list:
+    """Detect sustained engagement changes on Instagram over 5+ days."""
+    signals = []
+    sig_type = "engagement_trend_instagram"
+    if _already_signaled(db, comp.id, sig_type):
+        return signals
+
+    records = _get_series(db, InstagramData, comp.id, days=7)
+    rates = [r.engagement_rate for r in records if r.engagement_rate is not None]
+    if len(rates) < 5:
+        return signals
+
+    rising = sum(1 for i in range(1, len(rates)) if rates[i] > rates[i - 1])
+    falling = sum(1 for i in range(1, len(rates)) if rates[i] < rates[i - 1])
+
+    total_change = rates[-1] - rates[0]
+
+    if rising >= len(rates) - 2 and total_change > 0.5:
+        signals.append(_create_signal(db, comp,
+            signal_type=sig_type,
+            severity="info",
+            platform="instagram",
+            title=f"Instagram: engagement en hausse continue pour {comp.name}",
+            description=(
+                f"Taux d'engagement en hausse sur {len(rates)} jours: "
+                f"{rates[0]:.2f}% → {rates[-1]:.2f}% ({total_change:+.2f}pts). "
+                f"Contenu performant."
+            ),
+            metric_name="engagement_rate",
+            previous_value=rates[0],
+            current_value=rates[-1],
+            change_percent=round(total_change, 2),
+        ))
+    elif falling >= len(rates) - 2 and total_change < -0.5:
+        signals.append(_create_signal(db, comp,
+            signal_type=sig_type,
+            severity="warning",
+            platform="instagram",
+            title=f"Instagram: engagement en baisse continue pour {comp.name}",
+            description=(
+                f"Taux d'engagement en baisse sur {len(rates)} jours: "
+                f"{rates[0]:.2f}% → {rates[-1]:.2f}% ({total_change:+.2f}pts). "
+                f"Contenu moins performant ou changement d'algorithme."
+            ),
+            metric_name="engagement_rate",
+            previous_value=rates[0],
+            current_value=rates[-1],
+            change_percent=round(total_change, 2),
+        ))
+
+    return signals
+
+
+def _detect_posting_frequency(db: Session, comp: Competitor) -> list:
+    """Detect changes in social media posting frequency."""
+    signals = []
+
+    # Instagram: posts_count delta over 14 days
+    sig_type = "posting_surge_instagram"
+    if not _already_signaled(db, comp.id, sig_type):
+        records = _get_series(db, InstagramData, comp.id, days=14)
+        posts = [(r.recorded_at, r.posts_count) for r in records if r.posts_count]
+        if len(posts) >= 7:
+            mid = len(posts) // 2
+            first_half_rate = (posts[mid][1] - posts[0][1]) / max(mid, 1)
+            second_half_rate = (posts[-1][1] - posts[mid][1]) / max(len(posts) - mid, 1)
+
+            if first_half_rate > 0 and second_half_rate > first_half_rate * 2.5 and second_half_rate > 0.5:
+                total_new = posts[-1][1] - posts[0][1]
+                signals.append(_create_signal(db, comp,
+                    signal_type=sig_type,
+                    severity="info",
+                    platform="instagram",
+                    title=f"Instagram: rythme de publication accelere pour {comp.name}",
+                    description=(
+                        f"+{total_new} publications en {len(posts)} jours. "
+                        f"Rythme x{second_half_rate / first_half_rate:.1f} vs periode precedente. "
+                        f"Possible campagne de contenu en cours."
+                    ),
+                    metric_name="posts_count",
+                    previous_value=posts[0][1],
+                    current_value=posts[-1][1],
+                    change_percent=round((total_new / posts[0][1]) * 100 if posts[0][1] > 0 else 0, 2),
+                ))
+
+    # TikTok: videos_count delta
+    sig_type = "posting_surge_tiktok"
+    if not _already_signaled(db, comp.id, sig_type):
+        records = _get_series(db, TikTokData, comp.id, days=14)
+        videos = [(r.recorded_at, r.videos_count) for r in records if r.videos_count]
+        if len(videos) >= 7:
+            mid = len(videos) // 2
+            first_half_rate = (videos[mid][1] - videos[0][1]) / max(mid, 1)
+            second_half_rate = (videos[-1][1] - videos[mid][1]) / max(len(videos) - mid, 1)
+
+            if first_half_rate > 0 and second_half_rate > first_half_rate * 2.5 and second_half_rate > 0.3:
+                total_new = videos[-1][1] - videos[0][1]
+                signals.append(_create_signal(db, comp,
+                    signal_type=sig_type,
+                    severity="info",
+                    platform="tiktok",
+                    title=f"TikTok: rythme de publication accelere pour {comp.name}",
+                    description=(
+                        f"+{total_new} videos en {len(videos)} jours. "
+                        f"Rythme x{second_half_rate / first_half_rate:.1f} vs periode precedente."
+                    ),
+                    metric_name="videos_count",
+                    previous_value=videos[0][1],
+                    current_value=videos[-1][1],
+                    change_percent=round((total_new / videos[0][1]) * 100 if videos[0][1] > 0 else 0, 2),
+                ))
 
     return signals

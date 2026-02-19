@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { ExportMenu } from "@/components/export-menu";
 import {
   competitorsAPI,
   instagramAPI,
@@ -464,9 +465,23 @@ export default function SocialPage() {
       {/* ── Cross-Platform Overview ── */}
       {crossPlatformData.length > 0 && (
         <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
-          <div className="flex items-center gap-2.5">
-            <Crown className="h-4.5 w-4.5 text-amber-400" />
-            <h2 className="text-sm font-semibold">Vue d&apos;ensemble multi-plateformes</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Crown className="h-4.5 w-4.5 text-amber-400" />
+              <h2 className="text-sm font-semibold">Vue d&apos;ensemble multi-plateformes</h2>
+            </div>
+            <ExportMenu
+              variant="dark"
+              filename="social_vue_ensemble"
+              data={crossPlatformData.map(c => ({ name: c.name, ig_followers: c.ig?.followers, tt_followers: c.tt?.followers, yt_subscribers: c.yt?.subscribers, total: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) }))}
+              columns={[
+                { key: "name", label: "Concurrent" },
+                { key: "ig_followers", label: "Instagram" },
+                { key: "tt_followers", label: "TikTok" },
+                { key: "yt_subscribers", label: "YouTube" },
+                { key: "total", label: "Audience totale" },
+              ]}
+            />
           </div>
           <div className="overflow-x-auto -mx-5 sm:-mx-6 px-5 sm:px-6">
             <table className="w-full min-w-[600px]">
@@ -697,11 +712,24 @@ export default function SocialPage() {
 
           {/* ── Detailed Table ── */}
           <div className="rounded-2xl border bg-card overflow-hidden">
-            <div className="px-5 py-3 border-b bg-muted/20 flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
-                <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
+            <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
+                  <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
               </div>
-              <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
+              <ExportMenu
+                filename={`social_${platform}_details`}
+                data={sorted.map(c => ({ name: c.competitor_name, followers: platform === "youtube" ? c.subscribers : c.followers, engagement: c.engagement_rate, posts: c.posts_count || c.videos_count, likes: c.avg_likes || c.likes }))}
+                columns={[
+                  { key: "name", label: "Concurrent" },
+                  { key: "followers", label: platform === "youtube" ? "Abonnes" : "Followers" },
+                  { key: "engagement", label: "Engagement (%)", format: (v: number) => v?.toFixed(2) || "" },
+                  { key: "posts", label: platform === "youtube" ? "Videos" : "Posts" },
+                  { key: "likes", label: "Likes" },
+                ]}
+              />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[650px]">

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
+import { exportCSV, exportXLSX, ExportColumn } from "@/lib/export";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, Area, AreaChart,
@@ -165,6 +166,31 @@ function Sparkline({ data, color = "#6366f1", height = 32 }: { data: DataPoint[]
   );
 }
 
+function ExportMenu({ onCSV, onXLSX }: { onCSV: () => void; onXLSX: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-white hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+      >
+        <Download className="h-3.5 w-3.5" />
+        Exporter
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white rounded-lg border shadow-lg z-50 py-1 min-w-[120px]">
+          <button onClick={() => { onCSV(); setOpen(false); }} className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors">
+            CSV
+          </button>
+          <button onClick={() => { onXLSX(); setOpen(false); }} className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/50 transition-colors">
+            Excel (XLSX)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatDateLabel(iso: string): string {
   try {
     const d = new Date(iso);
@@ -258,6 +284,44 @@ export default function TendancesPage() {
 
     return results.slice(0, 8);
   }, [summaries]);
+
+  // ─── Export helpers ───
+  function exportRankingTable(format: "csv" | "xlsx") {
+    const columns: ExportColumn[] = [
+      { key: "name", label: "Concurrent" },
+      ...selectedCat.metrics.map((m) => ({
+        key: m.key,
+        label: m.label,
+        format: (v: any) => (v?.value != null ? v.value : ""),
+      })),
+      ...selectedCat.metrics.map((m) => ({
+        key: `${m.key}_delta`,
+        label: `${m.label} (variation %)`,
+        format: (v: any) => (v?.delta_pct != null ? `${v.delta_pct}%` : ""),
+      })),
+    ];
+    const rows = sortedSummaries.map((comp) => {
+      const row: Record<string, any> = { name: comp.name };
+      for (const m of selectedCat.metrics) {
+        row[m.key] = comp.metrics[m.key];
+        row[`${m.key}_delta`] = comp.metrics[m.key];
+      }
+      return row;
+    });
+    const fn = `tendances_${selectedCat.id}_${dateFrom}_${dateTo}`;
+    format === "csv" ? exportCSV(rows, columns, fn) : exportXLSX(rows, columns, fn);
+  }
+
+  function exportChartData(metricKey: string, source: string, field: string, label: string, format: "csv" | "xlsx") {
+    const chartData = buildChartData(source, field);
+    const compNames = compEntries.filter(([id]) => !hiddenCompetitors.has(id)).map(([, c]) => c.name);
+    const columns: ExportColumn[] = [
+      { key: "date", label: "Date" },
+      ...compNames.map((n) => ({ key: n, label: n })),
+    ];
+    const fn = `tendances_${metricKey}_${dateFrom}_${dateTo}`;
+    format === "csv" ? exportCSV(chartData, columns, fn) : exportXLSX(chartData, columns, fn);
+  }
 
   const isLoading = tsLoading || sumLoading;
 
@@ -435,7 +499,13 @@ export default function TendancesPage() {
                   {/* Expanded: full chart */}
                   {isExpanded && chartData.length > 0 && (
                     <div className="px-4 pb-4 border-t">
-                      <div className="h-72 mt-4">
+                      <div className="flex justify-end mt-3 mb-1">
+                        <ExportMenu
+                          onCSV={() => exportChartData(metric.key, metric.source, metric.field, metric.label, "csv")}
+                          onXLSX={() => exportChartData(metric.key, metric.source, metric.field, metric.label, "xlsx")}
+                        />
+                      </div>
+                      <div className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -496,10 +566,16 @@ export default function TendancesPage() {
 
           {/* ─── Ranking tables ─── */}
           <div className="rounded-2xl border bg-card p-5">
-            <h2 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-indigo-500" />
-              Classement par metrique
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-indigo-500" />
+                Classement par metrique
+              </h2>
+              <ExportMenu
+                onCSV={() => exportRankingTable("csv")}
+                onXLSX={() => exportRankingTable("xlsx")}
+              />
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>

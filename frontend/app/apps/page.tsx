@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { ExportMenu } from "@/components/export-menu";
 import {
   competitorsAPI,
   playstoreAPI,
@@ -320,9 +321,23 @@ export default function AppsPage() {
       {/* Cross-Store Overview */}
       {crossStoreData.length > 0 && (
         <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
-          <div className="flex items-center gap-2.5">
-            <Crown className="h-4.5 w-4.5 text-amber-400" />
-            <h2 className="text-sm font-semibold">Vue d&apos;ensemble multi-stores</h2>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Crown className="h-4.5 w-4.5 text-amber-400" />
+              <h2 className="text-sm font-semibold">Vue d&apos;ensemble multi-stores</h2>
+            </div>
+            <ExportMenu
+              variant="dark"
+              filename="apps_vue_ensemble"
+              data={crossStoreData.map(c => ({ name: c.name, ps_rating: c.ps?.rating, as_rating: c.as?.rating, avg_rating: c.avgRating, total_reviews: c.totalReviews }))}
+              columns={[
+                { key: "name", label: "Concurrent" },
+                { key: "ps_rating", label: "Play Store", format: (v) => v?.toFixed(1) || "" },
+                { key: "as_rating", label: "App Store", format: (v) => v?.toFixed(1) || "" },
+                { key: "avg_rating", label: "Note moyenne", format: (v) => v?.toFixed(1) || "" },
+                { key: "total_reviews", label: "Total avis" },
+              ]}
+            />
           </div>
           <div className="overflow-x-auto -mx-5 sm:-mx-6 px-5 sm:px-6">
             <table className="w-full min-w-[500px]">
@@ -556,11 +571,24 @@ export default function AppsPage() {
 
           {/* Detailed Table */}
           <div className="rounded-2xl border bg-card overflow-hidden">
-            <div className="px-5 py-3 border-b bg-muted/20 flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
-                <BarChart3 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+            <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
+                  <BarChart3 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                </div>
+                <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
               </div>
-              <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
+              <ExportMenu
+                filename={`apps_${store}_details`}
+                data={sorted.map(c => ({ name: c.app_name || c.competitor_name, rating: c.rating, reviews: c.reviews_count, downloads: c.downloads, version: c.version }))}
+                columns={[
+                  { key: "name", label: "Concurrent" },
+                  { key: "rating", label: "Note", format: (v) => v?.toFixed(1) || "" },
+                  { key: "reviews", label: "Avis" },
+                  ...(store === "playstore" ? [{ key: "downloads", label: "Downloads" }] : []),
+                  { key: "version", label: "Version" },
+                ]}
+              />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[600px]">
@@ -793,11 +821,24 @@ export default function AppsPage() {
           {/* History */}
           {appData.length > 1 && (
             <div className="rounded-2xl border bg-card overflow-hidden">
-              <div className="px-5 py-3 bg-muted/20 border-b flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
-                  <BarChart3 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+              <div className="px-5 py-3 bg-muted/20 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
+                    <BarChart3 className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                  </div>
+                  <span className="text-[12px] font-semibold text-foreground">Historique</span>
                 </div>
-                <span className="text-[12px] font-semibold text-foreground">Historique</span>
+                <ExportMenu
+                  filename={`apps_${store}_historique`}
+                  data={appData.map(e => ({ date: e.recorded_at, version: e.version, rating: e.rating, reviews: e.reviews_count, downloads: e.downloads }))}
+                  columns={[
+                    { key: "date", label: "Date" },
+                    { key: "version", label: "Version" },
+                    { key: "rating", label: "Note", format: (v) => v?.toFixed(1) || "" },
+                    { key: "reviews", label: "Avis" },
+                    ...(store === "playstore" ? [{ key: "downloads", label: "Downloads" }] : []),
+                  ]}
+                />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
