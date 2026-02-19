@@ -194,21 +194,24 @@ async def resolve_facebook_page_ids(
 
 @router.post("/discover-child-pages")
 async def discover_child_pages(
+    competitor_id: int | None = Query(None, description="Process a single competitor (recommended for large BANCO datasets)"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
     Auto-discover child/local Facebook pages for each competitor.
+    Uses BANCO store cities for exhaustive coverage.
 
-    Strategy 1: Mine existing ads in DB — any ad with a page_name containing
-    the competitor name but a different page_id is a child page (e.g. "Carrefour Laon").
-
-    Strategy 2: Search ScrapeCreators for "<Brand> <City>" patterns using
-    top French cities to find local pages.
+    Pass competitor_id to process one competitor at a time (recommended).
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    if competitor_id:
+        competitors = [c for c in competitors if c.id == competitor_id]
+        if not competitors:
+            raise HTTPException(404, "Competitor not found")
 
     # Fallback cities if no BANCO data
     FALLBACK_CITIES = [
@@ -320,9 +323,9 @@ async def discover_child_pages(
             cities = FALLBACK_CITIES
 
         logger.info(f"[{comp.name}] Searching {len(cities)} BANCO cities for child pages")
-        search_queries = [f"{comp.name} {city}" for city in cities]
 
-        for query in search_queries:
+        for i, city in enumerate(cities):
+            query = f"{comp.name} {city}"
             try:
                 search_result = await scrapecreators.search_facebook_companies(query)
                 if not search_result.get("success"):
@@ -348,6 +351,10 @@ async def discover_child_pages(
                 await asyncio.sleep(0.3)
             except Exception as e:
                 logger.warning(f"Child page search failed for '{query}': {e}")
+
+            # Progress log every 50 cities
+            if (i + 1) % 50 == 0:
+                logger.info(f"[{comp.name}] Progress: {i+1}/{len(cities)} cities, {len(found_children)} pages found so far")
 
         # Save updated child_page_ids
         if existing_children:
