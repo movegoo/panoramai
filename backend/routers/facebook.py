@@ -110,6 +110,8 @@ def _serialize_ad(ad: Ad) -> dict:
         "link_description": ad.link_description,
         "byline": ad.byline,
         "disclaimer_label": ad.disclaimer_label,
+        "payer": ad.payer,
+        "beneficiary": ad.beneficiary,
         "age_min": ad.age_min,
         "age_max": ad.age_max,
         "gender_audience": ad.gender_audience,
@@ -539,10 +541,17 @@ async def enrich_ads_transparency(
             breakdown = detail.get("age_country_gender_reach_breakdown", [])
             if breakdown:
                 ad.age_country_gender_reach = json.dumps(breakdown)
-            # Save payer/byline if available
+            # Save payer/byline if available (rare from ScrapeCreators but possible)
             byline = detail.get("byline")
             if byline:
                 ad.byline = byline
+            # Store payer/beneficiary if ScrapeCreators provides them
+            payer = detail.get("payer")
+            beneficiary_val = detail.get("beneficiary")
+            if payer:
+                ad.payer = payer
+            if beneficiary_val:
+                ad.beneficiary = beneficiary_val
             return True
         except Exception as e:
             logger.error(f"Error enriching ad {ad.ad_id}: {e}")
@@ -676,6 +685,80 @@ async def enrich_payers(
         "message": f"Updated payer info for {total_updated} ads",
         "total_updated": total_updated,
         "details": results,
+    }
+
+
+@router.post("/enrich-payers-searchapi")
+async def enrich_payers_searchapi(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Enrich Meta ads with payer/beneficiary data via SearchAPI.io.
+    Targets ALL ads that have been enriched by ScrapeCreators (eu_total_reach IS NOT NULL)
+    but still lack payer info.
+    """
+    from services.searchapi import searchapi
+
+    if not searchapi.is_configured:
+        raise HTTPException(status_code=503, detail="SEARCHAPI_KEY not configured")
+
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    user_comp_ids = get_user_competitor_ids(db, user, advertiser_id=adv_id)
+
+    # Select Meta ads already enriched by ScrapeCreators but missing payer
+    meta_platforms = ["facebook", "instagram"]
+    ads_to_enrich = db.query(Ad).filter(
+        Ad.payer.is_(None),
+        Ad.eu_total_reach.isnot(None),
+        Ad.platform.in_(meta_platforms),
+        Ad.competitor_id.in_(user_comp_ids),
+    ).all()
+
+    if not ads_to_enrich:
+        return {"message": "All Meta ads already have payer data", "enriched": 0}
+
+    enriched_count = 0
+    errors = 0
+
+    for ad in ads_to_enrich:
+        try:
+            result = await searchapi.get_ad_details(ad.ad_id)
+            if not result.get("success"):
+                errors += 1
+                continue
+
+            payer = result.get("payer")
+            beneficiary = result.get("beneficiary")
+
+            if payer:
+                ad.payer = payer
+            if beneficiary:
+                ad.beneficiary = beneficiary
+
+            # Fallback: update eu_total_reach if ScrapeCreators returned 0
+            searchapi_reach = result.get("eu_total_reach")
+            if ad.eu_total_reach == 0 and searchapi_reach and searchapi_reach > 0:
+                ad.eu_total_reach = searchapi_reach
+
+            if payer or beneficiary:
+                enriched_count += 1
+        except Exception as e:
+            logger.error(f"SearchAPI error for ad {ad.ad_id}: {e}")
+            errors += 1
+
+        # Commit every 20 ads to save progress
+        if (enriched_count + errors) % 20 == 0:
+            db.commit()
+
+    db.commit()
+
+    return {
+        "message": f"Enriched {enriched_count}/{len(ads_to_enrich)} ads with payer/beneficiary via SearchAPI",
+        "enriched": enriched_count,
+        "errors": errors,
+        "total_processed": len(ads_to_enrich),
     }
 
 

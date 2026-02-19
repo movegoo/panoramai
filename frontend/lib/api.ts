@@ -98,6 +98,8 @@ export interface Ad {
   link_description?: string;
   byline?: string;
   disclaimer_label?: string;
+  payer?: string;
+  beneficiary?: string;
   age_min?: number;
   age_max?: number;
   gender_audience?: string;

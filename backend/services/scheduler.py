@@ -84,6 +84,9 @@ class DataCollectionScheduler:
                 await self._fetch_competitor_data(db, competitor)
 
             logger.info(f"Daily collection completed for {len(competitors)} competitors")
+
+            # Enrich payer/beneficiary via SearchAPI.io (if configured)
+            await self._enrich_payers_searchapi(db, competitors)
         except Exception as e:
             logger.error(f"Error in daily data collection: {e}")
         finally:
@@ -204,6 +207,47 @@ class DataCollectionScheduler:
                     logger.info(f"Google Ads: {new} new, {updated} updated for {name}")
         except Exception as e:
             logger.error(f"Google Ads fetch failed for {name}: {e}")
+
+    async def _enrich_payers_searchapi(self, db: Session, competitors):
+        """Enrich new Meta ads with payer/beneficiary via SearchAPI.io."""
+        try:
+            from services.searchapi import searchapi
+            if not searchapi.is_configured:
+                return
+
+            from database import Ad
+            comp_ids = [c.id for c in competitors]
+
+            # Only enrich ads that have been through ScrapeCreators enrichment but lack payer
+            ads = db.query(Ad).filter(
+                Ad.payer.is_(None),
+                Ad.eu_total_reach.isnot(None),
+                Ad.platform.in_(["facebook", "instagram"]),
+                Ad.competitor_id.in_(comp_ids),
+            ).all()
+
+            if not ads:
+                return
+
+            enriched = 0
+            for ad in ads:
+                result = await searchapi.get_ad_details(ad.ad_id)
+                if not result.get("success"):
+                    continue
+                payer = result.get("payer")
+                beneficiary = result.get("beneficiary")
+                if payer:
+                    ad.payer = payer
+                if beneficiary:
+                    ad.beneficiary = beneficiary
+                if payer or beneficiary:
+                    enriched += 1
+
+            if enriched:
+                db.commit()
+                logger.info(f"SearchAPI: enriched {enriched}/{len(ads)} ads with payer/beneficiary")
+        except Exception as e:
+            logger.error(f"SearchAPI payer enrichment failed: {e}")
 
     async def _fetch_playstore(self, db: Session, competitor: Competitor, name: str):
         """Fetch Play Store data."""

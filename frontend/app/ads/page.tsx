@@ -650,10 +650,26 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo, brandName }: { ad: AdW
                       </span>
                     )}
                   </div>
-                  {(ad.byline || ad.disclaimer_label) && (
-                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700">
-                      <span className="font-medium">Financeur declare :</span>
-                      <span className="font-semibold">{ad.byline || ad.disclaimer_label}</span>
+                  {(ad.payer || ad.beneficiary || ad.byline || ad.disclaimer_label) && (
+                    <div className="mt-1.5 space-y-1">
+                      {ad.payer && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+                          <span className="font-medium">Payeur :</span>
+                          <span className="font-semibold">{ad.payer}</span>
+                        </div>
+                      )}
+                      {ad.beneficiary && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+                          <span className="font-medium">Bénéficiaire :</span>
+                          <span className="font-semibold">{ad.beneficiary}</span>
+                        </div>
+                      )}
+                      {!ad.payer && !ad.beneficiary && (ad.byline || ad.disclaimer_label) && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-700">
+                          <span className="font-medium">Financeur déclaré :</span>
+                          <span className="font-semibold">{ad.byline || ad.disclaimer_label}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

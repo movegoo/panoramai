@@ -100,6 +100,8 @@ class Ad(Base):
     link_description = Column(Text)             # Full ad description
     byline = Column(String(500))                # EU transparency: "Paid for by" entity
     disclaimer_label = Column(String(500))      # EU disclaimer label (payer/beneficiary)
+    payer = Column(String(500))                 # Payer entity (from SearchAPI.io / EU transparency)
+    beneficiary = Column(String(500))           # Beneficiary entity (from SearchAPI.io / EU transparency)
 
     # EU Transparency / Audience targeting (from ad detail endpoint)
     age_min = Column(Integer)                    # Minimum target age (e.g. 18)
@@ -566,6 +568,8 @@ def _run_migrations(engine):
             ("stores", "gps_verified", "BOOLEAN DEFAULT FALSE"),
             ("ads", "ad_type", "VARCHAR(20)"),
             ("competitors", "child_page_ids", "TEXT"),
+            ("ads", "payer", "VARCHAR(500)"),
+            ("ads", "beneficiary", "VARCHAR(500)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

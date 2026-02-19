@@ -36,6 +36,9 @@ class Settings:
     # Mistral API (for GEO tracking - Le Chat)
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
 
+    # SearchAPI.io (complementary Meta Ad Library enrichment)
+    SEARCHAPI_KEY: str = os.getenv("SEARCHAPI_KEY", "")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))
