@@ -192,6 +192,177 @@ async def resolve_facebook_page_ids(
     }
 
 
+# Known sub-brand patterns for grande distribution
+CHILD_BRAND_PATTERNS: dict[str, list[str]] = {
+    "carrefour": [
+        "Carrefour City", "Carrefour Market", "Carrefour Express",
+        "Carrefour Bio", "Carrefour Drive", "Carrefour Banque",
+        "Carrefour Voyages", "Carrefour Spectacles", "Carrefour Assurance",
+        "Carrefour Location", "Atacadao",
+    ],
+    "leclerc": [
+        "E.Leclerc Drive", "Leclerc Voyages", "E.Leclerc Parapharmacie",
+        "E.Leclerc Station", "Leclerc Mobile", "E.Leclerc Optique",
+        "E.Leclerc Billetterie", "E.Leclerc Energies",
+    ],
+    "lidl": [
+        "Lidl Voyages", "Lidl Plus",
+    ],
+    "auchan": [
+        "Auchan Retail", "Auchan Drive", "My Auchan",
+        "Auchan Supermarche", "Auchan.fr",
+    ],
+    "intermarche": [
+        "Intermarche Express", "Intermarche Super", "Intermarche Hyper",
+        "Intermarche Contact", "Les Mousquetaires",
+    ],
+    "monoprix": [
+        "Monop'", "Naturalia", "Monoprix.fr",
+    ],
+    "casino": [
+        "Geant Casino", "Casino Supermarche", "Franprix",
+        "Leader Price", "Vival", "Spar France",
+    ],
+    "systeme u": [
+        "Super U", "Hyper U", "U Express", "Courses U",
+    ],
+    "picard": [
+        "Picard Surgeles",
+    ],
+    "aldi": [
+        "ALDI France",
+    ],
+}
+
+
+@router.post("/discover-child-pages")
+async def discover_child_pages(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Auto-discover child/sub-brand Facebook pages for each competitor.
+    Searches known sub-brand names via ScrapeCreators and stores their page IDs.
+    """
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    results = []
+
+    for comp in competitors:
+        comp_lower = comp.name.lower().strip()
+        parent_page_id = comp.facebook_page_id or ""
+
+        # Find matching pattern list
+        patterns = []
+        for key, variants in CHILD_BRAND_PATTERNS.items():
+            if key in comp_lower or comp_lower in key:
+                patterns = variants
+                break
+
+        # Also search generic variations
+        if not patterns:
+            patterns = [
+                f"{comp.name} France",
+                f"{comp.name} Drive",
+                f"{comp.name} Express",
+            ]
+
+        # Load existing child page IDs
+        existing_children = set()
+        if comp.child_page_ids:
+            try:
+                existing_children = set(json.loads(comp.child_page_ids))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        found_children = []
+
+        for variant in patterns:
+            try:
+                search_result = await scrapecreators.search_facebook_companies(variant)
+                if not search_result.get("success"):
+                    continue
+
+                for company in search_result.get("companies", []):
+                    page_id = str(company.get("page_id") or company.get("pageId") or company.get("id") or "")
+                    page_name = company.get("page_name") or company.get("name") or ""
+
+                    if not page_id or page_id == parent_page_id:
+                        continue
+                    if page_id in existing_children:
+                        continue
+
+                    # Verify relevance: page name must relate to the brand
+                    pn_lower = page_name.lower()
+                    variant_words = variant.lower().split()
+                    if any(w in pn_lower for w in variant_words[:1]):
+                        existing_children.add(page_id)
+                        found_children.append({
+                            "page_id": page_id,
+                            "page_name": page_name,
+                            "search_query": variant,
+                        })
+
+                # Rate limit between searches
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"Child page search failed for '{variant}': {e}")
+
+        # Save updated child_page_ids
+        if existing_children:
+            comp.child_page_ids = json.dumps(list(existing_children))
+
+        results.append({
+            "competitor_id": comp.id,
+            "competitor_name": comp.name,
+            "parent_page_id": parent_page_id,
+            "existing_children": len(existing_children) - len(found_children),
+            "new_children_found": len(found_children),
+            "children": found_children,
+            "total_children": len(existing_children),
+        })
+
+    db.commit()
+
+    total_new = sum(r["new_children_found"] for r in results)
+    return {
+        "message": f"Discovered {total_new} new child pages across {len(results)} competitors",
+        "results": results,
+    }
+
+
+@router.get("/child-pages")
+async def list_child_pages(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """List all competitors and their child page IDs."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    result = []
+    for comp in competitors:
+        children = []
+        if comp.child_page_ids:
+            try:
+                children = json.loads(comp.child_page_ids)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        result.append({
+            "competitor_id": comp.id,
+            "name": comp.name,
+            "facebook_page_id": comp.facebook_page_id,
+            "child_page_ids": children,
+            "child_count": len(children),
+        })
+
+    return result
+
+
 @router.post("/fetch/{competitor_id}")
 async def fetch_competitor_ads(
     competitor_id: int,
