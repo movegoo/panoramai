@@ -134,18 +134,18 @@ async def compare_instagram_accounts(
             ).order_by(desc(InstagramData.recorded_at)).first()
 
             follower_growth = 0
-            if old_data and old_data.followers > 0:
+            if old_data and (old_data.followers or 0) > 0 and latest.followers is not None:
                 follower_growth = ((latest.followers - old_data.followers) / old_data.followers) * 100
 
             comparison.append({
                 "competitor_id": competitor.id,
                 "competitor_name": competitor.name,
                 "username": competitor.instagram_username,
-                "followers": latest.followers,
-                "engagement_rate": latest.engagement_rate,
-                "posts_count": latest.posts_count,
-                "avg_likes": latest.avg_likes,
-                "avg_comments": latest.avg_comments,
+                "followers": latest.followers or 0,
+                "engagement_rate": latest.engagement_rate or 0,
+                "posts_count": latest.posts_count or 0,
+                "avg_likes": latest.avg_likes or 0,
+                "avg_comments": latest.avg_comments or 0,
                 "follower_growth_7d": round(follower_growth, 2),
                 "last_updated": latest.recorded_at.isoformat()
             })

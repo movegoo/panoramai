@@ -128,9 +128,9 @@ export default function SocialPage() {
 
   // SWR-cached data fetches — survive page navigation
   const { data: swrComps } = useAPI<CompetitorListItem[]>("/competitors/?include_brand=true");
-  const { data: swrIg } = useAPI<any[]>(`/instagram/comparison?period_days=${periodDays}`);
-  const { data: swrTt } = useAPI<any[]>(`/tiktok/comparison?period_days=${periodDays}`);
-  const { data: swrYt } = useAPI<any[]>(`/youtube/comparison?period_days=${periodDays}`);
+  const { data: swrIg } = useAPI<any[]>(`/instagram/comparison?days=${periodDays}`);
+  const { data: swrTt } = useAPI<any[]>(`/tiktok/comparison?days=${periodDays}`);
+  const { data: swrYt } = useAPI<any[]>(`/youtube/comparison?days=${periodDays}`);
   const { data: swrBrand } = useAPI<any>("/brand/profile");
   const { data: swrCi } = useAPI<ContentInsights>(`/social-content/insights${contentPlatform ? `?platform=${contentPlatform}` : ""}`);
 

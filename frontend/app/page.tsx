@@ -650,7 +650,7 @@ export default function DashboardPage() {
 
   // SWR-cached dashboard fetch — survives page navigation
   const { data: swrData, error: swrError, isLoading: loading, mutate: refreshDashboard } = useAPI<DashboardData>(
-    `/watch/dashboard?period_days=${periodDays}`
+    `/watch/dashboard?days=${periodDays}`
   );
 
   const data = swrData?.brand ? swrData : null;
