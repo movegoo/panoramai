@@ -49,6 +49,7 @@ const navigation = [
       { name: "Applications", href: "/apps", icon: Smartphone },
       { name: "SEO", href: "/seo", icon: Globe },
       { name: "GEO", href: "/geo-tracking", icon: Sparkles },
+      { name: "Tendances", href: "/tendances", icon: TrendingUp },
       { name: "Signaux", href: "/signals", icon: Bell },
     ],
   },
