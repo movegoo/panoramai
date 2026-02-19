@@ -4,14 +4,14 @@ Veille publicitaire concurrentielle via ScrapeCreators Ad Library API.
 """
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
 import asyncio
 import logging
 
-from database import get_db, Competitor, Ad, User
+from database import get_db, Competitor, Ad, User, StoreLocation
 from core.auth import get_current_user
 from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids, parse_advertiser_header
 from services.scrapecreators import scrapecreators
@@ -210,16 +210,10 @@ async def discover_child_pages(
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
 
-    # Top French cities for local page search
-    TOP_CITIES = [
+    # Fallback cities if no BANCO data
+    FALLBACK_CITIES = [
         "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes",
-        "Strasbourg", "Montpellier", "Bordeaux", "Lille", "Rennes",
-        "Reims", "Saint-Etienne", "Toulon", "Le Havre", "Grenoble",
-        "Dijon", "Angers", "Nimes", "Clermont-Ferrand", "Aix-en-Provence",
-        "Brest", "Tours", "Amiens", "Limoges", "Metz", "Perpignan",
-        "Besancon", "Orleans", "Rouen", "Caen", "Mulhouse", "Nancy",
-        "Argenteuil", "Montreuil", "Dunkerque", "Avignon", "Poitiers",
-        "Versailles", "Laon",
+        "Strasbourg", "Montpellier", "Bordeaux", "Lille",
     ]
 
     # Brand name prefixes — the page_name must START with one of these
@@ -311,7 +305,22 @@ async def discover_child_pages(
                 })
 
         # ── Strategy 2: Search for local pages via ScrapeCreators ──
-        search_queries = [f"{comp.name} {city}" for city in TOP_CITIES[:15]]
+        # Use BANCO cities (unique cities where this competitor has stores)
+        banco_cities = (
+            db.query(StoreLocation.city)
+            .filter(StoreLocation.competitor_id == comp.id, StoreLocation.city.isnot(None))
+            .group_by(StoreLocation.city)
+            .order_by(func.count(StoreLocation.id).desc())
+            .all()
+        )
+        cities = [row[0] for row in banco_cities if row[0] and len(row[0]) > 1]
+
+        # Fallback if no BANCO data for this competitor
+        if not cities:
+            cities = FALLBACK_CITIES
+
+        logger.info(f"[{comp.name}] Searching {len(cities)} BANCO cities for child pages")
+        search_queries = [f"{comp.name} {city}" for city in cities]
 
         for query in search_queries:
             try:
