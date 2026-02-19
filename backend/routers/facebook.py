@@ -222,24 +222,50 @@ async def discover_child_pages(
         "Versailles", "Laon",
     ]
 
+    # Brand name prefixes — the page_name must START with one of these
+    BRAND_PREFIXES: dict[str, list[str]] = {
+        "carrefour": ["carrefour"],
+        "leclerc": ["e.leclerc", "leclerc", "e leclerc"],
+        "lidl": ["lidl"],
+        "auchan": ["auchan"],
+        "intermarche": ["intermarché", "intermarche"],
+        "monoprix": ["monoprix", "monop'"],
+        "casino": ["casino", "géant casino", "geant casino"],
+        "systeme u": ["super u", "hyper u", "u express"],
+        "ikea": ["ikea"],
+        "decathlon": ["decathlon"],
+        "leroy merlin": ["leroy merlin"],
+        "sephora": ["sephora"],
+        "hermès": ["hermès", "hermes"],
+        "picard": ["picard"],
+        "aldi": ["aldi"],
+        "franprix": ["franprix"],
+        "action": ["action"],
+        "fnac": ["fnac"],
+        "darty": ["darty"],
+    }
+
+    def _is_valid_child(brand_name: str, page_name: str) -> bool:
+        """Check if page_name starts with a known prefix for this brand."""
+        pn = page_name.lower().strip()
+        bn = brand_name.lower().strip()
+        # Try brand-specific prefixes first
+        for key, prefixes in BRAND_PREFIXES.items():
+            if key in bn or bn in key:
+                return any(pn.startswith(p) for p in prefixes)
+        # Fallback: page_name must start with brand name
+        return pn.startswith(bn)
+
     results = []
 
     for comp in competitors:
         parent_page_id = comp.facebook_page_id or ""
-        comp_lower = comp.name.lower().strip()
 
-        # Load existing child page IDs
+        # Reset child_page_ids (clean slate to remove previous false positives)
         existing_children = set()
-        if comp.child_page_ids:
-            try:
-                existing_children = set(json.loads(comp.child_page_ids))
-            except (json.JSONDecodeError, TypeError):
-                pass
-
         found_children = []
 
         # ── Strategy 1: Mine existing ads in DB ──
-        # Find distinct page_ids from this competitor's ads that differ from parent
         ads_with_pages = db.query(Ad.page_id, Ad.page_name).filter(
             Ad.competitor_id == comp.id,
             Ad.page_id.isnot(None),
@@ -251,8 +277,7 @@ async def discover_child_pages(
                 continue
             if ad_page_id in existing_children:
                 continue
-            # Check if it's a local page (name contains brand name)
-            if comp_lower in (ad_page_name or "").lower():
+            if _is_valid_child(comp.name, ad_page_name or ""):
                 existing_children.add(ad_page_id)
                 found_children.append({
                     "page_id": ad_page_id,
@@ -261,7 +286,6 @@ async def discover_child_pages(
                 })
 
         # ── Strategy 2: Search for local pages via ScrapeCreators ──
-        # Search "<Brand> <City>" for top cities
         search_queries = [f"{comp.name} {city}" for city in TOP_CITIES[:15]]
 
         for query in search_queries:
@@ -279,8 +303,7 @@ async def discover_child_pages(
                     if page_id in existing_children:
                         continue
 
-                    # Verify: page name must contain the brand name
-                    if comp_lower in page_name.lower():
+                    if _is_valid_child(comp.name, page_name):
                         existing_children.add(page_id)
                         found_children.append({
                             "page_id": page_id,
