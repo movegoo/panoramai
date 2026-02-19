@@ -230,7 +230,7 @@ async def discover_child_pages(
         "auchan": ["auchan"],
         "intermarche": ["intermarché", "intermarche"],
         "monoprix": ["monoprix", "monop'"],
-        "casino": ["casino", "géant casino", "geant casino"],
+        "casino": ["casino #bio", "casino supermarché", "casino supermarche", "casino shop", "géant casino", "geant casino", "casino max", "casino proximité"],
         "systeme u": ["super u", "hyper u", "u express"],
         "ikea": ["ikea"],
         "decathlon": ["decathlon"],
@@ -245,16 +245,41 @@ async def discover_child_pages(
         "darty": ["darty"],
     }
 
+    # Words that indicate a page is NOT a retail store
+    NEGATIVE_KEYWORDS = [
+        "barrière", "barriere", "café de paris", "serrures", "hypnothérapeute",
+        "hypnotherapeute", "parish council", "conseil municipal", "musée",
+        "museum", "théâtre", "theatre", "cinéma", "cinema", "fondation",
+        "association", "festival", "qatar", "argentina", " uk", "hrvatska",
+        "belgique", "españa", "italia", "deutschland",
+    ]
+
     def _is_valid_child(brand_name: str, page_name: str) -> bool:
-        """Check if page_name starts with a known prefix for this brand."""
+        """Check if page_name starts with a known prefix for this brand (word boundary)."""
         pn = page_name.lower().strip()
         bn = brand_name.lower().strip()
+
+        # Check negative keywords
+        for neg in NEGATIVE_KEYWORDS:
+            if neg in pn:
+                return False
+
         # Try brand-specific prefixes first
+        matched_prefixes = None
         for key, prefixes in BRAND_PREFIXES.items():
             if key in bn or bn in key:
-                return any(pn.startswith(p) for p in prefixes)
-        # Fallback: page_name must start with brand name
-        return pn.startswith(bn)
+                matched_prefixes = prefixes
+                break
+
+        check_prefixes = matched_prefixes or [bn]
+
+        for prefix in check_prefixes:
+            if pn.startswith(prefix):
+                # Must be exact match or followed by a space/punctuation (word boundary)
+                rest = pn[len(prefix):]
+                if rest == "" or rest[0] in " -_.'&,/()":
+                    return True
+        return False
 
     results = []
 
