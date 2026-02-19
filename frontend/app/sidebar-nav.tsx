@@ -29,6 +29,7 @@ import {
   Shield,
   X,
   Sparkles,
+  Bell,
 } from "lucide-react";
 
 const navigation = [
@@ -48,6 +49,7 @@ const navigation = [
       { name: "Applications", href: "/apps", icon: Smartphone },
       { name: "SEO", href: "/seo", icon: Globe },
       { name: "GEO", href: "/geo-tracking", icon: Sparkles },
+      { name: "Signaux", href: "/signals", icon: Bell },
     ],
   },
   {

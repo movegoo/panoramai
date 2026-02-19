@@ -1108,6 +1108,55 @@ export const geoTrackingAPI = {
   getInsights: () => fetchAPI<GeoInsights>("/geo-tracking/insights"),
 };
 
+// Signals API
+export interface SignalItem {
+  id: number;
+  competitor_id: number;
+  signal_type: string;
+  severity: string;
+  platform: string;
+  title: string;
+  description: string;
+  metric_name: string;
+  previous_value: number | null;
+  current_value: number | null;
+  change_percent: number | null;
+  is_brand: boolean;
+  is_read: boolean;
+  detected_at: string;
+}
+
+export interface SignalSummary {
+  total: number;
+  unread: number;
+  brand_signals: number;
+  by_severity: Record<string, number>;
+  by_platform: Record<string, number>;
+}
+
+export const signalsAPI = {
+  list: (opts?: { severity?: string; platform?: string; unread_only?: boolean; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.severity) params.set("severity", opts.severity);
+    if (opts?.platform) params.set("platform", opts.platform);
+    if (opts?.unread_only) params.set("unread_only", "true");
+    if (opts?.limit) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return fetchAPI<SignalItem[]>(`/signals/${qs ? `?${qs}` : ""}`);
+  },
+
+  summary: () => fetchAPI<SignalSummary>("/signals/summary"),
+
+  markRead: (signalId: number) =>
+    fetchAPI<{ ok: boolean }>(`/signals/mark-read/${signalId}`, { method: "POST" }),
+
+  markAllRead: () =>
+    fetchAPI<{ ok: boolean }>("/signals/mark-all-read", { method: "POST" }),
+
+  detect: () =>
+    fetchAPI<{ message: string; signals: any[]; snapshots: number }>("/signals/detect", { method: "POST" }),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(
