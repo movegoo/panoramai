@@ -520,11 +520,28 @@ export const facebookAPI = {
       `/facebook/ads/${competitorId}?active_only=${activeOnly}`
     ),
 
-  fetchAds: (competitorId: number, country = "FR") =>
-    fetchAPI<{ message: string; total_fetched: number; new_stored: number }>(
+  fetchAds: async (competitorId: number, country = "FR") => {
+    // Launch background fetch
+    const launch = await fetchAPI<{ message: string; status: string }>(
       `/facebook/fetch/${competitorId}?country=${country}`,
       { method: "POST" }
-    ),
+    );
+    // Poll until done (max 5 minutes)
+    const maxPolls = 60;
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const status = await fetchAPI<{ status: string; total_fetched?: number; new_stored?: number; message?: string }>(
+        `/facebook/fetch/${competitorId}/status`
+      );
+      if (status.status === "completed") {
+        return { message: status.message || "Done", total_fetched: status.total_fetched || 0, new_stored: status.new_stored || 0 };
+      }
+      if (status.status === "error") {
+        throw new Error(status.message || "Fetch failed");
+      }
+    }
+    return { message: launch.message, total_fetched: 0, new_stored: 0 };
+  },
 
   getStats: (competitorId: number) =>
     fetchAPI<any>(`/facebook/stats/${competitorId}`),

@@ -229,8 +229,9 @@ NEGATIVE_KEYWORDS = [
     "belgique", "españa", "italia", "deutschland",
 ]
 
-# In-memory progress tracking for background discovery
+# In-memory progress tracking for background tasks
 _discovery_status: dict[str, dict] = {}
+_fetch_status: dict[str, dict] = {}  # key: "fetch-{competitor_id}"
 
 
 def _is_valid_child(brand_name: str, page_name: str) -> bool:
@@ -439,6 +440,335 @@ async def list_child_pages(
     return result
 
 
+async def _fetch_ads_background(competitor_id: int, competitor_name: str, facebook_page_id: str | None, child_page_ids_json: str | None, country: str):
+    """Background task: fetch all ads for a competitor via ScrapeCreators."""
+    from database import SessionLocal
+
+    task_key = f"fetch-{competitor_id}"
+    _fetch_status[task_key] = {
+        "status": "running",
+        "started": datetime.utcnow().isoformat(),
+        "competitor_id": competitor_id,
+        "competitor_name": competitor_name,
+        "step": "initializing",
+        "total_fetched": 0,
+        "new_stored": 0,
+        "updated": 0,
+        "child_pages_new": 0,
+    }
+
+    db = SessionLocal()
+    try:
+        competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+        if not competitor:
+            _fetch_status[task_key]["status"] = "error"
+            _fetch_status[task_key]["error"] = "Competitor not found"
+            return
+
+        use_page_id = False
+        page_id_used = competitor.facebook_page_id
+
+        # Strategy 1: Use page_id if available (most reliable) — with pagination
+        if page_id_used:
+            _fetch_status[task_key]["step"] = "fetching_by_page_id"
+            all_ads = []
+            cursor = None
+            max_pages = 30
+            for page_num in range(max_pages):
+                result = await scrapecreators.fetch_facebook_company_ads(
+                    page_id=page_id_used,
+                    cursor=cursor,
+                )
+                if not result.get("success"):
+                    break
+                batch = result.get("ads", [])
+                all_ads.extend(batch)
+                _fetch_status[task_key]["total_fetched"] = len(all_ads)
+                cursor = result.get("cursor")
+                if not cursor or not batch:
+                    break
+            if all_ads:
+                use_page_id = True
+                result = {"success": True, "ads": all_ads}
+
+        # Strategy 2: Auto-resolve page_id via company search
+        if not use_page_id and not page_id_used:
+            _fetch_status[task_key]["step"] = "resolving_page_id"
+            search_result = await scrapecreators.search_facebook_companies(competitor.name)
+            if search_result.get("success") and search_result.get("companies"):
+                companies = search_result["companies"]
+                best = None
+                for c in companies:
+                    c_name = (c.get("page_name") or c.get("name") or "").lower()
+                    if competitor.name.lower() in c_name or c_name in competitor.name.lower():
+                        best = c
+                        break
+                if not best and companies:
+                    best = companies[0]
+
+                resolved_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "") if best else ""
+                if resolved_id:
+                    competitor.facebook_page_id = resolved_id
+                    page_id_used = resolved_id
+                    db.commit()
+                    logger.info(f"Auto-resolved facebook_page_id={resolved_id} for {competitor.name}")
+
+                    _fetch_status[task_key]["step"] = "fetching_by_resolved_page_id"
+                    all_ads = []
+                    cursor = None
+                    for _ in range(30):
+                        result = await scrapecreators.fetch_facebook_company_ads(
+                            page_id=resolved_id,
+                            cursor=cursor,
+                        )
+                        if not result.get("success"):
+                            break
+                        batch = result.get("ads", [])
+                        all_ads.extend(batch)
+                        _fetch_status[task_key]["total_fetched"] = len(all_ads)
+                        cursor = result.get("cursor")
+                        if not cursor or not batch:
+                            break
+                    if all_ads:
+                        use_page_id = True
+                        result = {"success": True, "ads": all_ads}
+
+        # Strategy 3: Fallback to keyword search
+        if not use_page_id:
+            _fetch_status[task_key]["step"] = "keyword_search"
+            result = await scrapecreators.search_facebook_ads(
+                company_name=competitor.name,
+                country=country,
+                limit=50,
+            )
+
+        if not result.get("success"):
+            _fetch_status[task_key]["status"] = "error"
+            _fetch_status[task_key]["error"] = f"Ad Library API error: {result.get('error', 'Unknown')}"
+            return
+
+        ads_data = result.get("ads", [])
+        _fetch_status[task_key]["total_fetched"] = len(ads_data)
+        _fetch_status[task_key]["step"] = "storing_ads"
+        new_count = 0
+        updated_count = 0
+
+        for ad in ads_data:
+            ad_id = str(ad.get("ad_archive_id", ""))
+            if not ad_id:
+                continue
+
+            snapshot = ad.get("snapshot", {})
+            page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
+
+            if not use_page_id and not _name_matches(competitor.name, page_name_val):
+                continue
+
+            existing = db.query(Ad).filter(Ad.ad_id == ad_id).first()
+
+            cards = snapshot.get("cards", [])
+            first_card = cards[0] if cards else {}
+
+            ad_text = first_card.get("body") or snapshot.get("body", {}).get("text", "") or snapshot.get("caption", "")
+            cta = first_card.get("cta_text") or snapshot.get("cta_text", "")
+            creative_url = first_card.get("original_image_url") or first_card.get("resized_image_url") or first_card.get("video_preview_image_url", "")
+
+            start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+            end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+            is_active = ad.get("is_active", not bool(end_date))
+
+            spend = ad.get("spend", {})
+            spend_min = spend.get("lower_bound", 0) if isinstance(spend, dict) else 0
+            spend_max = spend.get("upper_bound", 0) if isinstance(spend, dict) else 0
+
+            impressions = ad.get("impressions", {})
+            imp_min = impressions.get("lower_bound", 0) if isinstance(impressions, dict) else 0
+            imp_max = impressions.get("upper_bound", 0) if isinstance(impressions, dict) else 0
+
+            pub_platforms = ad.get("publisher_platform", [])
+            if not isinstance(pub_platforms, list):
+                pub_platforms = [pub_platforms] if pub_platforms else []
+            pub_platforms_upper = [p.upper() if isinstance(p, str) else str(p) for p in pub_platforms]
+
+            platform = "facebook"
+            for p in pub_platforms_upper:
+                if "INSTAGRAM" in p:
+                    platform = "instagram"
+                    break
+
+            page_id = snapshot.get("page_id", "") or ad.get("page_id", "")
+            page_categories = snapshot.get("page_categories", []) or []
+            page_like_count = snapshot.get("page_like_count")
+            page_profile_uri = snapshot.get("page_profile_uri", "")
+            page_profile_picture_url = snapshot.get("page_profile_picture_url", "")
+            link_url = first_card.get("link_url") or snapshot.get("link_url", "")
+            display_format = snapshot.get("display_format", "")
+            targeted_countries = ad.get("targeted_or_reached_countries", []) or []
+            ad_categories = ad.get("categories", []) or []
+            contains_ai = ad.get("contains_digital_created_media", False)
+            ad_library_url = ad.get("url", "")
+            title_val = first_card.get("title") or snapshot.get("title", "")
+            link_desc = first_card.get("link_description") or snapshot.get("link_description", "")
+            byline_val = snapshot.get("byline") or None
+            disclaimer_val = snapshot.get("disclaimer_label") or None
+
+            if page_id and not competitor.facebook_page_id:
+                competitor.facebook_page_id = page_id
+                logger.info(f"Auto-filled facebook_page_id={page_id} for {competitor.name} from ad data")
+
+            ad_type = _classify_ad_type(link_url, None, cta, display_format)
+
+            enriched = dict(
+                platform=platform,
+                ad_type=ad_type,
+                creative_url=creative_url,
+                ad_text=ad_text,
+                cta=cta,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=is_active,
+                estimated_spend_min=spend_min,
+                estimated_spend_max=spend_max,
+                impressions_min=imp_min,
+                impressions_max=imp_max,
+                publisher_platforms=json.dumps(pub_platforms_upper) if pub_platforms_upper else None,
+                page_id=page_id or None,
+                page_name=page_name_val or None,
+                page_categories=json.dumps(page_categories) if page_categories else None,
+                page_like_count=page_like_count,
+                page_profile_uri=page_profile_uri or None,
+                page_profile_picture_url=page_profile_picture_url or None,
+                link_url=link_url or None,
+                display_format=display_format or None,
+                targeted_countries=json.dumps(targeted_countries) if targeted_countries else None,
+                ad_categories=json.dumps(ad_categories) if ad_categories else None,
+                contains_ai_content=contains_ai,
+                ad_library_url=ad_library_url or None,
+                title=title_val or None,
+                link_description=link_desc[:2000] if link_desc else None,
+                byline=byline_val,
+                disclaimer_label=disclaimer_val,
+            )
+
+            if existing:
+                for k, v in enriched.items():
+                    setattr(existing, k, v)
+                updated_count += 1
+            else:
+                new_ad = Ad(competitor_id=competitor_id, ad_id=ad_id, **enriched)
+                db.add(new_ad)
+                new_count += 1
+
+        db.commit()
+        _fetch_status[task_key]["new_stored"] = new_count
+        _fetch_status[task_key]["updated"] = updated_count
+
+        # Fetch child pages via keyword search
+        child_new = 0
+        child_page_ids_set = set()
+        if competitor.child_page_ids:
+            try:
+                child_page_ids_set = set(json.loads(competitor.child_page_ids))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if child_page_ids_set:
+            _fetch_status[task_key]["step"] = "fetching_child_pages"
+            logger.info(f"Fetching child page ads via keyword search for '{competitor.name}' ({len(child_page_ids_set)} known children)")
+            try:
+                child_ads = []
+                cursor = None
+                for _ in range(100):
+                    child_result = await scrapecreators.search_facebook_ads(
+                        company_name=competitor.name,
+                        country="FR",
+                        limit=30,
+                        cursor=cursor,
+                    )
+                    if not child_result.get("success"):
+                        break
+                    batch = child_result.get("ads", [])
+                    child_ads.extend(batch)
+                    cursor = child_result.get("cursor")
+                    if not cursor or not batch:
+                        break
+
+                for ad in child_ads:
+                    ad_id = str(ad.get("ad_archive_id", ""))
+                    if not ad_id:
+                        continue
+                    ad_page_id = str(ad.get("page_id", "") or ad.get("snapshot", {}).get("page_id", ""))
+                    if ad_page_id == page_id_used:
+                        continue
+                    if ad_page_id and ad_page_id not in child_page_ids_set:
+                        ad_page_name = ad.get("snapshot", {}).get("page_name", "") or ""
+                        if not _is_valid_child(competitor.name, ad_page_name):
+                            continue
+
+                    if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                        continue
+
+                    snapshot = ad.get("snapshot", {})
+                    cards = snapshot.get("cards", [])
+                    first_card = cards[0] if cards else {}
+                    ad_text = first_card.get("body") or snapshot.get("body", {}).get("text", "") or ""
+                    cta = first_card.get("cta_text") or snapshot.get("cta_text", "")
+                    creative_url = first_card.get("original_image_url") or first_card.get("resized_image_url") or ""
+                    start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+                    end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+                    link_url_val = first_card.get("link_url") or snapshot.get("link_url", "")
+                    display_fmt = snapshot.get("display_format", "")
+                    ad_type = _classify_ad_type(link_url_val, None, cta, display_fmt)
+                    pubs = ad.get("publisher_platform", [])
+                    if not isinstance(pubs, list):
+                        pubs = [pubs] if pubs else []
+                    platform = "facebook"
+                    for p in pubs:
+                        if "INSTAGRAM" in str(p).upper():
+                            platform = "instagram"
+                            break
+                    new_ad = Ad(
+                        competitor_id=competitor_id,
+                        ad_id=ad_id,
+                        platform=platform,
+                        ad_type=ad_type,
+                        creative_url=creative_url,
+                        ad_text=ad_text,
+                        cta=cta,
+                        start_date=start_date,
+                        end_date=end_date,
+                        is_active=ad.get("is_active", not bool(end_date)),
+                        page_name=snapshot.get("page_name", "") or None,
+                        page_id=ad_page_id or None,
+                        link_url=link_url_val or None,
+                        display_format=display_fmt or None,
+                        ad_library_url=ad.get("url", "") or None,
+                    )
+                    db.add(new_ad)
+                    child_new += 1
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Child pages keyword search failed for {competitor.name}: {e}")
+
+        _fetch_status[task_key]["child_pages_new"] = child_new
+        _fetch_status[task_key]["method"] = "page_id" if use_page_id else "keyword_search"
+        _fetch_status[task_key]["facebook_page_id"] = page_id_used
+        _fetch_status[task_key]["status"] = "completed"
+        _fetch_status[task_key]["step"] = "done"
+        _fetch_status[task_key]["message"] = (
+            f"Fetched {len(ads_data)} ads for {competitor_name}"
+            + (f" + {child_new} from child pages" if child_new else "")
+        )
+        logger.info(f"Fetch completed for {competitor_name}: {new_count} new, {updated_count} updated, {child_new} child")
+
+    except Exception as e:
+        logger.error(f"Fetch background task failed for {competitor_name}: {e}")
+        _fetch_status[task_key]["status"] = "error"
+        _fetch_status[task_key]["error"] = str(e)
+    finally:
+        db.close()
+
+
 @router.post("/fetch/{competitor_id}")
 async def fetch_competitor_ads(
     competitor_id: int,
@@ -448,315 +778,44 @@ async def fetch_competitor_ads(
     x_advertiser_id: str | None = Header(None),
 ):
     """
-    Récupère les publicités d'un concurrent via ScrapeCreators Ad Library.
-    Utilise le facebook_page_id si disponible (company/ads endpoint),
-    sinon fait une recherche par nom puis auto-resolve le page_id.
+    Lance le fetch des publicités en background.
+    Retourne immédiatement — vérifier la progression via GET /api/facebook/fetch/{competitor_id}/status.
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
-    use_page_id = False
-    page_id_used = competitor.facebook_page_id
+    task_key = f"fetch-{competitor_id}"
 
-    # Strategy 1: Use page_id if available (most reliable) — with pagination
-    if page_id_used:
-        all_ads = []
-        cursor = None
-        max_pages = 30  # Safety limit (~300 ads max)
-        for _ in range(max_pages):
-            result = await scrapecreators.fetch_facebook_company_ads(
-                page_id=page_id_used,
-                cursor=cursor,
-            )
-            if not result.get("success"):
-                break
-            batch = result.get("ads", [])
-            all_ads.extend(batch)
-            cursor = result.get("cursor")
-            if not cursor or not batch:
-                break
-        if all_ads:
-            use_page_id = True
-            result = {"success": True, "ads": all_ads}
+    # Don't launch if already running
+    if task_key in _fetch_status and _fetch_status[task_key].get("status") == "running":
+        return {
+            "message": f"Fetch already running for {competitor.name}",
+            "status": "running",
+            "check_progress": f"GET /api/facebook/fetch/{competitor_id}/status",
+        }
 
-    # Strategy 2: Auto-resolve page_id via company search
-    if not use_page_id and not page_id_used:
-        search_result = await scrapecreators.search_facebook_companies(competitor.name)
-        if search_result.get("success") and search_result.get("companies"):
-            companies = search_result["companies"]
-            best = None
-            for c in companies:
-                c_name = (c.get("page_name") or c.get("name") or "").lower()
-                if competitor.name.lower() in c_name or c_name in competitor.name.lower():
-                    best = c
-                    break
-            if not best and companies:
-                best = companies[0]
-
-            resolved_id = str(best.get("page_id") or best.get("pageId") or best.get("id") or "") if best else ""
-            if resolved_id:
-                # Save the resolved page_id
-                competitor.facebook_page_id = resolved_id
-                page_id_used = resolved_id
-                db.commit()
-                logger.info(f"Auto-resolved facebook_page_id={resolved_id} for {competitor.name}")
-
-                # Paginated fetch for resolved page too
-                all_ads = []
-                cursor = None
-                for _ in range(30):
-                    result = await scrapecreators.fetch_facebook_company_ads(
-                        page_id=resolved_id,
-                        cursor=cursor,
-                    )
-                    if not result.get("success"):
-                        break
-                    batch = result.get("ads", [])
-                    all_ads.extend(batch)
-                    cursor = result.get("cursor")
-                    if not cursor or not batch:
-                        break
-                if all_ads:
-                    use_page_id = True
-                    result = {"success": True, "ads": all_ads}
-
-    # Strategy 3: Fallback to keyword search
-    if not use_page_id:
-        result = await scrapecreators.search_facebook_ads(
-            company_name=competitor.name,
-            country=country,
-            limit=50,
-        )
-
-    if not result.get("success"):
-        raise HTTPException(
-            status_code=503,
-            detail=f"Ad Library API error: {result.get('error', 'Unknown')}"
-        )
-
-    ads_data = result.get("ads", [])
-    new_count = 0
-    updated_count = 0
-
-    for ad in ads_data:
-        ad_id = str(ad.get("ad_archive_id", ""))
-        if not ad_id:
-            continue
-
-        snapshot = ad.get("snapshot", {})
-        page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
-
-        # When using page_id, all ads belong to this competitor (no fuzzy match needed)
-        # When using keyword search, filter by name match
-        if not use_page_id and not _name_matches(competitor.name, page_name_val):
-            continue
-
-        existing = db.query(Ad).filter(Ad.ad_id == ad_id).first()
-
-        # Extract data from snapshot
-        cards = snapshot.get("cards", [])
-        first_card = cards[0] if cards else {}
-
-        ad_text = first_card.get("body") or snapshot.get("body", {}).get("text", "") or snapshot.get("caption", "")
-        cta = first_card.get("cta_text") or snapshot.get("cta_text", "")
-        creative_url = first_card.get("original_image_url") or first_card.get("resized_image_url") or first_card.get("video_preview_image_url", "")
-
-        # Parse dates
-        start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
-        end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
-        is_active = ad.get("is_active", not bool(end_date))
-
-        # Spend/impressions ranges
-        spend = ad.get("spend", {})
-        spend_min = spend.get("lower_bound", 0) if isinstance(spend, dict) else 0
-        spend_max = spend.get("upper_bound", 0) if isinstance(spend, dict) else 0
-
-        impressions = ad.get("impressions", {})
-        imp_min = impressions.get("lower_bound", 0) if isinstance(impressions, dict) else 0
-        imp_max = impressions.get("upper_bound", 0) if isinstance(impressions, dict) else 0
-
-        # Platforms (array)
-        pub_platforms = ad.get("publisher_platform", [])
-        if not isinstance(pub_platforms, list):
-            pub_platforms = [pub_platforms] if pub_platforms else []
-        pub_platforms_upper = [p.upper() if isinstance(p, str) else str(p) for p in pub_platforms]
-
-        # Determine primary platform display
-        platform = "facebook"
-        for p in pub_platforms_upper:
-            if "INSTAGRAM" in p:
-                platform = "instagram"
-                break
-
-        # Enriched fields
-        page_id = snapshot.get("page_id", "") or ad.get("page_id", "")
-        page_categories = snapshot.get("page_categories", []) or []
-        page_like_count = snapshot.get("page_like_count")
-        page_profile_uri = snapshot.get("page_profile_uri", "")
-        page_profile_picture_url = snapshot.get("page_profile_picture_url", "")
-        link_url = first_card.get("link_url") or snapshot.get("link_url", "")
-        display_format = snapshot.get("display_format", "")
-        targeted_countries = ad.get("targeted_or_reached_countries", []) or []
-        ad_categories = ad.get("categories", []) or []
-        contains_ai = ad.get("contains_digital_created_media", False)
-        ad_library_url = ad.get("url", "")
-        title_val = first_card.get("title") or snapshot.get("title", "")
-        link_desc = first_card.get("link_description") or snapshot.get("link_description", "")
-        byline_val = snapshot.get("byline") or None
-        disclaimer_val = snapshot.get("disclaimer_label") or None
-
-        # Auto-fill competitor's facebook_page_id from first ad if missing
-        if page_id and not competitor.facebook_page_id:
-            competitor.facebook_page_id = page_id
-            logger.info(f"Auto-filled facebook_page_id={page_id} for {competitor.name} from ad data")
-
-        # Classify ad type
-        ad_type = _classify_ad_type(link_url, None, cta, display_format)
-
-        # Common fields dict
-        enriched = dict(
-            platform=platform,
-            ad_type=ad_type,
-            creative_url=creative_url,
-            ad_text=ad_text,
-            cta=cta,
-            start_date=start_date,
-            end_date=end_date,
-            is_active=is_active,
-            estimated_spend_min=spend_min,
-            estimated_spend_max=spend_max,
-            impressions_min=imp_min,
-            impressions_max=imp_max,
-            publisher_platforms=json.dumps(pub_platforms_upper) if pub_platforms_upper else None,
-            page_id=page_id or None,
-            page_name=page_name_val or None,
-            page_categories=json.dumps(page_categories) if page_categories else None,
-            page_like_count=page_like_count,
-            page_profile_uri=page_profile_uri or None,
-            page_profile_picture_url=page_profile_picture_url or None,
-            link_url=link_url or None,
-            display_format=display_format or None,
-            targeted_countries=json.dumps(targeted_countries) if targeted_countries else None,
-            ad_categories=json.dumps(ad_categories) if ad_categories else None,
-            contains_ai_content=contains_ai,
-            ad_library_url=ad_library_url or None,
-            title=title_val or None,
-            link_description=link_desc[:2000] if link_desc else None,
-            byline=byline_val,
-            disclaimer_label=disclaimer_val,
-        )
-
-        if existing:
-            for k, v in enriched.items():
-                setattr(existing, k, v)
-            updated_count += 1
-        else:
-            new_ad = Ad(competitor_id=competitor_id, ad_id=ad_id, **enriched)
-            db.add(new_ad)
-            new_count += 1
-
-    db.commit()
-
-    # Fetch child pages (pages filles) via keyword search (wildcard approach)
-    # Instead of fetching 694 pages one by one, search "Carrefour" in Ad Library
-    # which returns ads from ALL pages matching the brand name — much more efficient
-    child_new = 0
-    child_page_ids_set = set()
-    if competitor.child_page_ids:
-        try:
-            child_page_ids_set = set(json.loads(competitor.child_page_ids))
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    if child_page_ids_set:
-        logger.info(f"Fetching child page ads via keyword search for '{competitor.name}' ({len(child_page_ids_set)} known children)")
-        try:
-            child_ads = []
-            cursor = None
-            for _ in range(100):  # More pages since we're aggregating many child pages
-                child_result = await scrapecreators.search_facebook_ads(
-                    company_name=competitor.name,
-                    country="FR",
-                    limit=30,
-                    cursor=cursor,
-                )
-                if not child_result.get("success"):
-                    break
-                batch = child_result.get("ads", [])
-                child_ads.extend(batch)
-                cursor = child_result.get("cursor")
-                if not cursor or not batch:
-                    break
-
-            for ad in child_ads:
-                ad_id = str(ad.get("ad_archive_id", ""))
-                if not ad_id:
-                    continue
-                # Only keep ads from known child pages (not the parent page)
-                ad_page_id = str(ad.get("page_id", "") or ad.get("snapshot", {}).get("page_id", ""))
-                if ad_page_id == page_id_used:
-                    continue  # Skip parent page ads (already fetched above)
-                if ad_page_id and ad_page_id not in child_page_ids_set:
-                    # Unknown page — validate it with prefix matching
-                    ad_page_name = ad.get("snapshot", {}).get("page_name", "") or ""
-                    if not _is_valid_child(competitor.name, ad_page_name):
-                        continue
-
-                if db.query(Ad).filter(Ad.ad_id == ad_id).first():
-                    continue
-
-                snapshot = ad.get("snapshot", {})
-                cards = snapshot.get("cards", [])
-                first_card = cards[0] if cards else {}
-                ad_text = first_card.get("body") or snapshot.get("body", {}).get("text", "") or ""
-                cta = first_card.get("cta_text") or snapshot.get("cta_text", "")
-                creative_url = first_card.get("original_image_url") or first_card.get("resized_image_url") or ""
-                start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
-                end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
-                link_url_val = first_card.get("link_url") or snapshot.get("link_url", "")
-                display_fmt = snapshot.get("display_format", "")
-                ad_type = _classify_ad_type(link_url_val, None, cta, display_fmt)
-                pubs = ad.get("publisher_platform", [])
-                if not isinstance(pubs, list):
-                    pubs = [pubs] if pubs else []
-                platform = "facebook"
-                for p in pubs:
-                    if "INSTAGRAM" in str(p).upper():
-                        platform = "instagram"
-                        break
-                new_ad = Ad(
-                    competitor_id=competitor_id,
-                    ad_id=ad_id,
-                    platform=platform,
-                    ad_type=ad_type,
-                    creative_url=creative_url,
-                    ad_text=ad_text,
-                    cta=cta,
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=ad.get("is_active", not bool(end_date)),
-                    page_name=snapshot.get("page_name", "") or None,
-                    page_id=ad_page_id or None,
-                    link_url=link_url_val or None,
-                    display_format=display_fmt or None,
-                    ad_library_url=ad.get("url", "") or None,
-                )
-                db.add(new_ad)
-                child_new += 1
-            db.commit()
-        except Exception as e:
-            logger.warning(f"Child pages keyword search failed for {competitor.name}: {e}")
+    asyncio.create_task(_fetch_ads_background(
+        competitor_id=competitor_id,
+        competitor_name=competitor.name,
+        facebook_page_id=competitor.facebook_page_id,
+        child_page_ids_json=competitor.child_page_ids,
+        country=country,
+    ))
 
     return {
-        "message": f"Fetched {len(ads_data)} ads for {competitor.name}" + (f" + {child_new} from child pages" if child_new else ""),
-        "total_fetched": len(ads_data),
-        "new_stored": new_count,
-        "updated": updated_count,
-        "child_pages_new": child_new,
-        "total_available": result.get("total_available", len(ads_data)),
-        "method": "page_id" if use_page_id else "keyword_search",
-        "facebook_page_id": page_id_used,
+        "message": f"Fetch launched in background for {competitor.name}",
+        "status": "running",
+        "check_progress": f"GET /api/facebook/fetch/{competitor_id}/status",
     }
+
+
+@router.get("/fetch/{competitor_id}/status")
+async def fetch_competitor_status(competitor_id: int):
+    """Check progress of background ad fetch for a competitor."""
+    task_key = f"fetch-{competitor_id}"
+    if task_key not in _fetch_status:
+        return {"status": "not_started", "message": "No fetch task found for this competitor"}
+    return _fetch_status[task_key]
 
 
 @router.post("/enrich-transparency")
