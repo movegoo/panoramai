@@ -1176,6 +1176,17 @@ export const signalsAPI = {
     fetchAPI<{ message: string; signals: any[]; snapshots: number }>("/signals/detect", { method: "POST" }),
 };
 
+// Ads Overview (Part de Voix)
+export const adsOverviewAPI = {
+  getOverview: (startDate?: string, endDate?: string) => {
+    const params = new URLSearchParams();
+    if (startDate) params.set("start_date", startDate);
+    if (endDate) params.set("end_date", endDate);
+    const qs = params.toString();
+    return fetchAPI<any>(`/ads/overview${qs ? `?${qs}` : ""}`);
+  },
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(
