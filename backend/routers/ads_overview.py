@@ -7,12 +7,12 @@ import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Ad, User, Competitor
 from core.auth import get_current_user
-from core.permissions import get_user_competitors
+from core.permissions import get_user_competitors, parse_advertiser_header
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,8 +65,11 @@ async def ads_overview(
     end_date: str | None = Query(None, description="YYYY-MM-DD"),
     user: User = Depends(get_current_user),
     db: Session = Depends(_get_db),
+    x_advertiser_id: str | None = Header(None),
 ):
     """Agrégation part de voix publicitaire par annonceur (page_name)."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+
     # Period
     if end_date:
         period_end = datetime.strptime(end_date, "%Y-%m-%d")
@@ -78,8 +81,8 @@ async def ads_overview(
     else:
         period_start = period_end - timedelta(days=90)
 
-    # Get competitor IDs to scope ads (we only have ads for tracked competitors)
-    competitors = get_user_competitors(db, user)
+    # Get competitor IDs scoped to current advertiser
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     if not competitors:
         return {"period": {"start": period_start.strftime("%Y-%m-%d"), "end": period_end.strftime("%Y-%m-%d")},
                 "advertisers": [], "timeline": [], "totals": {}}
