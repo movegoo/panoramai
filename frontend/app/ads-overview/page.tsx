@@ -91,7 +91,6 @@ export default function AdsOverviewPage() {
       value: sovMetric === "ads" ? a.total_ads : Math.min(a.spend_min, a.spend_max) || a.spend_min,
       color: COLORS[i % COLORS.length],
     }));
-    // "Autres" if more than 10
     if (advertisers.length > 10) {
       const rest = advertisers.slice(10);
       const value = sovMetric === "ads"
@@ -126,7 +125,7 @@ export default function AdsOverviewPage() {
     return Array.from(s);
   }, [top10]);
 
-  // Timeline: only use top 10 advertiser names
+  // Timeline: only use top 10 names
   const advNames = useMemo(() => top10.map((a: any) => a.name), [top10]);
 
   // Ad type data (top 10 only)
@@ -177,7 +176,7 @@ export default function AdsOverviewPage() {
               Part de Voix Publicitaire
             </h1>
             <p className="text-indigo-200/70 text-sm mt-1">
-              Analyse de tous les annonceurs : qui communique le plus, sur quel r&eacute;seau, &agrave; quel moment
+              Qui communique le plus, sur quel r&eacute;seau, &agrave; quel moment &mdash; par b&eacute;n&eacute;ficiaire
             </p>
           </div>
           <PeriodFilter
@@ -199,9 +198,9 @@ export default function AdsOverviewPage() {
             <KPICard
               icon={Building2}
               iconBg="bg-indigo-100 text-indigo-600"
-              label="Annonceurs"
+              label="B&eacute;n&eacute;ficiaires"
               value={String(totals.advertisers_count || 0)}
-              sub="pages distinctes"
+              sub="marques distinctes"
             />
             <KPICard
               icon={Megaphone}
@@ -237,7 +236,7 @@ export default function AdsOverviewPage() {
           <div className="flex items-start gap-3 rounded-xl bg-indigo-50 border border-indigo-100 p-4">
             <Info className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
             <p className="text-xs text-indigo-700 leading-relaxed">
-              La part de voix est calcul&eacute;e sur <strong>tous les annonceurs</strong> (pages Facebook, Instagram, etc.) d&eacute;tect&eacute;s dans la biblioth&egrave;que publicitaire &mdash; pas uniquement vos concurrents directs. Un m&ecirc;me concurrent peut avoir plusieurs pages annonceurs (ex: Carrefour, Carrefour City, Carrefour Voyages).
+              La part de voix est calcul&eacute;e par <strong>b&eacute;n&eacute;ficiaire</strong> (la marque qui profite de la pub), pas par payeur (l&rsquo;agence m&eacute;dia). Par exemple, Mobsuccess peut payer pour Carrefour &mdash; c&rsquo;est Carrefour qui appara&icirc;t ici. Un m&ecirc;me concurrent peut avoir plusieurs b&eacute;n&eacute;ficiaires (ex: Carrefour, Carrefour City, Carrefour Voyages).
             </p>
           </div>
 
@@ -249,7 +248,7 @@ export default function AdsOverviewPage() {
                 <SectionHeader
                   icon={PieChartIcon}
                   color="bg-violet-100 text-violet-600"
-                  title="Part de voix par annonceur"
+                  title="Part de voix"
                 />
                 <div className="flex items-center gap-1 p-0.5 rounded-full bg-muted border">
                   <button
@@ -272,32 +271,41 @@ export default function AdsOverviewPage() {
               </div>
               <p className="text-xs text-muted-foreground mb-4">
                 {sovMetric === "ads"
-                  ? "Proportion du nombre de publicit\u00e9s par annonceur"
-                  : "Proportion du budget estim\u00e9 par annonceur"}
+                  ? "Proportion du nombre de pubs par b\u00e9n\u00e9ficiaire"
+                  : "Proportion du budget estim\u00e9 par b\u00e9n\u00e9ficiaire"}
               </p>
-              <div className="h-[280px]">
+              <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={donutData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={70}
-                      outerRadius={110}
+                      innerRadius={60}
+                      outerRadius={100}
                       paddingAngle={2}
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, percent }) => `${name.length > 15 ? name.slice(0, 12) + "\u2026" : name} ${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
                     >
                       {donutData.map((d: any, i: number) => (
                         <Cell key={i} fill={d.color} />
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) =>
-                        sovMetric === "spend" ? `${formatNumber(value)} \u20ac` : `${formatNumber(value)} pubs`
-                      }
+                      formatter={(value: number, name: string) => [
+                        sovMetric === "spend" ? `${formatNumber(value)} \u20ac` : `${formatNumber(value)} pubs`,
+                        name,
+                      ]}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      iconType="circle"
+                      iconSize={8}
+                      formatter={(value: string) => (
+                        <span className="text-xs text-foreground">{value.length > 20 ? value.slice(0, 18) + "\u2026" : value}</span>
+                      )}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -306,9 +314,9 @@ export default function AdsOverviewPage() {
 
             {/* Ranking */}
             <div className="rounded-2xl border bg-card p-6">
-              <SectionHeader icon={Trophy} color="bg-amber-100 text-amber-600" title="Top annonceurs par volume" />
+              <SectionHeader icon={Trophy} color="bg-amber-100 text-amber-600" title="Top b&eacute;n&eacute;ficiaires" />
               <p className="text-xs text-muted-foreground mt-1 mb-4">
-                Les annonceurs qui diffusent le plus de publicit&eacute;s sur la p&eacute;riode
+                Les marques qui diffusent le plus de publicit&eacute;s sur la p&eacute;riode
               </p>
               <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
                 {advertisers.slice(0, 15).map((a: any, i: number) => {
@@ -362,9 +370,9 @@ export default function AdsOverviewPage() {
 
           {/* ── R&eacute;partition par plateforme ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-blue-100 text-blue-600" title="Mix plateforme par annonceur" />
+            <SectionHeader icon={BarChart3} color="bg-blue-100 text-blue-600" title="Mix plateforme par b&eacute;n&eacute;ficiaire" />
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Sur quels r&eacute;seaux chaque annonceur diffuse ses publicit&eacute;s (% du volume)
+              Sur quels r&eacute;seaux chaque b&eacute;n&eacute;ficiaire diffuse ses publicit&eacute;s (% du volume)
             </p>
             <div style={{ height: Math.max(250, top10.length * 40 + 60) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -392,7 +400,7 @@ export default function AdsOverviewPage() {
           <div className="rounded-2xl border bg-card p-6">
             <SectionHeader icon={TrendingUp} color="bg-emerald-100 text-emerald-600" title="Pression publicitaire dans le temps" />
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Nombre de nouvelles publicit&eacute;s lanc&eacute;es par semaine, par annonceur (top 10)
+              Nombre de nouvelles publicit&eacute;s lanc&eacute;es par semaine, par b&eacute;n&eacute;ficiaire (top 10)
             </p>
             <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -428,9 +436,9 @@ export default function AdsOverviewPage() {
 
           {/* ── R&eacute;partition par type ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={Layers} color="bg-pink-100 text-pink-600" title="Objectif publicitaire par annonceur" />
+            <SectionHeader icon={Layers} color="bg-pink-100 text-pink-600" title="Objectif publicitaire" />
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Branding (notori&eacute;t&eacute;), Performance (conversion) ou Drive-to-Store pour chaque annonceur
+              Branding (notori&eacute;t&eacute;), Performance (conversion) ou Drive-to-Store pour chaque b&eacute;n&eacute;ficiaire
             </p>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -456,16 +464,16 @@ export default function AdsOverviewPage() {
 
           {/* ── Tableau d&eacute;taill&eacute; ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-indigo-100 text-indigo-600" title="Tous les annonceurs" />
+            <SectionHeader icon={BarChart3} color="bg-indigo-100 text-indigo-600" title="Tous les b&eacute;n&eacute;ficiaires" />
             <p className="text-xs text-muted-foreground mt-1 mb-4">
-              D&eacute;tail complet de chaque annonceur d&eacute;tect&eacute; sur la p&eacute;riode
+              D&eacute;tail complet de chaque b&eacute;n&eacute;ficiaire d&eacute;tect&eacute; sur la p&eacute;riode
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-3 pr-4 font-medium text-muted-foreground">#</th>
-                    <th className="pb-3 pr-4 font-medium text-muted-foreground">Annonceur</th>
+                    <th className="pb-3 pr-4 font-medium text-muted-foreground">B&eacute;n&eacute;ficiaire</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground">Concurrent</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Pubs</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Actives</th>

@@ -1,6 +1,7 @@
 """
-Part de Voix Publicitaire — agrégation par annonceur (page_name), pas par concurrent.
-Chaque page Facebook/Instagram/TikTok est un annonceur distinct.
+Part de Voix Publicitaire — agrégation par bénéficiaire.
+Priorité: beneficiary > page_name > competitor name.
+Un payeur (ex: Mobsuccess) achète pour le compte de bénéficiaires (ex: Carrefour).
 """
 import json
 import logging
@@ -67,7 +68,7 @@ async def ads_overview(
     db: Session = Depends(_get_db),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Agrégation part de voix publicitaire par annonceur (page_name)."""
+    """Agrégation part de voix publicitaire par bénéficiaire."""
     adv_id = parse_advertiser_header(x_advertiser_id)
 
     # Period
@@ -107,22 +108,26 @@ async def ads_overview(
             continue
         filtered_ads.append(a)
 
-    # Group by advertiser (page_name)
-    ads_by_advertiser: dict[str, list[Ad]] = defaultdict(list)
-    for a in filtered_ads:
-        advertiser_name = a.page_name or comp_map.get(a.competitor_id, None)
-        if advertiser_name is None:
-            advertiser_name = "Inconnu"
-        elif not isinstance(advertiser_name, str):
-            advertiser_name = advertiser_name.name
-        ads_by_advertiser[advertiser_name].append(a)
+    # Resolve beneficiary name: beneficiary > page_name > competitor name
+    def _resolve_beneficiary(ad: Ad) -> str:
+        if ad.beneficiary:
+            return ad.beneficiary.strip()
+        if ad.page_name:
+            return ad.page_name.strip()
+        comp = comp_map.get(ad.competitor_id)
+        return comp.name if comp else "Inconnu"
 
-    # Build page_id → logo/profile pic mapping
-    page_logos: dict[str, str | None] = {}
+    # Group by beneficiary
+    ads_by_beneficiary: dict[str, list[Ad]] = defaultdict(list)
     for a in filtered_ads:
-        pname = a.page_name
-        if pname and pname not in page_logos:
-            page_logos[pname] = a.page_profile_picture_url
+        ads_by_beneficiary[_resolve_beneficiary(a)].append(a)
+
+    # Build logo mapping: page profile pic by beneficiary name
+    beneficiary_logos: dict[str, str | None] = {}
+    for a in filtered_ads:
+        bname = _resolve_beneficiary(a)
+        if bname not in beneficiary_logos and a.page_profile_picture_url:
+            beneficiary_logos[bname] = a.page_profile_picture_url
 
     # Also map competitor logos as fallback
     comp_name_to_logo: dict[str, str | None] = {}
@@ -137,7 +142,7 @@ async def ads_overview(
 
     adv_results = []
 
-    for adv_name, adv_ads in ads_by_advertiser.items():
+    for adv_name, adv_ads in ads_by_beneficiary.items():
         active_count = sum(1 for a in adv_ads if a.is_active)
         grand_active += active_count
 
@@ -174,7 +179,7 @@ async def ads_overview(
         grand_reach += adv_reach
 
         # Logo: prefer page profile picture, fallback to competitor logo
-        logo = page_logos.get(adv_name) or comp_name_to_logo.get(adv_name)
+        logo = beneficiary_logos.get(adv_name) or comp_name_to_logo.get(adv_name)
 
         # Find which competitor this advertiser belongs to (if any)
         parent_competitor = None
@@ -206,19 +211,16 @@ async def ads_overview(
     # Sort by total_ads desc
     adv_results.sort(key=lambda x: x["total_ads"], reverse=True)
 
-    # Timeline: weekly aggregation by advertiser
+    # Timeline: weekly aggregation by beneficiary
     timeline: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(lambda: {"ads_started": 0, "spend_min": 0.0}))
     for a in filtered_ads:
         if not a.start_date:
             continue
         week = a.start_date.strftime("%G-W%V")
-        adv_name = a.page_name
-        if not adv_name:
-            comp = comp_map.get(a.competitor_id)
-            adv_name = comp.name if comp else "Inconnu"
+        bname = _resolve_beneficiary(a)
         s_min, _ = _estimate_spend(a)
-        timeline[week][adv_name]["ads_started"] += 1
-        timeline[week][adv_name]["spend_min"] += s_min
+        timeline[week][bname]["ads_started"] += 1
+        timeline[week][bname]["spend_min"] += s_min
 
     timeline_list = []
     for week in sorted(timeline.keys()):
