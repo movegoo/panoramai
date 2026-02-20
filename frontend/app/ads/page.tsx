@@ -1744,7 +1744,10 @@ export default function AdsPage() {
 
   const availableAdvertisers = useMemo(() => {
     const map = new Map<string, number>();
-    allAds.forEach(a => { if (a.page_name) map.set(a.page_name, (map.get(a.page_name) || 0) + 1); });
+    allAds.forEach(a => {
+      const bname = a.beneficiary || a.page_name || "Inconnu";
+      map.set(bname, (map.get(bname) || 0) + 1);
+    });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
 
@@ -1816,7 +1819,10 @@ export default function AdsPage() {
       if (filterCompetitors.size > 0 && !filterCompetitors.has(ad.competitor_name)) return false;
       if (filterPlatforms.size > 0 && !getPublisherPlatforms(ad).some(p => filterPlatforms.has(p))) return false;
       if (filterFormats.size > 0 && (!ad.display_format || !filterFormats.has(ad.display_format))) return false;
-      if (filterAdvertisers.size > 0 && (!ad.page_name || !filterAdvertisers.has(ad.page_name))) return false;
+      if (filterAdvertisers.size > 0) {
+        const bname = ad.beneficiary || ad.page_name || "Inconnu";
+        if (!filterAdvertisers.has(bname)) return false;
+      }
       if (filterStatus === "active" && !ad.is_active) return false;
       if (filterStatus === "inactive" && ad.is_active) return false;
       if (filterDateFrom && ad.start_date && ad.start_date < filterDateFrom) return false;
@@ -1925,8 +1931,8 @@ export default function AdsPage() {
       cc.spendMax += adSpendMax;
       byCompetitor.set(a.competitor_name, cc);
 
-      // By advertiser (page_name = payeur)
-      const pn = a.page_name || "Inconnu";
+      // By beneficiary (the brand, not the payer/agency)
+      const pn = a.beneficiary || a.page_name || "Inconnu";
       const aa = byAdvertiser.get(pn) || { total: 0, active: 0, likes: 0, categories: [], logo: undefined, spendMin: 0, spendMax: 0 };
       aa.total++;
       if (a.is_active) aa.active++;
@@ -2353,7 +2359,7 @@ export default function AdsPage() {
                   >
                     <div className="flex items-center gap-2">
                       <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Annonceur</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">B&eacute;n&eacute;ficiaire</span>
                       <span className="text-[10px] text-muted-foreground tabular-nums">{availableAdvertisers.length}</span>
                       {filterAdvertisers.size > 0 && (
                         <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterAdvertisers.size}</span>
@@ -2370,7 +2376,7 @@ export default function AdsPage() {
                             type="text"
                             value={advertiserSearch}
                             onChange={(e) => setAdvertiserSearch(e.target.value)}
-                            placeholder="Filtrer les annonceurs..."
+                            placeholder="Filtrer les b&eacute;n&eacute;ficiaires..."
                             className="w-full pl-7 pr-7 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
                           />
                           {advertiserSearch && (
@@ -2561,7 +2567,7 @@ export default function AdsPage() {
               </div>
               <div className="p-3 rounded-xl bg-muted/50 text-center">
                 <div className="text-2xl font-bold">{creativeInsights.by_competitor.length}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Annonceurs</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">B&eacute;n&eacute;ficiaires</div>
               </div>
             </div>
 
@@ -2721,8 +2727,8 @@ export default function AdsPage() {
                   <Building2 className="h-4.5 w-4.5 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Payeurs (annonceurs)</h3>
-                  <p className="text-[11px] text-muted-foreground">{sortedAdvertisers.length} payeur{sortedAdvertisers.length > 1 ? "s" : ""} identifié{sortedAdvertisers.length > 1 ? "s" : ""}</p>
+                  <h3 className="text-sm font-semibold text-foreground">B&eacute;n&eacute;ficiaires</h3>
+                  <p className="text-[11px] text-muted-foreground">{sortedAdvertisers.length} marque{sortedAdvertisers.length > 1 ? "s" : ""} identifi&eacute;e{sortedAdvertisers.length > 1 ? "s" : ""}</p>
                 </div>
               </div>
               {hasMore && (

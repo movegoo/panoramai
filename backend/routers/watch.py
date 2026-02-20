@@ -735,7 +735,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
     # Global format breakdown
     format_counts = {}
     platform_counts = {}
-    advertisers = {}  # page_name -> {ads, competitors, active, formats}
+    advertisers = {}  # beneficiary -> {ads, competitors, active, formats}
     payers = {}  # byline/disclaimer -> {total, active, pages} (only explicit payer data)
 
     for ad in all_ads:
@@ -752,14 +752,16 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         for pp in pps:
             platform_counts[pp] = platform_counts.get(pp, 0) + 1
 
-        pname = ad.page_name or "Inconnu"
-        if pname not in advertisers:
-            advertisers[pname] = {"total": 0, "active": 0, "competitor_id": ad.competitor_id, "formats": {}}
-        advertisers[pname]["total"] += 1
+        # Group by beneficiary (the brand), not page_name (can be agency)
+        bname = ad.beneficiary or ad.page_name or "Inconnu"
+        bname = bname.strip()
+        if bname not in advertisers:
+            advertisers[bname] = {"total": 0, "active": 0, "competitor_id": ad.competitor_id, "formats": {}}
+        advertisers[bname]["total"] += 1
         if ad.is_active:
-            advertisers[pname]["active"] += 1
+            advertisers[bname]["active"] += 1
         fmt_key = ad.display_format or "AUTRE"
-        advertisers[pname]["formats"][fmt_key] = advertisers[pname]["formats"].get(fmt_key, 0) + 1
+        advertisers[bname]["formats"][fmt_key] = advertisers[bname]["formats"].get(fmt_key, 0) + 1
 
         # Payer tracking: only use REAL payer data (byline/disclaimer_label)
         # Don't fallback to page_name — that's the advertiser, not the payer
@@ -770,7 +772,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             payers[explicit_payer]["total"] += 1
             if ad.is_active:
                 payers[explicit_payer]["active"] += 1
-            payers[explicit_payer]["pages"].add(pname)
+            payers[explicit_payer]["pages"].add(bname)
 
     # Per competitor summary
     competitor_ad_summary = []
