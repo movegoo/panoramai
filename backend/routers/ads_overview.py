@@ -1,7 +1,6 @@
 """
-Part de Voix Publicitaire — agrégation par bénéficiaire.
-Priorité: beneficiary > page_name > competitor name.
-Un payeur (ex: Mobsuccess) achète pour le compte de bénéficiaires (ex: Carrefour).
+Part de Voix Publicitaire — agrégation par concurrent tel que configuré.
+Toutes les pages/bénéficiaires d'un concurrent sont regroupées sous son nom.
 """
 import json
 import logging
@@ -68,7 +67,7 @@ async def ads_overview(
     db: Session = Depends(_get_db),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Agrégation part de voix publicitaire par bénéficiaire."""
+    """Agrégation part de voix publicitaire par concurrent."""
     adv_id = parse_advertiser_header(x_advertiser_id)
 
     # Period
@@ -82,11 +81,11 @@ async def ads_overview(
     else:
         period_start = period_end - timedelta(days=90)
 
-    # Get competitor IDs scoped to current advertiser
+    # Get competitors scoped to current advertiser
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     if not competitors:
         return {"period": {"start": period_start.strftime("%Y-%m-%d"), "end": period_end.strftime("%Y-%m-%d")},
-                "advertisers": [], "timeline": [], "totals": {}}
+                "competitors": [], "timeline": [], "totals": {}}
 
     comp_map = {c.id: c for c in competitors}
     comp_ids = list(comp_map.keys())
@@ -108,31 +107,10 @@ async def ads_overview(
             continue
         filtered_ads.append(a)
 
-    # Resolve beneficiary name: beneficiary > page_name > competitor name
-    def _resolve_beneficiary(ad: Ad) -> str:
-        if ad.beneficiary:
-            return ad.beneficiary.strip()
-        if ad.page_name:
-            return ad.page_name.strip()
-        comp = comp_map.get(ad.competitor_id)
-        return comp.name if comp else "Inconnu"
-
-    # Group by beneficiary
-    ads_by_beneficiary: dict[str, list[Ad]] = defaultdict(list)
+    # Group by competitor (all pages/beneficiaries roll up to competitor)
+    ads_by_comp: dict[int, list[Ad]] = defaultdict(list)
     for a in filtered_ads:
-        ads_by_beneficiary[_resolve_beneficiary(a)].append(a)
-
-    # Build logo mapping: page profile pic by beneficiary name
-    beneficiary_logos: dict[str, str | None] = {}
-    for a in filtered_ads:
-        bname = _resolve_beneficiary(a)
-        if bname not in beneficiary_logos and a.page_profile_picture_url:
-            beneficiary_logos[bname] = a.page_profile_picture_url
-
-    # Also map competitor logos as fallback
-    comp_name_to_logo: dict[str, str | None] = {}
-    for c in competitors:
-        comp_name_to_logo[c.name] = c.logo_url
+        ads_by_comp[a.competitor_id].append(a)
 
     grand_total_ads = len(filtered_ads)
     grand_active = 0
@@ -140,26 +118,33 @@ async def ads_overview(
     grand_spend_max = 0.0
     grand_reach = 0
 
-    adv_results = []
+    comp_results = []
 
-    for adv_name, adv_ads in ads_by_beneficiary.items():
-        active_count = sum(1 for a in adv_ads if a.is_active)
+    for cid in comp_ids:
+        comp = comp_map[cid]
+        c_ads = ads_by_comp.get(cid, [])
+        if not c_ads:
+            continue
+
+        active_count = sum(1 for a in c_ads if a.is_active)
         grand_active += active_count
 
         by_platform: dict[str, dict] = defaultdict(lambda: {"ads": 0, "spend_min": 0.0, "spend_max": 0.0, "reach": 0})
         by_type: dict[str, int] = defaultdict(int)
         by_format: dict[str, int] = defaultdict(int)
+        # Track distinct pages/beneficiaries under this competitor
+        pages: set[str] = set()
 
-        adv_spend_min = 0.0
-        adv_spend_max = 0.0
-        adv_reach = 0
+        comp_spend_min = 0.0
+        comp_spend_max = 0.0
+        comp_reach = 0
 
-        for a in adv_ads:
+        for a in c_ads:
             s_min, s_max = _estimate_spend(a)
-            adv_spend_min += s_min
-            adv_spend_max += s_max
+            comp_spend_min += s_min
+            comp_spend_max += s_max
             reach = a.eu_total_reach or 0
-            adv_reach += reach
+            comp_reach += reach
 
             platforms = _parse_platforms(a)
             for plat in platforms:
@@ -174,60 +159,57 @@ async def ads_overview(
             fmt = (a.display_format or "unknown").upper()
             by_format[fmt] += 1
 
-        grand_spend_min += adv_spend_min
-        grand_spend_max += adv_spend_max
-        grand_reach += adv_reach
+            # Track pages
+            page = a.beneficiary or a.page_name
+            if page:
+                pages.add(page.strip())
 
-        # Logo: prefer page profile picture, fallback to competitor logo
-        logo = beneficiary_logos.get(adv_name) or comp_name_to_logo.get(adv_name)
+        grand_spend_min += comp_spend_min
+        grand_spend_max += comp_spend_max
+        grand_reach += comp_reach
 
-        # Find which competitor this advertiser belongs to (if any)
-        parent_competitor = None
-        if adv_ads:
-            cid = adv_ads[0].competitor_id
-            comp = comp_map.get(cid)
-            if comp:
-                parent_competitor = comp.name
-
-        adv_results.append({
-            "name": adv_name,
-            "logo_url": logo,
-            "parent_competitor": parent_competitor,
-            "total_ads": len(adv_ads),
+        comp_results.append({
+            "id": cid,
+            "name": comp.name,
+            "logo_url": comp.logo_url,
+            "total_ads": len(c_ads),
             "active_ads": active_count,
-            "sov_pct": 0,  # calculated below
-            "spend_min": round(adv_spend_min),
-            "spend_max": round(adv_spend_max),
-            "reach": adv_reach,
+            "sov_pct": 0,
+            "spend_min": round(comp_spend_min),
+            "spend_max": round(comp_spend_max),
+            "reach": comp_reach,
+            "pages": sorted(pages),
             "by_platform": {k: {"ads": v["ads"], "spend_min": round(v["spend_min"]), "spend_max": round(v["spend_max"]), "reach": v["reach"]} for k, v in by_platform.items()},
             "by_type": dict(by_type),
             "by_format": dict(by_format),
         })
 
     # Calculate SOV %
-    for a in adv_results:
-        a["sov_pct"] = round(a["total_ads"] / grand_total_ads * 100, 1) if grand_total_ads > 0 else 0
+    for c in comp_results:
+        c["sov_pct"] = round(c["total_ads"] / grand_total_ads * 100, 1) if grand_total_ads > 0 else 0
 
     # Sort by total_ads desc
-    adv_results.sort(key=lambda x: x["total_ads"], reverse=True)
+    comp_results.sort(key=lambda x: x["total_ads"], reverse=True)
 
-    # Timeline: weekly aggregation by beneficiary
+    # Timeline: weekly aggregation by competitor
     timeline: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(lambda: {"ads_started": 0, "spend_min": 0.0}))
     for a in filtered_ads:
         if not a.start_date:
             continue
         week = a.start_date.strftime("%G-W%V")
-        bname = _resolve_beneficiary(a)
+        comp = comp_map.get(a.competitor_id)
+        if not comp:
+            continue
         s_min, _ = _estimate_spend(a)
-        timeline[week][bname]["ads_started"] += 1
-        timeline[week][bname]["spend_min"] += s_min
+        timeline[week][comp.name]["ads_started"] += 1
+        timeline[week][comp.name]["spend_min"] += s_min
 
     timeline_list = []
     for week in sorted(timeline.keys()):
         entry: dict = {"week": week}
-        for adv_name_str, vals in timeline[week].items():
-            entry[adv_name_str] = vals["ads_started"]
-            entry[f"{adv_name_str}_spend"] = round(vals["spend_min"])
+        for comp_name, vals in timeline[week].items():
+            entry[comp_name] = vals["ads_started"]
+            entry[f"{comp_name}_spend"] = round(vals["spend_min"])
         timeline_list.append(entry)
 
     return {
@@ -235,7 +217,7 @@ async def ads_overview(
             "start": period_start.strftime("%Y-%m-%d"),
             "end": period_end.strftime("%Y-%m-%d"),
         },
-        "advertisers": adv_results,
+        "competitors": comp_results,
         "timeline": timeline_list,
         "totals": {
             "total_ads": grand_total_ads,
@@ -243,6 +225,6 @@ async def ads_overview(
             "spend_min": round(grand_spend_min),
             "spend_max": round(grand_spend_max),
             "reach": grand_reach,
-            "advertisers_count": len(adv_results),
+            "competitors_count": len(comp_results),
         },
     }
