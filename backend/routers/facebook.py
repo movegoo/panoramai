@@ -657,25 +657,29 @@ async def fetch_competitor_ads(
 
     db.commit()
 
-    # Fetch child pages (pages filles) — aggregate into parent competitor
+    # Fetch child pages (pages filles) via keyword search (wildcard approach)
+    # Instead of fetching 694 pages one by one, search "Carrefour" in Ad Library
+    # which returns ads from ALL pages matching the brand name — much more efficient
     child_new = 0
-    child_page_ids_list = []
+    child_page_ids_set = set()
     if competitor.child_page_ids:
         try:
-            child_page_ids_list = json.loads(competitor.child_page_ids)
+            child_page_ids_set = set(json.loads(competitor.child_page_ids))
         except (json.JSONDecodeError, TypeError):
-            child_page_ids_list = []
+            pass
 
-    for child_id in child_page_ids_list:
-        child_id = str(child_id).strip()
-        if not child_id:
-            continue
+    if child_page_ids_set:
+        logger.info(f"Fetching child page ads via keyword search for '{competitor.name}' ({len(child_page_ids_set)} known children)")
         try:
-            # Paginated fetch for child pages too
             child_ads = []
             cursor = None
-            for _ in range(30):
-                child_result = await scrapecreators.fetch_facebook_company_ads(page_id=child_id, cursor=cursor)
+            for _ in range(100):  # More pages since we're aggregating many child pages
+                child_result = await scrapecreators.search_facebook_ads(
+                    company_name=competitor.name,
+                    country="FR",
+                    limit=30,
+                    cursor=cursor,
+                )
                 if not child_result.get("success"):
                     break
                 batch = child_result.get("ads", [])
@@ -683,12 +687,24 @@ async def fetch_competitor_ads(
                 cursor = child_result.get("cursor")
                 if not cursor or not batch:
                     break
+
             for ad in child_ads:
                 ad_id = str(ad.get("ad_archive_id", ""))
                 if not ad_id:
                     continue
+                # Only keep ads from known child pages (not the parent page)
+                ad_page_id = str(ad.get("page_id", "") or ad.get("snapshot", {}).get("page_id", ""))
+                if ad_page_id == page_id_used:
+                    continue  # Skip parent page ads (already fetched above)
+                if ad_page_id and ad_page_id not in child_page_ids_set:
+                    # Unknown page — validate it with prefix matching
+                    ad_page_name = ad.get("snapshot", {}).get("page_name", "") or ""
+                    if not _is_valid_child(competitor.name, ad_page_name):
+                        continue
+
                 if db.query(Ad).filter(Ad.ad_id == ad_id).first():
                     continue
+
                 snapshot = ad.get("snapshot", {})
                 cards = snapshot.get("cards", [])
                 first_card = cards[0] if cards else {}
@@ -720,7 +736,7 @@ async def fetch_competitor_ads(
                     end_date=end_date,
                     is_active=ad.get("is_active", not bool(end_date)),
                     page_name=snapshot.get("page_name", "") or None,
-                    page_id=child_id,
+                    page_id=ad_page_id or None,
                     link_url=link_url_val or None,
                     display_format=display_fmt or None,
                     ad_library_url=ad.get("url", "") or None,
@@ -729,7 +745,7 @@ async def fetch_competitor_ads(
                 child_new += 1
             db.commit()
         except Exception as e:
-            logger.warning(f"Child page {child_id} fetch failed: {e}")
+            logger.warning(f"Child pages keyword search failed for {competitor.name}: {e}")
 
     return {
         "message": f"Fetched {len(ads_data)} ads for {competitor.name}" + (f" + {child_new} from child pages" if child_new else ""),

@@ -432,13 +432,16 @@ class ScrapeCreatorsAPI:
             "credits_remaining": data.get("credits_remaining"),
         }
 
-    async def search_facebook_ads(self, company_name: str, country: str = "FR", limit: int = 30) -> Dict:
+    async def search_facebook_ads(self, company_name: str, country: str = "FR", limit: int = 30, cursor: str = None) -> Dict:
         """Search Facebook Ad Library for a company's ads via ScrapeCreators."""
-        data = await self._get("/v1/facebook/adLibrary/search/ads", {
+        params = {
             "query": company_name,
             "country": country,
             "limit": str(limit),
-        })
+        }
+        if cursor:
+            params["cursor"] = cursor
+        data = await self._get("/v1/facebook/adLibrary/search/ads", params)
 
         if not data.get("success"):
             return data
