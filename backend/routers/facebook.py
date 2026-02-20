@@ -292,7 +292,50 @@ async def _discover_child_pages_background(competitor_ids: list[int], advertiser
                     existing_children.add(ad_page_id)
                     found_children.append({"page_id": ad_page_id, "page_name": ad_page_name, "source": "ads_db"})
 
-            # Strategy 2: BANCO cities
+            # Strategy 2: Wildcard search — "Brand -", "Brand City", "Brand Market", etc.
+            # Much more efficient than per-city: a few queries can find most child pages
+            bn_lower = comp.name.lower().strip()
+            matched_prefixes = None
+            for key, prefixes in BRAND_PREFIXES.items():
+                if key in bn_lower or bn_lower in key:
+                    matched_prefixes = prefixes
+                    break
+            wildcard_prefixes = matched_prefixes or [bn_lower]
+
+            # Build wildcard queries: "Brand -", plus brand-specific sub-formats
+            wildcard_queries = []
+            for prefix in wildcard_prefixes:
+                wildcard_queries.append(f"{prefix} -")  # "Carrefour -", "E.Leclerc -"
+            # Also search common retail sub-brands
+            RETAIL_SUFFIXES = ["City", "Market", "Express", "Contact", "Proximité", "Bio",
+                               "Drive", "Hyper", "Super", "Local", "Plus"]
+            for prefix in wildcard_prefixes[:1]:  # Only main prefix to avoid too many calls
+                for suffix in RETAIL_SUFFIXES:
+                    wildcard_queries.append(f"{prefix} {suffix}")
+
+            logger.info(f"[{comp.name}] Wildcard search: {len(wildcard_queries)} queries")
+            _discovery_status[task_id][comp.name] = {"total_cities": 0, "processed": 0, "found": 0, "wildcard_queries": len(wildcard_queries)}
+
+            for wq in wildcard_queries:
+                try:
+                    search_result = await scrapecreators.search_facebook_companies(wq)
+                    if search_result.get("success"):
+                        for company in search_result.get("companies", []):
+                            page_id = str(company.get("page_id") or company.get("pageId") or company.get("id") or "")
+                            page_name = company.get("page_name") or company.get("name") or ""
+                            if not page_id or page_id == parent_page_id or page_id in existing_children:
+                                continue
+                            if _is_valid_child(comp.name, page_name):
+                                existing_children.add(page_id)
+                                found_children.append({"page_id": page_id, "page_name": page_name, "source": f"wildcard:{wq}"})
+                    await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"Wildcard search failed for '{wq}': {e}")
+
+            logger.info(f"[{comp.name}] Wildcard search found {len(found_children)} child pages")
+            _discovery_status[task_id][comp.name]["found"] = len(found_children)
+
+            # Strategy 3: BANCO cities (complements wildcard — catches local pages missed above)
             banco_cities = (
                 db.query(StoreLocation.city)
                 .filter(StoreLocation.competitor_id == comp.id, StoreLocation.city.isnot(None))
@@ -305,7 +348,8 @@ async def _discover_child_pages_background(competitor_ids: list[int], advertiser
                 cities = FALLBACK_CITIES
 
             logger.info(f"[{comp.name}] Searching {len(cities)} BANCO cities for child pages")
-            _discovery_status[task_id][comp.name] = {"total_cities": len(cities), "processed": 0, "found": 0}
+            _discovery_status[task_id][comp.name]["total_cities"] = len(cities)
+            _discovery_status[task_id][comp.name]["processed"] = 0
 
             for i, city in enumerate(cities):
                 query = f"{comp.name} {city}"
@@ -365,8 +409,9 @@ async def discover_child_pages(
     x_advertiser_id: str | None = Header(None),
 ):
     """
-    Launch background discovery of child/local Facebook pages using BANCO store cities.
-    Returns immediately — check progress via GET /api/facebook/discover-child-pages/status.
+    Launch background discovery of child/local Facebook pages.
+    Strategy: 1) mine existing ads, 2) wildcard search ("Brand -", "Brand City", etc.),
+    3) BANCO store cities. Returns immediately — check progress via GET /api/facebook/discover-child-pages/status.
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
@@ -390,12 +435,19 @@ async def discover_child_pages(
     # Launch background task
     asyncio.create_task(_discover_child_pages_background(comp_ids, adv_id))
 
+    # Wildcard queries per competitor: 1 "Brand -" + up to 11 retail suffixes = ~12
+    wildcard_per_comp = 12
+    total_wildcard = wildcard_per_comp * len(competitors)
+    total_city = sum(city_counts.values())
+
     return {
         "message": f"Discovery launched in background for {len(competitors)} competitors",
         "competitors": comp_names,
+        "strategy": "1) mine ads DB, 2) wildcard search (Brand -, Brand City, etc.), 3) BANCO cities",
+        "wildcard_queries": total_wildcard,
         "cities_to_search": city_counts,
-        "total_api_calls": sum(city_counts.values()),
-        "estimated_time_minutes": round(sum(city_counts.values()) * 0.5 / 60, 1),
+        "total_api_calls": total_wildcard + total_city,
+        "estimated_time_minutes": round((total_wildcard + total_city) * 0.5 / 60, 1),
         "check_progress": "GET /api/facebook/discover-child-pages/status",
     }
 
