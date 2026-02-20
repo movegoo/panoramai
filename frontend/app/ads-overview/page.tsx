@@ -15,6 +15,8 @@ import {
   TrendingUp,
   PieChart as PieChartIcon,
   Loader2,
+  Building2,
+  Info,
 } from "lucide-react";
 import {
   PieChart,
@@ -41,6 +43,13 @@ const PLATFORM_COLORS: Record<string, string> = {
   unknown: "#9ca3af",
 };
 
+const TYPE_LABELS: Record<string, string> = {
+  branding: "Branding",
+  performance: "Performance",
+  dts: "Drive-to-Store",
+  unknown: "Non classifie",
+};
+
 function periodToDates(days: PeriodDays): { start: string; end: string } {
   const end = new Date();
   const start = new Date();
@@ -49,6 +58,14 @@ function periodToDates(days: PeriodDays): { start: string; end: string } {
     start: start.toISOString().split("T")[0],
     end: end.toISOString().split("T")[0],
   };
+}
+
+function formatBudget(min: number, max: number): string {
+  if (min === 0 && max === 0) return "N/A";
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  if (lo === hi) return `~${formatNumber(lo)} \u20ac`;
+  return `${formatNumber(lo)} \u2013 ${formatNumber(hi)} \u20ac`;
 }
 
 export default function AdsOverviewPage() {
@@ -60,68 +77,80 @@ export default function AdsOverviewPage() {
     `/ads/overview?start_date=${start}&end_date=${end}`
   );
 
-  const competitors = data?.competitors || [];
+  const advertisers = data?.advertisers || [];
   const timeline = data?.timeline || [];
   const totals = data?.totals || {};
 
+  // Top 10 for charts, rest grouped as "Autres"
+  const top10 = useMemo(() => advertisers.slice(0, 10), [advertisers]);
+
   // Donut data
   const donutData = useMemo(() => {
-    return competitors.map((c: any, i: number) => ({
-      name: c.name,
-      value: sovMetric === "ads" ? c.total_ads : c.spend_min,
+    const top = top10.map((a: any, i: number) => ({
+      name: a.name,
+      value: sovMetric === "ads" ? a.total_ads : Math.min(a.spend_min, a.spend_max) || a.spend_min,
       color: COLORS[i % COLORS.length],
     }));
-  }, [competitors, sovMetric]);
+    // "Autres" if more than 10
+    if (advertisers.length > 10) {
+      const rest = advertisers.slice(10);
+      const value = sovMetric === "ads"
+        ? rest.reduce((s: number, a: any) => s + a.total_ads, 0)
+        : rest.reduce((s: number, a: any) => s + (a.spend_min || 0), 0);
+      top.push({ name: "Autres", value, color: "#d1d5db" });
+    }
+    return top;
+  }, [top10, advertisers, sovMetric]);
 
-  // Platform stacked data
+  // Platform stacked data (top 10 only)
   const platformData = useMemo(() => {
     const allPlatforms = new Set<string>();
-    competitors.forEach((c: any) => {
-      Object.keys(c.by_platform || {}).forEach((p) => allPlatforms.add(p));
+    top10.forEach((a: any) => {
+      Object.keys(a.by_platform || {}).forEach((p) => allPlatforms.add(p));
     });
-    return competitors.map((c: any) => {
-      const total = c.total_ads || 1;
-      const entry: any = { name: c.name };
+    return top10.map((a: any) => {
+      const total = a.total_ads || 1;
+      const entry: any = { name: a.name };
       allPlatforms.forEach((p) => {
-        entry[p] = Math.round(((c.by_platform?.[p]?.ads || 0) / total) * 100);
+        entry[p] = Math.round(((a.by_platform?.[p]?.ads || 0) / total) * 100);
       });
       return entry;
     });
-  }, [competitors]);
+  }, [top10]);
 
   const allPlatforms = useMemo(() => {
     const s = new Set<string>();
-    competitors.forEach((c: any) => {
-      Object.keys(c.by_platform || {}).forEach((p) => s.add(p));
+    top10.forEach((a: any) => {
+      Object.keys(a.by_platform || {}).forEach((p) => s.add(p));
     });
     return Array.from(s);
-  }, [competitors]);
+  }, [top10]);
 
-  // Timeline competitor names
-  const compNames = useMemo(() => competitors.map((c: any) => c.name), [competitors]);
+  // Timeline: only use top 10 advertiser names
+  const advNames = useMemo(() => top10.map((a: any) => a.name), [top10]);
 
-  // Ad type data
+  // Ad type data (top 10 only)
   const typeData = useMemo(() => {
     const types = new Set<string>();
-    competitors.forEach((c: any) => {
-      Object.keys(c.by_type || {}).forEach((t) => types.add(t));
+    top10.forEach((a: any) => {
+      Object.keys(a.by_type || {}).forEach((t) => types.add(t));
     });
-    return competitors.map((c: any) => {
-      const entry: any = { name: c.name };
+    return top10.map((a: any) => {
+      const entry: any = { name: a.name };
       types.forEach((t) => {
-        entry[t] = c.by_type?.[t] || 0;
+        entry[t] = a.by_type?.[t] || 0;
       });
       return entry;
     });
-  }, [competitors]);
+  }, [top10]);
 
   const allTypes = useMemo(() => {
     const s = new Set<string>();
-    competitors.forEach((c: any) => {
-      Object.keys(c.by_type || {}).forEach((t) => s.add(t));
+    top10.forEach((a: any) => {
+      Object.keys(a.by_type || {}).forEach((t) => s.add(t));
     });
     return Array.from(s);
-  }, [competitors]);
+  }, [top10]);
 
   const typeColors: Record<string, string> = {
     branding: "#6366f1",
@@ -148,7 +177,7 @@ export default function AdsOverviewPage() {
               Part de Voix Publicitaire
             </h1>
             <p className="text-indigo-200/70 text-sm mt-1">
-              Qui communique le plus, sur quel r&eacute;seau, &agrave; quel moment
+              Analyse de tous les annonceurs : qui communique le plus, sur quel r&eacute;seau, &agrave; quel moment
             </p>
           </div>
           <PeriodFilter
@@ -165,40 +194,63 @@ export default function AdsOverviewPage() {
         </div>
       ) : (
         <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-          {/* ── 5.2 KPI Cards ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* ── KPI Cards ── */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <KPICard
+              icon={Building2}
+              iconBg="bg-indigo-100 text-indigo-600"
+              label="Annonceurs"
+              value={String(totals.advertisers_count || 0)}
+              sub="pages distinctes"
+            />
             <KPICard
               icon={Megaphone}
               iconBg="bg-violet-100 text-violet-600"
               label="Total pubs"
               value={formatNumber(totals.total_ads || 0)}
+              sub="sur la p\u00e9riode"
             />
             <KPICard
               icon={Zap}
               iconBg="bg-emerald-100 text-emerald-600"
               label="Pubs actives"
               value={formatNumber(totals.active_ads || 0)}
+              sub="en cours de diffusion"
             />
             <KPICard
               icon={Euro}
               iconBg="bg-amber-100 text-amber-600"
-              label="Budget estim&eacute;"
-              value={`${formatNumber(totals.spend_min || 0)} – ${formatNumber(totals.spend_max || 0)} €`}
+              label="Budget estim\u00e9 total"
+              value={formatBudget(totals.spend_min || 0, totals.spend_max || 0)}
+              sub="estimation CPM 3\u20ac"
             />
             <KPICard
               icon={Users}
               iconBg="bg-blue-100 text-blue-600"
               label="Couverture EU"
               value={formatNumber(totals.reach || 0)}
+              sub="personnes atteintes"
             />
           </div>
 
-          {/* ── 5.3 Part de voix donut + classement ── */}
+          {/* ── Info banner ── */}
+          <div className="flex items-start gap-3 rounded-xl bg-indigo-50 border border-indigo-100 p-4">
+            <Info className="h-4 w-4 text-indigo-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-indigo-700 leading-relaxed">
+              La part de voix est calcul&eacute;e sur <strong>tous les annonceurs</strong> (pages Facebook, Instagram, etc.) d&eacute;tect&eacute;s dans la biblioth&egrave;que publicitaire &mdash; pas uniquement vos concurrents directs. Un m&ecirc;me concurrent peut avoir plusieurs pages annonceurs (ex: Carrefour, Carrefour City, Carrefour Voyages).
+            </p>
+          </div>
+
+          {/* ── Part de voix donut + classement ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Donut */}
             <div className="rounded-2xl border bg-card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <SectionHeader icon={PieChartIcon} color="bg-violet-100 text-violet-600" title="Part de voix" />
+              <div className="flex items-center justify-between mb-2">
+                <SectionHeader
+                  icon={PieChartIcon}
+                  color="bg-violet-100 text-violet-600"
+                  title="Part de voix par annonceur"
+                />
                 <div className="flex items-center gap-1 p-0.5 rounded-full bg-muted border">
                   <button
                     onClick={() => setSovMetric("ads")}
@@ -206,7 +258,7 @@ export default function AdsOverviewPage() {
                       sovMetric === "ads" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground"
                     }`}
                   >
-                    Pubs
+                    Nombre
                   </button>
                   <button
                     onClick={() => setSovMetric("spend")}
@@ -218,6 +270,11 @@ export default function AdsOverviewPage() {
                   </button>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                {sovMetric === "ads"
+                  ? "Proportion du nombre de publicit\u00e9s par annonceur"
+                  : "Proportion du budget estim\u00e9 par annonceur"}
+              </p>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -230,6 +287,8 @@ export default function AdsOverviewPage() {
                       paddingAngle={2}
                       dataKey="value"
                       nameKey="name"
+                      label={({ name, percent }) => `${name.length > 15 ? name.slice(0, 12) + "\u2026" : name} ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
                     >
                       {donutData.map((d: any, i: number) => (
                         <Cell key={i} fill={d.color} />
@@ -237,7 +296,7 @@ export default function AdsOverviewPage() {
                     </Pie>
                     <Tooltip
                       formatter={(value: number) =>
-                        sovMetric === "spend" ? `${formatNumber(value)} €` : formatNumber(value)
+                        sovMetric === "spend" ? `${formatNumber(value)} \u20ac` : `${formatNumber(value)} pubs`
                       }
                     />
                   </PieChart>
@@ -247,25 +306,41 @@ export default function AdsOverviewPage() {
 
             {/* Ranking */}
             <div className="rounded-2xl border bg-card p-6">
-              <SectionHeader icon={Trophy} color="bg-amber-100 text-amber-600" title="Classement" />
-              <div className="mt-4 space-y-3">
-                {competitors.map((c: any, i: number) => {
-                  const maxAds = competitors[0]?.total_ads || 1;
-                  const pct = (c.total_ads / maxAds) * 100;
-                  const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
+              <SectionHeader icon={Trophy} color="bg-amber-100 text-amber-600" title="Top annonceurs par volume" />
+              <p className="text-xs text-muted-foreground mt-1 mb-4">
+                Les annonceurs qui diffusent le plus de publicit&eacute;s sur la p&eacute;riode
+              </p>
+              <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                {advertisers.slice(0, 15).map((a: any, i: number) => {
+                  const maxAds = advertisers[0]?.total_ads || 1;
+                  const pct = (a.total_ads / maxAds) * 100;
+                  const medal = i === 0 ? "\ud83e\uddc1" : i === 1 ? "\ud83e\uddc2" : i === 2 ? "\ud83e\uddc3" : null;
                   return (
-                    <div key={c.id} className="flex items-center gap-3">
-                      <span className="text-sm font-semibold w-6 text-center text-muted-foreground">
-                        {medal || `#${i + 1}`}
+                    <div key={a.name} className="flex items-center gap-3">
+                      <span className="text-sm font-semibold w-6 text-center text-muted-foreground shrink-0">
+                        {medal || `${i + 1}`}
                       </span>
-                      {c.logo_url && (
-                        <img src={c.logo_url} alt="" className="h-6 w-6 rounded-full object-cover" />
+                      {a.logo_url ? (
+                        <img src={a.logo_url} alt="" className="h-6 w-6 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-bold text-muted-foreground">
+                            {a.name.charAt(0)}
+                          </span>
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium truncate">{c.name}</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm font-medium truncate">{a.name}</span>
+                            {a.parent_competitor && a.parent_competitor !== a.name && (
+                              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                                {a.parent_competitor}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                            {c.total_ads} pubs &middot; {c.sov_pct}%
+                            {a.total_ads} &middot; {a.sov_pct}%
                           </span>
                         </div>
                         <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -285,15 +360,18 @@ export default function AdsOverviewPage() {
             </div>
           </div>
 
-          {/* ── 5.4 Répartition par plateforme ── */}
+          {/* ── R&eacute;partition par plateforme ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-blue-100 text-blue-600" title="R&eacute;partition par plateforme" />
-            <div className="h-[300px] mt-4">
+            <SectionHeader icon={BarChart3} color="bg-blue-100 text-blue-600" title="Mix plateforme par annonceur" />
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              Sur quels r&eacute;seaux chaque annonceur diffuse ses publicit&eacute;s (% du volume)
+            </p>
+            <div style={{ height: Math.max(250, top10.length * 40 + 60) }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={platformData} layout="vertical" margin={{ left: 80 }}>
+                <BarChart data={platformData} layout="vertical" margin={{ left: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={80} />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
                   <Tooltip formatter={(v: number) => `${v}%`} />
                   <Legend />
                   {allPlatforms.map((p) => (
@@ -310,14 +388,17 @@ export default function AdsOverviewPage() {
             </div>
           </div>
 
-          {/* ── 5.5 Timeline ── */}
+          {/* ── Timeline ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={TrendingUp} color="bg-emerald-100 text-emerald-600" title="Timeline hebdomadaire" />
-            <div className="h-[320px] mt-4">
+            <SectionHeader icon={TrendingUp} color="bg-emerald-100 text-emerald-600" title="Pression publicitaire dans le temps" />
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              Nombre de nouvelles publicit&eacute;s lanc&eacute;es par semaine, par annonceur (top 10)
+            </p>
+            <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeline}>
                   <defs>
-                    {compNames.map((name: string, i: number) => (
+                    {advNames.map((name: string, i: number) => (
                       <linearGradient key={name} id={`grad-${i}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.4} />
                         <stop offset="100%" stopColor={COLORS[i % COLORS.length]} stopOpacity={0.05} />
@@ -329,7 +410,7 @@ export default function AdsOverviewPage() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
                   <Legend />
-                  {compNames.map((name: string, i: number) => (
+                  {advNames.map((name: string, i: number) => (
                     <Area
                       key={name}
                       type="monotone"
@@ -345,14 +426,17 @@ export default function AdsOverviewPage() {
             </div>
           </div>
 
-          {/* ── 5.6 Répartition par type ── */}
+          {/* ── R&eacute;partition par type ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={Layers} color="bg-pink-100 text-pink-600" title="R&eacute;partition par type" />
-            <div className="h-[300px] mt-4">
+            <SectionHeader icon={Layers} color="bg-pink-100 text-pink-600" title="Objectif publicitaire par annonceur" />
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              Branding (notori&eacute;t&eacute;), Performance (conversion) ou Drive-to-Store pour chaque annonceur
+            </p>
+            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={typeData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={50} />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
                   <Legend />
@@ -361,7 +445,7 @@ export default function AdsOverviewPage() {
                       key={t}
                       dataKey={t}
                       fill={typeColors[t] || "#9ca3af"}
-                      name={t.charAt(0).toUpperCase() + t.slice(1)}
+                      name={TYPE_LABELS[t] || t}
                       radius={[4, 4, 0, 0]}
                     />
                   ))}
@@ -370,53 +454,76 @@ export default function AdsOverviewPage() {
             </div>
           </div>
 
-          {/* ── 5.7 Tableau détaillé ── */}
+          {/* ── Tableau d&eacute;taill&eacute; ── */}
           <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-indigo-100 text-indigo-600" title="Classement d&eacute;taill&eacute;" />
-            <div className="overflow-x-auto mt-4">
+            <SectionHeader icon={BarChart3} color="bg-indigo-100 text-indigo-600" title="Tous les annonceurs" />
+            <p className="text-xs text-muted-foreground mt-1 mb-4">
+              D&eacute;tail complet de chaque annonceur d&eacute;tect&eacute; sur la p&eacute;riode
+            </p>
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-3 pr-4 font-medium text-muted-foreground">#</th>
-                    <th className="pb-3 pr-4 font-medium text-muted-foreground">Enseigne</th>
+                    <th className="pb-3 pr-4 font-medium text-muted-foreground">Annonceur</th>
+                    <th className="pb-3 pr-4 font-medium text-muted-foreground">Concurrent</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Pubs</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Actives</th>
+                    <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Part de voix</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Budget estim&eacute;</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Couverture</th>
                     <th className="pb-3 font-medium text-muted-foreground">Plateformes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {competitors.map((c: any, i: number) => {
-                    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : null;
-                    const platforms = Object.keys(c.by_platform || {});
+                  {advertisers.map((a: any, i: number) => {
+                    const medal = i === 0 ? "\ud83e\uddc1" : i === 1 ? "\ud83e\uddc2" : i === 2 ? "\ud83e\uddc3" : null;
+                    const platforms = Object.keys(a.by_platform || {});
                     return (
-                      <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <tr key={a.name} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="py-3 pr-4 text-sm font-semibold text-muted-foreground">
                           {medal || i + 1}
                         </td>
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-2">
-                            {c.logo_url && (
-                              <img src={c.logo_url} alt="" className="h-6 w-6 rounded-full object-cover" />
+                            {a.logo_url ? (
+                              <img src={a.logo_url} alt="" className="h-6 w-6 rounded-full object-cover" />
+                            ) : (
+                              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-muted-foreground">
+                                  {a.name.charAt(0)}
+                                </span>
+                              </div>
                             )}
-                            <span className="font-medium">{c.name}</span>
+                            <span className="font-medium">{a.name}</span>
                           </div>
                         </td>
-                        <td className="py-3 pr-4 text-right font-medium">{c.total_ads}</td>
-                        <td className="py-3 pr-4 text-right">{c.active_ads}</td>
-                        <td className="py-3 pr-4 text-right text-xs">
-                          {formatNumber(c.spend_min)} – {formatNumber(c.spend_max)} €
+                        <td className="py-3 pr-4 text-xs text-muted-foreground">
+                          {a.parent_competitor || "\u2014"}
                         </td>
-                        <td className="py-3 pr-4 text-right">{formatNumber(c.reach)}</td>
+                        <td className="py-3 pr-4 text-right font-medium">{a.total_ads}</td>
+                        <td className="py-3 pr-4 text-right">{a.active_ads}</td>
+                        <td className="py-3 pr-4 text-right">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-50 text-violet-700">
+                            {a.sov_pct}%
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-right text-xs">
+                          {formatBudget(a.spend_min, a.spend_max)}
+                        </td>
+                        <td className="py-3 pr-4 text-right">{formatNumber(a.reach)}</td>
                         <td className="py-3">
                           <div className="flex gap-1 flex-wrap">
                             {platforms.map((p) => (
                               <span
                                 key={p}
-                                className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground"
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                                style={{
+                                  backgroundColor: `${PLATFORM_COLORS[p] || "#9ca3af"}18`,
+                                  color: PLATFORM_COLORS[p] || "#9ca3af",
+                                }}
                               >
-                                {p}
+                                {p.charAt(0).toUpperCase() + p.slice(1)}
                               </span>
                             ))}
                           </div>
@@ -441,11 +548,13 @@ function KPICard({
   iconBg,
   label,
   value,
+  sub,
 }: {
   icon: any;
   iconBg: string;
   label: string;
   value: string;
+  sub?: string;
 }) {
   return (
     <div className="rounded-2xl border bg-card p-5">
@@ -456,6 +565,9 @@ function KPICard({
         <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
       </div>
       <p className="text-xl font-bold tracking-tight">{value}</p>
+      {sub && (
+        <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
+      )}
     </div>
   );
 }
