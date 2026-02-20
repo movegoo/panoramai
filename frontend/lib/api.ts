@@ -129,8 +129,6 @@ export interface Ad {
   creative_tags?: string[];
   creative_summary?: string;
   creative_analyzed_at?: string;
-  // EU Transparency payer/beneficiary
-  beneficiary?: string;
   // Ad type segmentation
   ad_type?: string;  // "branding" | "performance" | "dts"
 }
