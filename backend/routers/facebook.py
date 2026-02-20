@@ -11,7 +11,7 @@ import json
 import asyncio
 import logging
 
-from database import get_db, Competitor, Ad, User, StoreLocation
+from database import get_db, SessionLocal, Competitor, Ad, User, StoreLocation
 from core.auth import get_current_user
 from core.permissions import verify_competitor_ownership, get_user_competitors, get_user_competitor_ids, parse_advertiser_header
 from services.scrapecreators import scrapecreators
@@ -192,18 +192,180 @@ async def resolve_facebook_page_ids(
     }
 
 
+# ── Child page discovery constants (module-level) ──
+FALLBACK_CITIES = [
+    "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes",
+    "Strasbourg", "Montpellier", "Bordeaux", "Lille",
+]
+
+BRAND_PREFIXES: dict[str, list[str]] = {
+    "carrefour": ["carrefour"],
+    "leclerc": ["e.leclerc", "leclerc", "e leclerc"],
+    "lidl": ["lidl"],
+    "auchan": ["auchan"],
+    "intermarche": ["intermarché", "intermarche"],
+    "monoprix": ["monoprix", "monop'"],
+    "casino": ["casino #bio", "casino supermarché", "casino supermarche", "casino shop", "géant casino", "geant casino", "casino max", "casino proximité"],
+    "systeme u": ["super u", "hyper u", "u express"],
+    "ikea": ["ikea"],
+    "decathlon": ["decathlon"],
+    "leroy merlin": ["leroy merlin"],
+    "sephora": ["sephora"],
+    "hermès": ["hermès", "hermes"],
+    "picard": ["picard"],
+    "aldi": ["aldi"],
+    "franprix": ["franprix"],
+    "action": ["action"],
+    "fnac": ["fnac"],
+    "darty": ["darty"],
+    "grand frais": ["grand frais"],
+}
+
+NEGATIVE_KEYWORDS = [
+    "barrière", "barriere", "café de paris", "serrures", "hypnothérapeute",
+    "hypnotherapeute", "parish council", "conseil municipal", "musée",
+    "museum", "théâtre", "theatre", "cinéma", "cinema", "fondation",
+    "association", "festival", "qatar", "argentina", " uk", "hrvatska",
+    "belgique", "españa", "italia", "deutschland",
+]
+
+# In-memory progress tracking for background discovery
+_discovery_status: dict[str, dict] = {}
+
+
+def _is_valid_child(brand_name: str, page_name: str) -> bool:
+    """Check if page_name starts with a known prefix for this brand (word boundary)."""
+    pn = page_name.lower().strip()
+    bn = brand_name.lower().strip()
+
+    for neg in NEGATIVE_KEYWORDS:
+        if neg in pn:
+            return False
+
+    matched_prefixes = None
+    for key, prefixes in BRAND_PREFIXES.items():
+        if key in bn or bn in key:
+            matched_prefixes = prefixes
+            break
+
+    check_prefixes = matched_prefixes or [bn]
+
+    for prefix in check_prefixes:
+        if pn.startswith(prefix):
+            rest = pn[len(prefix):]
+            if rest == "" or rest[0] in " -_.'&,/()":
+                return True
+    return False
+
+
+async def _discover_child_pages_background(competitor_ids: list[int], advertiser_id: int):
+    """Background task: discover child Facebook pages using BANCO cities."""
+    from database import SessionLocal
+
+    task_id = f"discover-{datetime.utcnow().strftime('%H%M%S')}"
+    _discovery_status[task_id] = {"status": "running", "started": datetime.utcnow().isoformat(), "results": []}
+
+    db = SessionLocal()
+    try:
+        competitors = db.query(Competitor).filter(Competitor.id.in_(competitor_ids)).all()
+        total_found = 0
+
+        for comp in competitors:
+            parent_page_id = comp.facebook_page_id or ""
+            existing_children = set()
+            found_children = []
+
+            # Strategy 1: Mine existing ads
+            ads_with_pages = db.query(Ad.page_id, Ad.page_name).filter(
+                Ad.competitor_id == comp.id,
+                Ad.page_id.isnot(None),
+                Ad.page_name.isnot(None),
+            ).distinct().all()
+
+            for ad_page_id, ad_page_name in ads_with_pages:
+                if not ad_page_id or ad_page_id == parent_page_id:
+                    continue
+                if ad_page_id in existing_children:
+                    continue
+                if _is_valid_child(comp.name, ad_page_name or ""):
+                    existing_children.add(ad_page_id)
+                    found_children.append({"page_id": ad_page_id, "page_name": ad_page_name, "source": "ads_db"})
+
+            # Strategy 2: BANCO cities
+            banco_cities = (
+                db.query(StoreLocation.city)
+                .filter(StoreLocation.competitor_id == comp.id, StoreLocation.city.isnot(None))
+                .group_by(StoreLocation.city)
+                .order_by(func.count(StoreLocation.id).desc())
+                .all()
+            )
+            cities = [row[0] for row in banco_cities if row[0] and len(row[0]) > 1]
+            if not cities:
+                cities = FALLBACK_CITIES
+
+            logger.info(f"[{comp.name}] Searching {len(cities)} BANCO cities for child pages")
+            _discovery_status[task_id][comp.name] = {"total_cities": len(cities), "processed": 0, "found": 0}
+
+            for i, city in enumerate(cities):
+                query = f"{comp.name} {city}"
+                try:
+                    search_result = await scrapecreators.search_facebook_companies(query)
+                    if search_result.get("success"):
+                        for company in search_result.get("companies", []):
+                            page_id = str(company.get("page_id") or company.get("pageId") or company.get("id") or "")
+                            page_name = company.get("page_name") or company.get("name") or ""
+                            if not page_id or page_id == parent_page_id or page_id in existing_children:
+                                continue
+                            if _is_valid_child(comp.name, page_name):
+                                existing_children.add(page_id)
+                                found_children.append({"page_id": page_id, "page_name": page_name, "source": f"search:{query}"})
+                    await asyncio.sleep(0.3)
+                except Exception as e:
+                    logger.warning(f"Child page search failed for '{query}': {e}")
+
+                if (i + 1) % 50 == 0:
+                    _discovery_status[task_id][comp.name]["processed"] = i + 1
+                    _discovery_status[task_id][comp.name]["found"] = len(found_children)
+                    logger.info(f"[{comp.name}] Progress: {i+1}/{len(cities)} cities, {len(found_children)} pages found")
+
+            # Save
+            if existing_children:
+                comp.child_page_ids = json.dumps(list(existing_children))
+
+            result = {
+                "competitor_id": comp.id,
+                "competitor_name": comp.name,
+                "cities_searched": len(cities),
+                "new_children_found": len(found_children),
+                "total_children": len(existing_children),
+            }
+            _discovery_status[task_id]["results"].append(result)
+            total_found += len(found_children)
+            logger.info(f"[{comp.name}] Done: {len(found_children)} child pages found from {len(cities)} cities")
+
+            db.commit()
+
+        _discovery_status[task_id]["status"] = "completed"
+        _discovery_status[task_id]["total_found"] = total_found
+        logger.info(f"Discovery complete: {total_found} total child pages across {len(competitors)} competitors")
+
+    except Exception as e:
+        logger.error(f"Discovery background task failed: {e}")
+        _discovery_status[task_id]["status"] = f"error: {e}"
+    finally:
+        db.close()
+
+
 @router.post("/discover-child-pages")
 async def discover_child_pages(
-    competitor_id: int | None = Query(None, description="Process a single competitor (recommended for large BANCO datasets)"),
+    competitor_id: int | None = Query(None, description="Process a single competitor"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
-    Auto-discover child/local Facebook pages for each competitor.
-    Uses BANCO store cities for exhaustive coverage.
-
-    Pass competitor_id to process one competitor at a time (recommended).
+    Launch background discovery of child/local Facebook pages using BANCO store cities.
+    Returns immediately — check progress via GET /api/facebook/discover-child-pages/status.
     """
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
@@ -213,169 +375,38 @@ async def discover_child_pages(
         if not competitors:
             raise HTTPException(404, "Competitor not found")
 
-    # Fallback cities if no BANCO data
-    FALLBACK_CITIES = [
-        "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes",
-        "Strasbourg", "Montpellier", "Bordeaux", "Lille",
-    ]
+    comp_ids = [c.id for c in competitors]
+    comp_names = [c.name for c in competitors]
 
-    # Brand name prefixes — the page_name must START with one of these
-    BRAND_PREFIXES: dict[str, list[str]] = {
-        "carrefour": ["carrefour"],
-        "leclerc": ["e.leclerc", "leclerc", "e leclerc"],
-        "lidl": ["lidl"],
-        "auchan": ["auchan"],
-        "intermarche": ["intermarché", "intermarche"],
-        "monoprix": ["monoprix", "monop'"],
-        "casino": ["casino #bio", "casino supermarché", "casino supermarche", "casino shop", "géant casino", "geant casino", "casino max", "casino proximité"],
-        "systeme u": ["super u", "hyper u", "u express"],
-        "ikea": ["ikea"],
-        "decathlon": ["decathlon"],
-        "leroy merlin": ["leroy merlin"],
-        "sephora": ["sephora"],
-        "hermès": ["hermès", "hermes"],
-        "picard": ["picard"],
-        "aldi": ["aldi"],
-        "franprix": ["franprix"],
-        "action": ["action"],
-        "fnac": ["fnac"],
-        "darty": ["darty"],
-    }
-
-    # Words that indicate a page is NOT a retail store
-    NEGATIVE_KEYWORDS = [
-        "barrière", "barriere", "café de paris", "serrures", "hypnothérapeute",
-        "hypnotherapeute", "parish council", "conseil municipal", "musée",
-        "museum", "théâtre", "theatre", "cinéma", "cinema", "fondation",
-        "association", "festival", "qatar", "argentina", " uk", "hrvatska",
-        "belgique", "españa", "italia", "deutschland",
-    ]
-
-    def _is_valid_child(brand_name: str, page_name: str) -> bool:
-        """Check if page_name starts with a known prefix for this brand (word boundary)."""
-        pn = page_name.lower().strip()
-        bn = brand_name.lower().strip()
-
-        # Check negative keywords
-        for neg in NEGATIVE_KEYWORDS:
-            if neg in pn:
-                return False
-
-        # Try brand-specific prefixes first
-        matched_prefixes = None
-        for key, prefixes in BRAND_PREFIXES.items():
-            if key in bn or bn in key:
-                matched_prefixes = prefixes
-                break
-
-        check_prefixes = matched_prefixes or [bn]
-
-        for prefix in check_prefixes:
-            if pn.startswith(prefix):
-                # Must be exact match or followed by a space/punctuation (word boundary)
-                rest = pn[len(prefix):]
-                if rest == "" or rest[0] in " -_.'&,/()":
-                    return True
-        return False
-
-    results = []
-
+    # Count cities per competitor for the response
+    city_counts = {}
     for comp in competitors:
-        parent_page_id = comp.facebook_page_id or ""
+        count = db.query(func.count(func.distinct(StoreLocation.city))).filter(
+            StoreLocation.competitor_id == comp.id, StoreLocation.city.isnot(None)
+        ).scalar() or 0
+        city_counts[comp.name] = count if count > 0 else len(FALLBACK_CITIES)
 
-        # Reset child_page_ids (clean slate to remove previous false positives)
-        existing_children = set()
-        found_children = []
+    # Launch background task
+    asyncio.create_task(_discover_child_pages_background(comp_ids, adv_id))
 
-        # ── Strategy 1: Mine existing ads in DB ──
-        ads_with_pages = db.query(Ad.page_id, Ad.page_name).filter(
-            Ad.competitor_id == comp.id,
-            Ad.page_id.isnot(None),
-            Ad.page_name.isnot(None),
-        ).distinct().all()
-
-        for ad_page_id, ad_page_name in ads_with_pages:
-            if not ad_page_id or ad_page_id == parent_page_id:
-                continue
-            if ad_page_id in existing_children:
-                continue
-            if _is_valid_child(comp.name, ad_page_name or ""):
-                existing_children.add(ad_page_id)
-                found_children.append({
-                    "page_id": ad_page_id,
-                    "page_name": ad_page_name,
-                    "source": "ads_db",
-                })
-
-        # ── Strategy 2: Search for local pages via ScrapeCreators ──
-        # Use BANCO cities (unique cities where this competitor has stores)
-        banco_cities = (
-            db.query(StoreLocation.city)
-            .filter(StoreLocation.competitor_id == comp.id, StoreLocation.city.isnot(None))
-            .group_by(StoreLocation.city)
-            .order_by(func.count(StoreLocation.id).desc())
-            .all()
-        )
-        cities = [row[0] for row in banco_cities if row[0] and len(row[0]) > 1]
-
-        # Fallback if no BANCO data for this competitor
-        if not cities:
-            cities = FALLBACK_CITIES
-
-        logger.info(f"[{comp.name}] Searching {len(cities)} BANCO cities for child pages")
-
-        for i, city in enumerate(cities):
-            query = f"{comp.name} {city}"
-            try:
-                search_result = await scrapecreators.search_facebook_companies(query)
-                if not search_result.get("success"):
-                    continue
-
-                for company in search_result.get("companies", []):
-                    page_id = str(company.get("page_id") or company.get("pageId") or company.get("id") or "")
-                    page_name = company.get("page_name") or company.get("name") or ""
-
-                    if not page_id or page_id == parent_page_id:
-                        continue
-                    if page_id in existing_children:
-                        continue
-
-                    if _is_valid_child(comp.name, page_name):
-                        existing_children.add(page_id)
-                        found_children.append({
-                            "page_id": page_id,
-                            "page_name": page_name,
-                            "source": f"search:{query}",
-                        })
-
-                await asyncio.sleep(0.3)
-            except Exception as e:
-                logger.warning(f"Child page search failed for '{query}': {e}")
-
-            # Progress log every 50 cities
-            if (i + 1) % 50 == 0:
-                logger.info(f"[{comp.name}] Progress: {i+1}/{len(cities)} cities, {len(found_children)} pages found so far")
-
-        # Save updated child_page_ids
-        if existing_children:
-            comp.child_page_ids = json.dumps(list(existing_children))
-
-        results.append({
-            "competitor_id": comp.id,
-            "competitor_name": comp.name,
-            "parent_page_id": parent_page_id,
-            "new_children_found": len(found_children),
-            "children": found_children,
-            "total_children": len(existing_children),
-        })
-
-    db.commit()
-
-    total_new = sum(r["new_children_found"] for r in results)
     return {
-        "message": f"Discovered {total_new} child/local pages across {len(results)} competitors",
-        "results": results,
+        "message": f"Discovery launched in background for {len(competitors)} competitors",
+        "competitors": comp_names,
+        "cities_to_search": city_counts,
+        "total_api_calls": sum(city_counts.values()),
+        "estimated_time_minutes": round(sum(city_counts.values()) * 0.5 / 60, 1),
+        "check_progress": "GET /api/facebook/discover-child-pages/status",
     }
+
+
+@router.get("/discover-child-pages/status")
+async def discover_child_pages_status():
+    """Check progress of background child page discovery."""
+    if not _discovery_status:
+        return {"message": "No discovery task running or completed"}
+    # Return the most recent task
+    latest_key = list(_discovery_status.keys())[-1]
+    return _discovery_status[latest_key]
 
 
 @router.get("/child-pages")
