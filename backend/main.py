@@ -297,15 +297,24 @@ def _seed_prompt_templates():
 
     db = SessionLocal()
     try:
-        existing_keys = {p.key for p in db.query(PromptTemplate.key).all()}
+        existing = {p.key: p for p in db.query(PromptTemplate).all()}
         added = 0
+        updated = 0
         for d in defaults:
-            if d["key"] not in existing_keys:
+            if d["key"] not in existing:
                 db.add(PromptTemplate(**d))
                 added += 1
-        if added:
+            else:
+                # Update prompt text if it changed (e.g. new French version)
+                row = existing[d["key"]]
+                if row.prompt_text != d["prompt_text"]:
+                    row.prompt_text = d["prompt_text"]
+                    row.model_id = d.get("model_id", row.model_id)
+                    row.max_tokens = d.get("max_tokens", row.max_tokens)
+                    updated += 1
+        if added or updated:
             db.commit()
-            logger.info(f"Seeded {added} new prompt template(s)")
+            logger.info(f"Prompt templates: {added} added, {updated} updated")
     except Exception as e:
         logger.warning(f"Prompt template seed warning: {e}")
     finally:
