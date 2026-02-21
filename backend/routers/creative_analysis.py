@@ -65,13 +65,24 @@ async def analyze_all_creatives(
     if x_advertiser_id:
         query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
-    # Skip VIDEO format (no static image)
+    # Skip VIDEO format and non-image URLs (Google Ads syndication, etc.)
+    SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
     ads_to_analyze = []
-    candidates = query.limit(limit * 2).all()
+    candidates = query.limit(limit * 3).all()
     for ad in candidates:
         fmt = (ad.display_format or "").upper()
-        if fmt != "VIDEO" and len(ads_to_analyze) < limit:
+        url = ad.creative_url or ""
+        if fmt == "VIDEO":
+            continue
+        if any(p in url for p in SKIP_URL_PATTERNS):
+            # Mark as analyzed with score=0 so we don't retry
+            ad.creative_analyzed_at = datetime.utcnow()
+            ad.creative_score = 0
+            ad.creative_summary = "URL non analysable (réseau publicitaire)"
+            continue
+        if len(ads_to_analyze) < limit:
             ads_to_analyze.append(ad)
+    db.commit()
 
     # Count remaining for this user
     remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
