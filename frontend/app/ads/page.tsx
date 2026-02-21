@@ -127,6 +127,14 @@ function GoogleAdsIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function SnapchatIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12.959-.289.165-.093.333-.14.502-.14.356 0 .655.192.753.462a.671.671 0 01-.071.586c-.13.2-.336.328-.484.39-.36.153-.81.263-1.264.387-.089.025-.178.049-.266.075-.222.066-.272.18-.275.246-.005.094.052.2.133.308.395.532.88 1.01 1.443 1.42.405.294.862.485 1.205.594a1.032 1.032 0 01.574.392c.078.12.14.282.042.488-.162.342-.561.542-1.186.595-.063.005-.133.025-.212.046-.168.046-.378.104-.671.104-.107 0-.22-.01-.34-.035-.2-.045-.37-.076-.528-.076-.162 0-.255.03-.295.063-.09.075-.236.329-.364.553a4.864 4.864 0 01-.643.906c-.39.405-.894.785-1.538 1.163-.553.327-1.2.626-1.92.89-.15.055-.26.104-.339.149.006.074.006.148 0 .222-.03.362-.18.604-.427.704-.16.065-.348.094-.55.094-.258 0-.553-.056-.816-.106-.361-.07-.734-.142-1.114-.142-.088 0-.175.004-.262.014-.287.033-.566.1-.84.17-.375.094-.764.19-1.189.19-.05 0-.1-.001-.149-.005-.234-.015-.435-.094-.58-.226a.815.815 0 01-.248-.541c0-.046.003-.091.01-.137.019-.12.04-.248.04-.38a.68.68 0 00-.007-.09c-.067-.03-.165-.075-.302-.125-.716-.262-1.362-.56-1.914-.886-.644-.378-1.148-.758-1.538-1.163a4.86 4.86 0 01-.643-.906c-.128-.224-.274-.478-.365-.553-.04-.033-.133-.063-.295-.063-.158 0-.329.031-.528.076-.12.025-.233.035-.34.035-.293 0-.503-.058-.671-.104-.079-.021-.149-.041-.212-.046-.625-.053-1.024-.253-1.186-.595-.098-.206-.036-.368.042-.488a1.032 1.032 0 01.574-.392c.343-.109.8-.3 1.205-.594.564-.41 1.048-.888 1.443-1.42.081-.108.138-.214.133-.308-.003-.066-.053-.18-.275-.246-.088-.026-.177-.05-.266-.075-.454-.124-.903-.234-1.264-.387a1.135 1.135 0 01-.484-.39.671.671 0 01-.071-.586c.098-.27.397-.462.753-.462.17 0 .337.047.502.14.3.17.659.273.96.289.197 0 .325-.045.4-.09a12.794 12.794 0 01-.032-.57c-.104-1.628-.23-3.654.3-4.847C5.654 1.069 9.01.793 10 .793h.045l.161.001z"/>
+    </svg>
+  );
+}
+
 function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 36 36" className={className} fill="currentColor">
@@ -191,6 +199,9 @@ function getSourcePlatform(ad: AdWithCompetitor): { label: string; icon: React.R
   if (ad.platform === "google") {
     return { label: "Google Ads", icon: <GoogleAdsIcon className="h-3.5 w-3.5" />, color: "text-amber-700", bg: "bg-amber-50 border-amber-200" };
   }
+  if (ad.platform === "snapchat") {
+    return { label: "Snapchat Ads", icon: <SnapchatIcon className="h-3.5 w-3.5" />, color: "text-yellow-600", bg: "bg-yellow-50 border-yellow-200" };
+  }
   // Default: Meta (Facebook Ad Library)
   return { label: "Meta Ads", icon: <MetaIcon className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-50 border-blue-200" };
 }
@@ -199,11 +210,13 @@ const SOURCE_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
   meta: { label: "Meta", icon: <MetaIcon className="h-3 w-3" />, color: "#3b82f6" },
   tiktok: { label: "TikTok", icon: <TikTokIcon className="h-3 w-3" />, color: "#0f172a" },
   google: { label: "Google", icon: <GoogleAdsIcon className="h-3 w-3" />, color: "#f59e0b" },
+  snapchat: { label: "Snapchat", icon: <SnapchatIcon className="h-3 w-3" />, color: "#facc15" },
 };
 
 function normalizeSource(platform: string | undefined | null): string {
   if (platform === "tiktok") return "tiktok";
   if (platform === "google") return "google";
+  if (platform === "snapchat") return "snapchat";
   return "meta";
 }
 
@@ -213,6 +226,7 @@ function getPublisherPlatforms(ad: { publisher_platforms?: string[]; platform?: 
   // Fallback: derive from platform field
   if (ad.platform === "tiktok") return ["TIKTOK"];
   if (ad.platform === "google") return ["GOOGLE"];
+  if (ad.platform === "snapchat") return ["SNAPCHAT"];
   if (ad.platform === "instagram") return ["INSTAGRAM"];
   if (ad.platform === "facebook") return ["FACEBOOK"];
   return ["UNKNOWN"];
@@ -305,6 +319,7 @@ const PLATFORM_CONFIGS: Record<string, { label: string; color: string; iconColor
   YOUTUBE: { label: "YouTube", color: "bg-red-100 text-red-700 border-red-200", iconColor: "text-red-600", bg: "bg-red-500" },
   GOOGLE_PLAY: { label: "Google Play", color: "bg-green-100 text-green-700 border-green-200", iconColor: "text-green-600", bg: "bg-green-500" },
   APP_STORE: { label: "App Store", color: "bg-sky-100 text-sky-700 border-sky-200", iconColor: "text-sky-600", bg: "bg-sky-500" },
+  SNAPCHAT: { label: "Snapchat", color: "bg-yellow-100 text-yellow-700 border-yellow-200", iconColor: "text-yellow-600", bg: "bg-yellow-500" },
 };
 
 const FORMAT_LABELS: Record<string, { label: string; icon: string }> = {
@@ -337,6 +352,7 @@ function PlatformIcon({ name, className = "h-3.5 w-3.5" }: { name: string; class
     case "YOUTUBE": return <YouTubeIcon className={className} />;
     case "GOOGLE_PLAY": case "PLAYSTORE": return <GooglePlayIcon className={className} />;
     case "APP_STORE": case "APPSTORE": return <AppStoreIcon className={className} />;
+    case "SNAPCHAT": return <SnapchatIcon className={className} />;
     default: return <Globe className={className} />;
   }
 }
@@ -1517,7 +1533,7 @@ export default function AdsPage() {
   const { data: swrSnapAds } = useAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all");
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
-  const { data: swrInsights } = useAPI<CreativeInsights>("/creative/insights");
+  const { data: swrInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights");
 
   // Merge SWR data into state when available
   useEffect(() => {
@@ -1570,10 +1586,8 @@ export default function AdsPage() {
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
       if (brandRes.status === "fulfilled") setBrandName(brandRes.value.company_name);
-      try {
-        const ci = await creativeAPI.getInsights();
-        setCreativeInsights(ci);
-      } catch {}
+      // Revalidate creative insights via SWR
+      mutateInsights();
     } catch (err) {
       console.error(err);
     } finally {
@@ -1587,8 +1601,8 @@ export default function AdsPage() {
     try {
       const result = await creativeAPI.analyzeAll(10);
       setAnalyzeResult(result);
-      // Refresh insights
-      try { const ci = await creativeAPI.getInsights(); setCreativeInsights(ci); } catch {}
+      // Refresh insights via SWR revalidation
+      await mutateInsights();
       // Refresh ads to get updated creative fields
       const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
         facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(), snapchatAPI.getAllAds(),

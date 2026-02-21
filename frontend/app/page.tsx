@@ -1031,7 +1031,7 @@ export default function DashboardPage() {
           <div className="rounded-2xl border bg-card overflow-hidden">
             <div className="px-4 py-3 border-b bg-muted/20">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Volume par b&eacute;n&eacute;ficiaire / payeur
+                Volume par annonceur / payeur
               </span>
             </div>
             <div className="divide-y">
@@ -1492,16 +1492,16 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Bénéficiaires (marques qui profitent des pubs) */}
+        {/* Annonceurs (pages qui diffusent) */}
         <div className="space-y-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
               <Users className="h-4 w-4 text-violet-600" />
             </div>
             <h2 className="text-[13px] font-semibold text-foreground">
-              B&eacute;n&eacute;ficiaires
+              Annonceurs (pages)
             </h2>
-            <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.advertisers.length} marques</span>
+            <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.advertisers.length} pages</span>
           </div>
           <div className="rounded-2xl border bg-card overflow-hidden">
             <div className="divide-y">
