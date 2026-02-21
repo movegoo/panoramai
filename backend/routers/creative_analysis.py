@@ -113,8 +113,9 @@ async def analyze_all_creatives(
                     creative_url=ad.creative_url,
                     ad_text=ad.ad_text or "",
                     platform=_normalize_platform(ad.platform),
+                    ad_id=ad.ad_id or "",
                 ),
-                timeout=45,
+                timeout=60,
             )
 
             if result:

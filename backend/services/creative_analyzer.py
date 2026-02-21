@@ -84,6 +84,7 @@ class CreativeAnalyzer:
         creative_url: str,
         ad_text: str = "",
         platform: str = "meta",
+        ad_id: str = "",
     ) -> Optional[dict]:
         """Analyze a single ad creative image with Claude Vision.
 
@@ -99,6 +100,28 @@ class CreativeAnalyzer:
 
         # Download image
         image_data, media_type = await self._download_image(creative_url)
+
+        # If download failed and we have an ad_id, try fetching a fresh URL via ScrapeCreators
+        if not image_data and ad_id and "fbcdn" in creative_url:
+            logger.info(f"Retrying with fresh URL from ScrapeCreators for ad {ad_id}")
+            try:
+                from services.scrapecreators import scrapecreators
+                detail = await scrapecreators.get_ad_detail(ad_id)
+                if detail.get("success") or detail.get("snapshot"):
+                    snapshot = detail.get("snapshot", {})
+                    cards = snapshot.get("cards", [])
+                    images = snapshot.get("images", [])
+                    fresh_url = ""
+                    if cards:
+                        fresh_url = cards[0].get("original_image_url") or cards[0].get("resized_image_url", "")
+                    elif images:
+                        fresh_url = images[0].get("original_image_url") or images[0].get("resized_image_url", "")
+                    if fresh_url:
+                        image_data, media_type = await self._download_image(fresh_url)
+                        if image_data:
+                            logger.info(f"Fresh URL worked for ad {ad_id}")
+            except Exception as e:
+                logger.warning(f"ScrapeCreators fallback failed for {ad_id}: {e}")
         if not image_data:
             logger.error(f"Image download failed for: {creative_url[:100]}")
             return None
