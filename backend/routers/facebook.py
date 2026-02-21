@@ -306,11 +306,20 @@ async def _discover_child_pages_background(competitor_ids: list[int], advertiser
             wildcard_queries = []
             for prefix in wildcard_prefixes:
                 wildcard_queries.append(f"{prefix} -")  # "Carrefour -", "E.Leclerc -"
-            # Also search common retail sub-brands
-            RETAIL_SUFFIXES = ["City", "Market", "Express", "Contact", "Proximité", "Bio",
-                               "Drive", "Hyper", "Super", "Local", "Plus"]
+            # Universal suffixes covering all verticals (retail, sport, beauty, DIY, etc.)
+            UNIVERSAL_SUFFIXES = [
+                # Retail / Grande Distribution
+                "City", "Market", "Express", "Contact", "Proximité", "Bio", "Drive",
+                "Hyper", "Super", "Local", "Plus", "Mini",
+                # Store formats (multi-vertical)
+                "Boutique", "Shop", "Store", "Outlet", "Corner", "Flagship",
+                "Showroom", "Studio", "Atelier", "Village", "Maison",
+                # Services / Concepts
+                "Pro", "Service", "Center", "Hub", "Lab", "Institute",
+                "Voyages", "Spectacles", "Traiteur",
+            ]
             for prefix in wildcard_prefixes[:1]:  # Only main prefix to avoid too many calls
-                for suffix in RETAIL_SUFFIXES:
+                for suffix in UNIVERSAL_SUFFIXES:
                     wildcard_queries.append(f"{prefix} {suffix}")
 
             logger.info(f"[{comp.name}] Wildcard search: {len(wildcard_queries)} queries")

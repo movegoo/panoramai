@@ -129,6 +129,10 @@ export interface Ad {
   creative_tags?: string[];
   creative_summary?: string;
   creative_analyzed_at?: string;
+  // Product classification (AI-powered)
+  product_category?: string;
+  product_subcategory?: string;
+  ad_objective?: string;
   // Ad type segmentation
   ad_type?: string;  // "branding" | "performance" | "dts"
 }
@@ -957,6 +961,9 @@ export interface CreativeInsights {
     top_concept: string;
     top_tone: string;
   }[];
+  categories: { category: string; count: number; pct: number }[];
+  subcategories: { subcategory: string; count: number; pct: number }[];
+  objectives: { objective: string; count: number; pct: number }[];
   recommendations: string[];
 }
 

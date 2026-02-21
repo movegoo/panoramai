@@ -127,6 +127,10 @@ class Ad(Base):
     creative_tags = Column(Text)                   # JSON: ["promo","lifestyle","bold-text"]
     creative_summary = Column(Text)                # 1-2 sentence AI description
     creative_analyzed_at = Column(DateTime)
+    # Product classification (AI-powered, LSA taxonomy)
+    product_category = Column(String(100))      # Épicerie, Frais, DPH, Non-alimentaire, Services...
+    product_subcategory = Column(String(100))    # Boissons, Boucherie, Beauté, Multimédia...
+    ad_objective = Column(String(50))            # notoriété, trafic, conversion, fidélisation, recrutement
 
     # Ad type segmentation
     ad_type = Column(String(20))  # branding, performance, dts

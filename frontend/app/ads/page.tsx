@@ -590,6 +590,16 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo, brandName }: { ad: AdW
                   <Zap className="h-2.5 w-2.5" />{ad.creative_tone}
                 </span>
               )}
+              {ad.product_category && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium border border-emerald-200">
+                  <Tag className="h-2.5 w-2.5" />{ad.product_category}
+                </span>
+              )}
+              {ad.ad_objective && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-medium border border-sky-200">
+                  <Target className="h-2.5 w-2.5" />{ad.ad_objective}
+                </span>
+              )}
             </div>
             {ad.creative_dominant_colors && ad.creative_dominant_colors.length > 0 && (
               <div className="flex items-center gap-1">
@@ -1519,7 +1529,10 @@ export default function AdsPage() {
   const [filterAdType, setFilterAdType] = useState<"all" | "branding" | "performance" | "dts">("all");
   const [filterCountry, setFilterCountry] = useState<Set<string>>(new Set());
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
+  const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
+  const [filterObjectives, setFilterObjectives] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
+  const [categorySearch, setCategorySearch] = useState("");
   const [showAllPayers, setShowAllPayers] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
   const [advertiserSearch, setAdvertiserSearch] = useState("");
@@ -1690,6 +1703,8 @@ export default function AdsPage() {
     setSearchQuery("");
     setFilterGender("none");
     setFilterLocations(new Set());
+    setFilterCategories(new Set());
+    setFilterObjectives(new Set());
   }
 
   // Build advertiser logos map: always use competitor logo_url
@@ -1758,6 +1773,22 @@ export default function AdsPage() {
         const name = loc.name.split(":")[0].trim();
         map.set(name, (map.get(name) || 0) + 1);
       });
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      if (a.product_category) map.set(a.product_category, (map.get(a.product_category) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableObjectives = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      if (a.ad_objective) map.set(a.ad_objective, (map.get(a.ad_objective) || 0) + 1);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
@@ -1832,6 +1863,8 @@ export default function AdsPage() {
         const adLocs = (ad.location_audience || []).map(l => l.name.split(":")[0].trim());
         if (!adLocs.some(l => filterLocations.has(l))) return false;
       }
+      if (filterCategories.size > 0 && (!ad.product_category || !filterCategories.has(ad.product_category))) return false;
+      if (filterObjectives.size > 0 && (!ad.ad_objective || !filterObjectives.has(ad.ad_objective))) return false;
       if (filterAdType !== "all" && ad.ad_type !== filterAdType) return false;
       if (filterCountry.size > 0) {
         const adCountries = ad.targeted_countries || [];
@@ -1877,10 +1910,10 @@ export default function AdsPage() {
       return bDate - aDate;
     });
     return result;
-  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, searchQuery]);
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, searchQuery]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, searchQuery]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
@@ -1889,7 +1922,8 @@ export default function AdsPage() {
   const activeFilters = filterSource.size + filterCompetitors.size + filterPlatforms.size + filterFormats.size + filterAdvertisers.size
     + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size
-    + (filterAdType !== "all" ? 1 : 0) + filterCountry.size;
+    + (filterAdType !== "all" ? 1 : 0) + filterCountry.size
+    + filterCategories.size + filterObjectives.size;
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -2484,6 +2518,101 @@ export default function AdsPage() {
               )}
             </div>
 
+            {/* Row 4: Catégorie produit + Objectif pub — only shown if any ads have these fields */}
+            {(availableCategories.length > 0 || availableObjectives.length > 0) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Catégorie produit - collapsible with search */}
+                {availableCategories.length > 0 && (
+                  <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedFilterSections(prev => { const n = new Set(prev); if (n.has("category")) n.delete("category"); else n.add("category"); return n; })}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Cat&eacute;gorie produit</span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{availableCategories.length}</span>
+                        {filterCategories.size > 0 && (
+                          <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterCategories.size}</span>
+                        )}
+                      </div>
+                      {expandedFilterSections.has("category") ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </button>
+                    {expandedFilterSections.has("category") && (
+                      <div className="px-3.5 pb-3 space-y-2">
+                        {availableCategories.length > 6 && (
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                            <input
+                              type="text"
+                              value={categorySearch}
+                              onChange={(e) => setCategorySearch(e.target.value)}
+                              placeholder="Filtrer les cat&eacute;gories..."
+                              className="w-full pl-7 pr-7 py-1.5 rounded-lg border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                            />
+                            {categorySearch && (
+                              <button onClick={() => setCategorySearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                          {availableCategories
+                            .filter(([name]) => !categorySearch || name.toLowerCase().includes(categorySearch.toLowerCase()))
+                            .map(([name, count]) => {
+                              const active = filterCategories.has(name);
+                              return (
+                                <button
+                                  key={name}
+                                  onClick={() => toggleFilter(filterCategories, name, setFilterCategories)}
+                                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors ${active ? "bg-violet-100 text-violet-800" : "hover:bg-muted/60"}`}
+                                >
+                                  <div className={`flex items-center justify-center h-4 w-4 rounded border shrink-0 ${active ? "bg-violet-600 border-violet-600 text-white" : "border-border bg-background"}`}>
+                                    {active && <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                                  </div>
+                                  <span className="text-xs font-medium truncate flex-1">{name}</span>
+                                  <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{count}</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Objectif pub */}
+                {availableObjectives.length > 0 && (
+                  <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                    <button
+                      onClick={() => setExpandedFilterSections(prev => { const n = new Set(prev); if (n.has("objective")) n.delete("objective"); else n.add("objective"); return n; })}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Target className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Objectif pub</span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{availableObjectives.length}</span>
+                        {filterObjectives.size > 0 && (
+                          <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterObjectives.size}</span>
+                        )}
+                      </div>
+                      {expandedFilterSections.has("objective") ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </button>
+                    {expandedFilterSections.has("objective") && (
+                      <div className="px-3.5 pb-3">
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {availableObjectives.map(([name, count]) => (
+                            <FilterChip key={name} label={name} count={count} active={filterObjectives.has(name)} onClick={() => toggleFilter(filterObjectives, name, setFilterObjectives)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Clear all */}
             {activeFilters > 0 && (
               <div className="flex items-center justify-between pt-1">
@@ -2608,6 +2737,47 @@ export default function AdsPage() {
                 </div>
               )}
             </div>
+
+            {/* Product categories + Objectives */}
+            {((creativeInsights.categories && creativeInsights.categories.length > 0) || (creativeInsights.objectives && creativeInsights.objectives.length > 0)) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Product categories */}
+                {creativeInsights.categories && creativeInsights.categories.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Cat&eacute;gories produit</div>
+                    <div className="space-y-2">
+                      {creativeInsights.categories.slice(0, 8).map(c => (
+                        <div key={c.category} className="flex items-center gap-3">
+                          <span className="text-xs font-medium w-32 truncate">{c.category}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ad objectives */}
+                {creativeInsights.objectives && creativeInsights.objectives.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Objectifs publicitaires</div>
+                    <div className="space-y-2">
+                      {creativeInsights.objectives.slice(0, 8).map(o => (
+                        <div key={o.objective} className="flex items-center gap-3">
+                          <span className="text-xs font-medium w-32 truncate">{o.objective}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${o.pct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{o.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Color palette + by competitor */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

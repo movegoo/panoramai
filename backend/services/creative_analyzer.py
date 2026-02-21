@@ -16,33 +16,40 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_PROMPT = """Tu es un expert en analyse créative publicitaire pour la grande distribution et le retail.
+ANALYSIS_PROMPT = """Tu es un expert en analyse créative publicitaire et en grande distribution/retail en France.
 Analyse ce visuel publicitaire et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire, pas de ```).
+TOUTES les valeurs doivent être en FRANÇAIS.
 
 Contexte : plateforme={platform}, texte de la pub="{ad_text}"
 
 JSON attendu :
 {{
-  "concept": "<UNE valeur parmi : product-shot, lifestyle, ugc-style, promo, testimonial, before-after, tutorial, seasonal, event, comparison, story, influencer, recipe, catalogue>",
-  "hook": "<1 phrase : ce qui capte l'attention en premier>",
-  "tone": "<UNE valeur parmi : urgency, aspiration, humor, trust, fomo, community, premium, value, educational, emotional, playful, bold, minimalist, festive>",
+  "concept": "<UNE valeur parmi : photo-produit, mise-en-scène, ugc, promo, témoignage, avant-après, tutoriel, saisonnier, événement, comparatif, storytelling, influenceur, recette, catalogue, jeu-concours, engagement-RSE>",
+  "hook": "<1 phrase en français : ce qui capte l'attention en premier>",
+  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique>",
   "text_overlay": "<tout le texte visible sur le visuel, verbatim, séparé par des |>",
   "dominant_colors": ["#HEX1", "#HEX2", "#HEX3"],
   "has_product": true ou false,
   "has_face": true ou false,
   "has_logo": true ou false,
-  "layout": "<UNE valeur parmi : single-image, split, collage, full-bleed, text-heavy, minimal, before-after, product-grid, hero-image>",
-  "cta_style": "<UNE valeur parmi : button, text, arrow, badge, none>",
+  "has_price": true ou false,
+  "layout": "<UNE valeur parmi : image-unique, split, collage, plein-écran, texte-dominant, minimaliste, avant-après, grille-produits, hero, carrousel, vidéo-cover>",
+  "cta_style": "<UNE valeur parmi : bouton, texte, flèche, badge, aucun>",
   "score": <entier 0-100>,
   "tags": ["mot-clé1", "mot-clé2", "mot-clé3", "mot-clé4", "mot-clé5"],
-  "summary": "<1-2 phrases décrivant l'approche créative et son efficacité probable>"
+  "summary": "<1-2 phrases en français décrivant l'approche créative et son efficacité probable>",
+  "product_category": "<UNE valeur parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, Boucherie & Volaille, Poissonnerie, Boulangerie, DPH, Beauté & Parfumerie, Hygiène, Entretien, Textile & Mode, Électroménager, Multimédia & High-Tech, Jouets & Loisirs, Sport, Bricolage & Jardin, Ameublement & Déco, Auto & Mobilité, Animalerie, Bio & Écologie, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Autre>",
+  "product_subcategory": "<sous-catégorie plus précise, en français, ex: Yaourts, Café, Bières, Lessive, Smartphones, Literie, Drive, Carte fidélité...>",
+  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>"
 }}
 
 Critères de score :
 - Impact visuel (30%) : contraste, composition, accroche
 - Clarté du message (25%) : compréhension immédiate de l'offre
 - Exécution professionnelle (25%) : qualité graphique, cohérence
-- Persuasion (20%) : incitation à l'action, urgence, désirabilité"""
+- Persuasion (20%) : incitation à l'action, urgence, désirabilité
+
+IMPORTANT : Si la pub concerne plusieurs rayons (ex: catalogue général), utilise "Multi-rayons" comme product_category."""
 
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
@@ -264,12 +271,13 @@ class CreativeAnalyzer:
             data["tags"] = []
 
         # Ensure strings
-        for key in ("concept", "hook", "tone", "text_overlay", "layout", "cta_style", "summary"):
+        for key in ("concept", "hook", "tone", "text_overlay", "layout", "cta_style", "summary",
+                     "product_category", "product_subcategory", "ad_objective"):
             if key not in data or not isinstance(data[key], str):
                 data[key] = ""
 
         # Ensure booleans
-        for key in ("has_product", "has_face", "has_logo"):
+        for key in ("has_product", "has_face", "has_logo", "has_price"):
             data[key] = bool(data.get(key, False))
 
         return data

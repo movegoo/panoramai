@@ -121,6 +121,9 @@ async def analyze_all_creatives(
                 ad.creative_score = result.get("score", 0)
                 ad.creative_tags = json.dumps(result.get("tags", []), ensure_ascii=False)
                 ad.creative_summary = result.get("summary", "")
+                ad.product_category = result.get("product_category", "")[:100]
+                ad.product_subcategory = result.get("product_subcategory", "")[:100]
+                ad.ad_objective = result.get("ad_objective", "")[:50]
                 ad.creative_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:
@@ -247,6 +250,9 @@ async def get_creative_insights(
     color_counter = Counter()
     layout_counter = Counter()
     cta_counter = Counter()
+    category_counter = Counter()
+    subcategory_counter = Counter()
+    objective_counter = Counter()
     hooks = []
     by_competitor: dict[str, list] = {}
     all_ads_data = []
@@ -263,6 +269,12 @@ async def get_creative_insights(
             layout_counter[ad.creative_layout] += 1
         if ad.creative_cta_style:
             cta_counter[ad.creative_cta_style] += 1
+        if ad.product_category:
+            category_counter[ad.product_category] += 1
+        if ad.product_subcategory:
+            subcategory_counter[ad.product_subcategory] += 1
+        if ad.ad_objective:
+            objective_counter[ad.ad_objective] += 1
 
         # Parse colors
         try:
@@ -303,6 +315,9 @@ async def get_creative_insights(
             "layout": ad.creative_layout or "",
             "has_face": ad.creative_has_face,
             "has_product": ad.creative_has_product,
+            "product_category": ad.product_category or "",
+            "product_subcategory": ad.product_subcategory or "",
+            "ad_objective": ad.ad_objective or "",
         })
 
     total = len(scores)
@@ -359,6 +374,24 @@ async def get_creative_insights(
         total=total,
     )
 
+    # Product categories
+    categories = [
+        {"category": c, "count": n, "pct": round(n / total * 100, 1)}
+        for c, n in category_counter.most_common(20)
+    ]
+
+    # Sub-categories
+    subcategories = [
+        {"subcategory": s, "count": n, "pct": round(n / total * 100, 1)}
+        for s, n in subcategory_counter.most_common(20)
+    ]
+
+    # Ad objectives
+    objectives = [
+        {"objective": o, "count": n, "pct": round(n / total * 100, 1)}
+        for o, n in objective_counter.most_common(10)
+    ]
+
     return {
         "total_analyzed": total,
         "avg_score": avg_score,
@@ -368,6 +401,9 @@ async def get_creative_insights(
         "colors": colors,
         "top_performers": top_performers,
         "by_competitor": competitor_stats,
+        "categories": categories,
+        "subcategories": subcategories,
+        "objectives": objectives,
         "recommendations": recommendations,
     }
 
@@ -398,7 +434,7 @@ def _generate_recommendations(
     # Tone gap
     if tones:
         top_tones = [t for t, _ in tones.most_common(3)]
-        underused = [t for t in ("humor", "ugc-style", "educational", "community")
+        underused = [t for t in ("humour", "ugc", "pédagogique", "communauté")
                      if t not in top_tones]
         if underused:
             recs.append(
@@ -417,15 +453,15 @@ def _generate_recommendations(
     # Layout insight
     if layouts:
         top_layout = layouts.most_common(1)[0][0]
-        if top_layout == "text-heavy":
+        if top_layout in ("text-heavy", "texte-dominant"):
             recs.append(
                 "La majorité des visuels sont chargés en texte. "
-                "Des visuels plus épurés (minimal, hero-image) pourraient mieux performer."
+                "Des visuels plus épurés (minimaliste, hero) pourraient mieux performer."
             )
-        elif top_layout in ("single-image", "minimal"):
+        elif top_layout in ("single-image", "minimal", "image-unique", "minimaliste"):
             recs.append(
                 "Les visuels minimalistes dominent. Testez des formats plus riches "
-                "(collage, split, before-after) pour vous démarquer."
+                "(collage, split, avant-après) pour vous démarquer."
             )
 
     # Face/product insight
