@@ -34,25 +34,51 @@ def _normalize_platform(platform: str | None) -> str:
 @router.post("/analyze-all")
 async def analyze_all_creatives(
     limit: int = Query(10, ge=1, le=200),
+    force: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Batch-analyze ad creatives that haven't been analyzed yet."""
-    # Auto-reset previous failures (score=0) so they can be retried
-    reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
-        Ad.creative_analyzed_at.isnot(None),
-        Ad.creative_score == 0,
-    )
-    if user:
-        reset_query = reset_query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
-    for ad in reset_query.all():
-        ad.creative_analyzed_at = None
-        ad.creative_score = None
-        ad.creative_analysis = None
-    db.commit()
+    """Batch-analyze ad creatives. Use force=true to re-analyze already analyzed ads."""
+    if force:
+        # Reset ALL analyzed ads so they get re-analyzed with current prompt
+        reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
+            Ad.creative_analyzed_at.isnot(None),
+        )
+        if user:
+            reset_query = reset_query.filter(Competitor.user_id == user.id)
+        if x_advertiser_id:
+            reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        reset_count = 0
+        for ad in reset_query.all():
+            ad.creative_analyzed_at = None
+            ad.creative_score = None
+            ad.creative_analysis = None
+            ad.creative_concept = None
+            ad.creative_tone = None
+            ad.creative_hook = None
+            ad.creative_summary = None
+            ad.product_category = None
+            ad.product_subcategory = None
+            ad.ad_objective = None
+            reset_count += 1
+        db.commit()
+        logger.info(f"Force mode: reset {reset_count} previously analyzed ads")
+    else:
+        # Auto-reset previous failures (score=0) so they can be retried
+        reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
+            Ad.creative_analyzed_at.isnot(None),
+            Ad.creative_score == 0,
+        )
+        if user:
+            reset_query = reset_query.filter(Competitor.user_id == user.id)
+        if x_advertiser_id:
+            reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        for ad in reset_query.all():
+            ad.creative_analyzed_at = None
+            ad.creative_score = None
+            ad.creative_analysis = None
+        db.commit()
 
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
         Ad.creative_analyzed_at.is_(None),
