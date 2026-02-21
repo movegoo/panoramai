@@ -154,6 +154,17 @@ class SocialContentAnalyzer:
 
                 result = response.json()
                 text_response = result.get("content", [{}])[0].get("text", "")
+
+                from core.langfuse_client import trace_generation
+                usage = result.get("usage", {})
+                trace_generation(
+                    name="social_content_analyzer",
+                    model=db_model_id,
+                    input=prompt,
+                    output=text_response,
+                    usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+                )
+
                 return self._parse_analysis(text_response)
 
             except httpx.TimeoutException:

@@ -371,7 +371,19 @@ class GeoAnalyzer:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data["content"][0]["text"]
+                answer = data["content"][0]["text"]
+
+                from core.langfuse_client import trace_generation
+                usage = data.get("usage", {})
+                trace_generation(
+                    name="geo_analyzer.query_claude",
+                    model="claude-haiku-4-5-20251001",
+                    input=query,
+                    output=answer,
+                    usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+                )
+
+                return answer
         except httpx.HTTPStatusError as e:
             msg = f"claude: HTTP {e.response.status_code}"
             try:
@@ -409,7 +421,19 @@ class GeoAnalyzer:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                answer = data["candidates"][0]["content"]["parts"][0]["text"]
+
+                from core.langfuse_client import trace_generation
+                um = data.get("usageMetadata", {})
+                trace_generation(
+                    name="geo_analyzer.query_gemini",
+                    model="gemini-2.0-flash",
+                    input=query,
+                    output=answer,
+                    usage={"input_tokens": um.get("promptTokenCount"), "output_tokens": um.get("candidatesTokenCount")},
+                )
+
+                return answer
         except httpx.HTTPStatusError as e:
             msg = f"gemini: HTTP {e.response.status_code}"
             try:
@@ -450,7 +474,19 @@ class GeoAnalyzer:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                answer = data["choices"][0]["message"]["content"]
+
+                from core.langfuse_client import trace_generation
+                usage = data.get("usage", {})
+                trace_generation(
+                    name="geo_analyzer.query_chatgpt",
+                    model="gpt-4o-mini",
+                    input=query,
+                    output=answer,
+                    usage={"input_tokens": usage.get("prompt_tokens"), "output_tokens": usage.get("completion_tokens")},
+                )
+
+                return answer
         except httpx.HTTPStatusError as e:
             msg = f"chatgpt: HTTP {e.response.status_code}"
             try:
@@ -491,7 +527,19 @@ class GeoAnalyzer:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data["choices"][0]["message"]["content"]
+                answer = data["choices"][0]["message"]["content"]
+
+                from core.langfuse_client import trace_generation
+                usage = data.get("usage", {})
+                trace_generation(
+                    name="geo_analyzer.query_mistral",
+                    model="mistral-small-latest",
+                    input=query,
+                    output=answer,
+                    usage={"input_tokens": usage.get("prompt_tokens"), "output_tokens": usage.get("completion_tokens")},
+                )
+
+                return answer
         except httpx.HTTPStatusError as e:
             msg = f"mistral: HTTP {e.response.status_code}"
             try:
@@ -533,7 +581,19 @@ class GeoAnalyzer:
                     },
                 )
                 resp.raise_for_status()
-                text = resp.json()["content"][0]["text"]
+                resp_data = resp.json()
+                text = resp_data["content"][0]["text"]
+
+                from core.langfuse_client import trace_generation
+                usage = resp_data.get("usage", {})
+                trace_generation(
+                    name="geo_analyzer.analyze_response",
+                    model="claude-haiku-4-5-20251001",
+                    input=prompt,
+                    output=text,
+                    usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+                )
+
                 # Strip possible markdown code fences
                 text = text.strip()
                 if text.startswith("```"):

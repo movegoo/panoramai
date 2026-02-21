@@ -42,6 +42,11 @@ class Settings:
     # Apify API (Snapchat Ads scraping)
     APIFY_API_KEY: str = os.getenv("APIFY_API_KEY", "")
 
+    # Langfuse (LLM observability)
+    LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))

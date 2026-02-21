@@ -583,7 +583,19 @@ async def _generate_ai_analysis(
             logger.warning(f"GEO AI analysis API error: {response.status_code}")
             return None
 
-        text = response.json().get("content", [{}])[0].get("text", "")
+        result = response.json()
+
+        from core.langfuse_client import trace_generation
+        usage = result.get("usage", {})
+        trace_generation(
+            name="geo_tracking.ai_analysis",
+            model=model_id,
+            input=prompt,
+            output=result.get("content", [{}])[0].get("text", ""),
+            usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+        )
+
+        text = result.get("content", [{}])[0].get("text", "")
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]

@@ -413,6 +413,13 @@ async def lifespan(app: FastAPI):
     yield
 
     try:
+        from core.langfuse_client import flush as langfuse_flush
+        langfuse_flush()
+        logger.info("Langfuse flushed")
+    except Exception:
+        pass
+
+    try:
         await scheduler.stop()
         logger.info("Scheduler stopped")
     except Exception:
