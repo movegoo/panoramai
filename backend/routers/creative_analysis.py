@@ -23,18 +23,26 @@ router = APIRouter()
 @router.get("/debug-db")
 async def debug_creative_db(db: Session = Depends(get_db)):
     """Temporary debug endpoint — check creative analysis state in DB."""
+    from sqlalchemy import func
     total = db.query(Ad).count()
     analyzed = db.query(Ad).filter(Ad.creative_analyzed_at.isnot(None)).count()
     with_score = db.query(Ad).filter(Ad.creative_score > 0).count()
-    users = db.query(User).count()
-    competitors = db.query(Competitor).all()
-    comp_info = [{"id": c.id, "name": c.name, "user_id": c.user_id} for c in competitors]
+    # Which competitors have analyzed ads?
+    analyzed_by_comp = db.query(
+        Competitor.id, Competitor.name, Competitor.user_id, func.count(Ad.id)
+    ).join(Ad, Ad.competitor_id == Competitor.id).filter(
+        Ad.creative_score > 0
+    ).group_by(Competitor.id).all()
+    comp_analysis = [{"id": c[0], "name": c[1], "user_id": c[2], "analyzed_count": c[3]} for c in analyzed_by_comp]
+    # Users
+    users = db.query(User).all()
+    user_info = [{"id": u.id, "email": u.email} for u in users]
     return {
         "total_ads": total,
         "analyzed": analyzed,
         "with_score": with_score,
-        "users": users,
-        "competitors": comp_info,
+        "users": user_info,
+        "analyzed_by_competitor": comp_analysis,
     }
 
 # Formats that have a static image to analyze
