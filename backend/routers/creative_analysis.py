@@ -19,6 +19,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+@router.get("/debug-db")
+async def debug_creative_db(db: Session = Depends(get_db)):
+    """Temporary debug endpoint — check creative analysis state in DB."""
+    total = db.query(Ad).count()
+    analyzed = db.query(Ad).filter(Ad.creative_analyzed_at.isnot(None)).count()
+    with_score = db.query(Ad).filter(Ad.creative_score > 0).count()
+    users = db.query(User).count()
+    competitors = db.query(Competitor).all()
+    comp_info = [{"id": c.id, "name": c.name, "user_id": c.user_id} for c in competitors]
+    return {
+        "total_ads": total,
+        "analyzed": analyzed,
+        "with_score": with_score,
+        "users": users,
+        "competitors": comp_info,
+    }
+
 # Formats that have a static image to analyze
 ANALYZABLE_FORMATS = {"IMAGE", "CAROUSEL", "DPA", "DCO", "", None}
 
