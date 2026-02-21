@@ -618,8 +618,7 @@ async def _fetch_ads_background(competitor_id: int, competitor_name: str, facebo
 
         # Import creative analyzer for inline analysis
         from services.creative_analyzer import creative_analyzer
-        import os
-        can_analyze = bool(os.getenv("ANTHROPIC_API_KEY", "") or creative_analyzer.api_key)
+        can_analyze = True  # Let analyze_creative() handle API key check (may be in DB)
         SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
 
         for ad in ads_data:
