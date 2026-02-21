@@ -44,7 +44,6 @@ import {
   MapPin,
   UserCheck,
   Target,
-  Shield,
   TrendingUp,
   PieChart,
   Megaphone,
@@ -1446,59 +1445,6 @@ function CompetitorComparison({ filteredAds, stats, competitors, brandName }: { 
   );
 }
 
-function MobsuccessRecommendations({ filteredAds, brandName }: { filteredAds: AdWithCompetitor[]; brandName: string }) {
-  const recs = useMemo(() => {
-    const r: { bu: string; grad: string; title: string; text: string; icon: React.ReactNode }[] = [];
-    const hasLocal = filteredAds.some(a => a.location_audience && a.location_audience.some(l => l.type !== "country"));
-    if (hasLocal) {
-      r.push({ bu: "WIDELY", grad: "from-teal-500 to-emerald-500", title: "Activez le marketing multilocal", text: "Vos concurrents utilisent du ciblage local granulaire. WIDELY transforme vos campagnes nationales en strategies multilocales avec DMP proprietaire et drive-to-store.", icon: <MapPin className="h-4 w-4" /> });
-    }
-    const brandFmts = new Set(filteredAds.filter(a => brandName && a.competitor_name === brandName).map(a => a.display_format).filter(Boolean));
-    const allFmts = new Set(filteredAds.map(a => a.display_format).filter(Boolean));
-    if (brandFmts.size < allFmts.size) {
-      const missing = Array.from(allFmts).filter(f => !brandFmts.has(f)).map(f => FORMAT_LABELS[f as string]?.label || f);
-      r.push({ bu: "STORY", grad: "from-pink-500 to-rose-500", title: "Diversifiez vos creatives", text: `Formats inexploites : ${missing.join(", ")}. STORY produit du contenu social, video et carrousel haute performance.`, icon: <Play className="h-4 w-4" /> });
-    }
-    const brandReach = filteredAds.filter(a => brandName && a.competitor_name === brandName).reduce((s, a) => s + (a.eu_total_reach || 0), 0);
-    const totalReach = filteredAds.reduce((s, a) => s + (a.eu_total_reach || 0), 0);
-    const pct = totalReach > 0 ? Math.round((brandReach / totalReach) * 100) : 0;
-    r.push({ bu: "SPARKLY", grad: "from-violet-500 to-purple-500", title: "Boostez vos performances digitales", text: `Votre couverture EU represente ${pct}% du marche. SPARKLY optimise vos budgets avec l'IA pour maximiser couverture et ROAS.`, icon: <Zap className="h-4 w-4" /> });
-    r.push({ bu: "FARLY", grad: "from-blue-500 to-cyan-500", title: "Accelerez l'acquisition mobile", text: "Completez votre strategie media avec l'acquisition mobile. FARLY combine ASO, Sensego AI et UA pour maximiser installations et retention.", icon: <GooglePlayIcon className="h-4 w-4" /> });
-    return r;
-  }, [filteredAds]);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-          <Shield className="h-4 w-4 text-white" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold">Solutions Mobsuccess</h3>
-          <p className="text-[10px] text-muted-foreground">Recommandations basees sur l&apos;analyse concurrentielle</p>
-        </div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {recs.map(rec => (
-          <div key={rec.bu} className="group rounded-2xl border bg-card p-4 hover:shadow-lg transition-all hover:-translate-y-0.5">
-            <div className="flex items-start gap-3">
-              <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${rec.grad} flex items-center justify-center shrink-0 text-white shadow-sm`}>
-                {rec.icon}
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full bg-gradient-to-r ${rec.grad} text-white`}>
-                  {rec.bu}
-                </span>
-                <h4 className="text-sm font-semibold leading-snug mt-1">{rec.title}</h4>
-                <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">{rec.text}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ─────────────── Page ─────────────── */
 
@@ -3102,9 +3048,6 @@ export default function AdsPage() {
           </div>
         </div>
       </div>
-
-      {/* ── Solutions Mobsuccess ──────── */}
-      <MobsuccessRecommendations filteredAds={filteredAds} brandName={brandName} />
 
       {/* ── Ads Grid ─────────────────────────── */}
       {filteredAds.length === 0 ? (
