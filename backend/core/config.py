@@ -39,6 +39,9 @@ class Settings:
     # SearchAPI.io (complementary Meta Ad Library enrichment)
     SEARCHAPI_KEY: str = os.getenv("SEARCHAPI_KEY", "")
 
+    # Apify API (Snapchat Ads scraping)
+    APIFY_API_KEY: str = os.getenv("APIFY_API_KEY", "")
+
     # Scheduler
     SCHEDULER_ENABLED: bool = os.getenv("SCHEDULER_ENABLED", "true").lower() == "true"
     SCHEDULER_HOUR: int = int(os.getenv("SCHEDULER_HOUR", "2"))

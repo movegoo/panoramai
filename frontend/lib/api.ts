@@ -738,6 +738,27 @@ export const googleAdsAPI = {
     ),
 };
 
+// Snapchat Ads API
+export const snapchatAPI = {
+  getAllAds: () =>
+    fetchAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all"),
+
+  getAds: (competitorId: number) =>
+    fetchAPI<Ad[]>(`/snapchat/ads/${competitorId}`),
+
+  fetchAds: (competitorId: number) =>
+    fetchAPI<{ message: string; ads_detected: number; new_stored: number }>(
+      `/snapchat/ads/fetch/${competitorId}`,
+      { method: "POST" }
+    ),
+
+  fetchAllAds: () =>
+    fetchAPI<{ message: string; results: any[] }>(
+      "/snapchat/ads/fetch-all",
+      { method: "POST" }
+    ),
+};
+
 // Brand / Mon Compte API
 export interface BrandProfileData {
   id: number;

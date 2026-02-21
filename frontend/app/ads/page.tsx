@@ -9,6 +9,7 @@ import {
   facebookAPI,
   tiktokAPI,
   googleAdsAPI,
+  snapchatAPI,
   brandAPI,
   creativeAPI,
   Ad,
@@ -1513,6 +1514,7 @@ export default function AdsPage() {
   const { data: swrFbAds } = useAPI<(Ad & { competitor_name: string })[]>("/facebook/ads/all");
   const { data: swrTtAds } = useAPI<(Ad & { competitor_name: string })[]>("/tiktok/ads/all");
   const { data: swrGAds } = useAPI<(Ad & { competitor_name: string })[]>("/google/ads/all");
+  const { data: swrSnapAds } = useAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all");
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
   const { data: swrInsights } = useAPI<CreativeInsights>("/creative/insights");
@@ -1522,11 +1524,12 @@ export default function AdsPage() {
     const fb = swrFbAds || [];
     const tt = swrTtAds || [];
     const g = swrGAds || [];
-    if (fb.length || tt.length || g.length) {
-      setAllAds(deduplicateAds([...fb, ...tt, ...g]));
+    const snap = swrSnapAds || [];
+    if (fb.length || tt.length || g.length || snap.length) {
+      setAllAds(deduplicateAds([...fb, ...tt, ...g, ...snap]));
       setLoading(false);
     }
-  }, [swrFbAds, swrTtAds, swrGAds]);
+  }, [swrFbAds, swrTtAds, swrGAds, swrSnapAds]);
 
   useEffect(() => {
     if (swrComps) setCompetitors(swrComps);
@@ -1542,25 +1545,27 @@ export default function AdsPage() {
 
   // If no ads at all after SWR load, loading is still false (empty state)
   useEffect(() => {
-    if (swrFbAds !== undefined && swrTtAds !== undefined && swrGAds !== undefined) {
+    if (swrFbAds !== undefined && swrTtAds !== undefined && swrGAds !== undefined && swrSnapAds !== undefined) {
       setLoading(false);
     }
-  }, [swrFbAds, swrTtAds, swrGAds]);
+  }, [swrFbAds, swrTtAds, swrGAds, swrSnapAds]);
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [fbAdsRes, ttAdsRes, gAdsRes, compRes, brandRes] = await Promise.allSettled([
+      const [fbAdsRes, ttAdsRes, gAdsRes, snapAdsRes, compRes, brandRes] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
         googleAdsAPI.getAllAds(),
+        snapchatAPI.getAllAds(),
         competitorsAPI.list({ includeBrand: true }),
         brandAPI.getProfile(),
       ]);
       const fbAds = fbAdsRes.status === "fulfilled" ? fbAdsRes.value : [];
       const ttAds = ttAdsRes.status === "fulfilled" ? ttAdsRes.value : [];
       const gAds = gAdsRes.status === "fulfilled" ? gAdsRes.value : [];
-      const ads = deduplicateAds([...fbAds, ...ttAds, ...gAds]);
+      const snapAds = snapAdsRes.status === "fulfilled" ? snapAdsRes.value : [];
+      const ads = deduplicateAds([...fbAds, ...ttAds, ...gAds, ...snapAds]);
       const comps = compRes.status === "fulfilled" ? compRes.value : [];
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
@@ -1585,13 +1590,14 @@ export default function AdsPage() {
       // Refresh insights
       try { const ci = await creativeAPI.getInsights(); setCreativeInsights(ci); } catch {}
       // Refresh ads to get updated creative fields
-      const [fbAds, ttAds, gAds] = await Promise.allSettled([
-        facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(),
+      const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
+        facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(), snapchatAPI.getAllAds(),
       ]);
       setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
+        ...(snapAds.status === "fulfilled" ? snapAds.value : []),
       ]));
     } catch (err) {
       console.error(err);
@@ -1609,6 +1615,7 @@ export default function AdsPage() {
         try { await facebookAPI.fetchAds(c.id); } catch {}
         try { await tiktokAPI.fetchAds(c.id); } catch {}
         try { await googleAdsAPI.fetchAds(c.id); } catch {}
+        try { await snapchatAPI.fetchAds(c.id); } catch {}
       }
       // Enrich with EU transparency data (multiple rounds, 25 ads at a time)
       for (let round = 0; round < 5; round++) {
@@ -1617,15 +1624,17 @@ export default function AdsPage() {
           if (r.enriched === 0) break;
         } catch { break; }
       }
-      const [fbAds, ttAds, gAds] = await Promise.allSettled([
+      const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
         googleAdsAPI.getAllAds(),
+        snapchatAPI.getAllAds(),
       ]);
       setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
+        ...(snapAds.status === "fulfilled" ? snapAds.value : []),
       ]));
     } catch (err) {
       console.error(err);
