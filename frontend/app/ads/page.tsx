@@ -1503,10 +1503,8 @@ export default function AdsPage() {
   const [locationSearch, setLocationSearch] = useState("");
   const [advertiserSearch, setAdvertiserSearch] = useState("");
   const [brandName, setBrandName] = useState<string>("");
-  const [creativeInsights, setCreativeInsights] = useState<CreativeInsights | null>(null);
   const [analyzingCreatives, setAnalyzingCreatives] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<{ analyzed: number; errors: number; remaining: number } | null>(null);
-  const autoAnalyzedRef = useRef(false);
 
   function handlePeriodChange(days: PeriodDays) {
     setPeriodDays(days);
@@ -1533,7 +1531,11 @@ export default function AdsPage() {
   const { data: swrSnapAds } = useAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all");
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
-  const { data: swrInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights");
+  const cachedInsights = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    try { const v = localStorage.getItem("creative_insights"); return v ? JSON.parse(v) as CreativeInsights : undefined; } catch { return undefined; }
+  }, []);
+  const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights", { fallbackData: cachedInsights });
 
   // Merge SWR data into state when available
   useEffect(() => {
@@ -1556,8 +1558,10 @@ export default function AdsPage() {
   }, [swrBrand]);
 
   useEffect(() => {
-    if (swrInsights) setCreativeInsights(swrInsights);
-  }, [swrInsights]);
+    if (creativeInsights && creativeInsights.total_analyzed > 0) {
+      try { localStorage.setItem("creative_insights", JSON.stringify(creativeInsights)); } catch {}
+    }
+  }, [creativeInsights]);
 
   // If no ads at all after SWR load, loading is still false (empty state)
   useEffect(() => {

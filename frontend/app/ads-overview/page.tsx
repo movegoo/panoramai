@@ -38,6 +38,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   instagram: "#E4405F",
   tiktok: "#000000",
   google: "#4285F4",
+  snapchat: "#FFFC00",
   unknown: "#9ca3af",
 };
 
