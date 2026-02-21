@@ -254,6 +254,30 @@ async def get_creative_insights(
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated creative intelligence across all analyzed ads."""
+    try:
+        return _compute_insights(db, user, x_advertiser_id)
+    except Exception as e:
+        logger.error(f"Error computing creative insights: {e}", exc_info=True)
+        return {
+            "total_analyzed": 0,
+            "avg_score": 0,
+            "concepts": [],
+            "tones": [],
+            "top_hooks": [],
+            "colors": [],
+            "top_performers": [],
+            "by_competitor": [],
+            "categories": [],
+            "subcategories": [],
+            "objectives": [],
+            "recommendations": [],
+            "signals": [],
+            "geo_analysis": [],
+            "error": str(e),
+        }
+
+
+def _compute_insights(db: Session, user: User | None, x_advertiser_id: str | None):
     query = db.query(Ad, Competitor.name).join(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(
