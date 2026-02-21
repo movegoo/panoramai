@@ -5,8 +5,8 @@ AI-powered visual analysis of ad creatives using Claude Vision.
 import asyncio
 import json
 import logging
-from collections import Counter
-from datetime import datetime
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
@@ -279,6 +279,8 @@ async def get_creative_insights(
             "top_performers": [],
             "by_competitor": [],
             "recommendations": [],
+            "signals": [],
+            "geo_analysis": [],
         }
 
     # Aggregate data
@@ -430,6 +432,19 @@ async def get_creative_insights(
         for o, n in objective_counter.most_common(10)
     ]
 
+    # Generate JARVIS signals
+    signals = _generate_signals(
+        all_ads_data=all_ads_data,
+        competitor_stats=competitor_stats,
+        category_counter=category_counter,
+        tone_counter=tone_counter,
+        total=total,
+        rows=rows,
+    )
+
+    # Build geo analysis
+    geo_analysis = _build_geo_analysis(rows)
+
     return {
         "total_analyzed": total,
         "avg_score": avg_score,
@@ -443,6 +458,8 @@ async def get_creative_insights(
         "subcategories": subcategories,
         "objectives": objectives,
         "recommendations": recommendations,
+        "signals": signals,
+        "geo_analysis": geo_analysis,
     }
 
 
@@ -511,3 +528,230 @@ def _generate_recommendations(
         )
 
     return recs[:5]
+
+
+def _generate_signals(
+    all_ads_data: list[dict],
+    competitor_stats: list[dict],
+    category_counter: Counter,
+    tone_counter: Counter,
+    total: int,
+    rows: list,
+) -> list[dict]:
+    """Generate JARVIS intelligence signals from competitive analysis data."""
+    signals = []
+    if not total or not competitor_stats:
+        return signals
+
+    # Build per-competitor breakdowns
+    comp_categories: dict[str, Counter] = defaultdict(Counter)
+    comp_formats: dict[str, Counter] = defaultdict(Counter)
+    comp_tones: dict[str, Counter] = defaultdict(Counter)
+    comp_prices: dict[str, dict] = defaultdict(lambda: {"total": 0, "with_price": 0})
+    comp_recent: dict[str, int] = defaultdict(int)
+    comp_locations: dict[str, Counter] = defaultdict(Counter)
+
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+
+    for ad, comp_name in rows:
+        # Categories
+        if ad.product_category:
+            comp_categories[comp_name][ad.product_category] += 1
+
+        # Formats
+        fmt = (ad.display_format or "IMAGE").upper()
+        comp_formats[comp_name][fmt] += 1
+
+        # Tones
+        if ad.creative_tone:
+            comp_tones[comp_name][ad.creative_tone] += 1
+
+        # Price detection (from creative analysis)
+        comp_prices[comp_name]["total"] += 1
+        try:
+            analysis = json.loads(ad.creative_analysis) if ad.creative_analysis else {}
+            if analysis.get("has_price"):
+                comp_prices[comp_name]["with_price"] += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Recent surge
+        if ad.ad_delivery_start_time:
+            try:
+                start = datetime.fromisoformat(str(ad.ad_delivery_start_time).replace("Z", "+00:00")).replace(tzinfo=None)
+                if start >= seven_days_ago:
+                    comp_recent[comp_name] += 1
+            except (ValueError, TypeError):
+                pass
+
+        # Geo (location_audience)
+        if ad.location_audience:
+            try:
+                locations = json.loads(ad.location_audience) if isinstance(ad.location_audience, str) else ad.location_audience
+                if isinstance(locations, list):
+                    for loc in locations:
+                        name = loc.get("name", "") if isinstance(loc, dict) else str(loc)
+                        if name:
+                            comp_locations[comp_name][name] += 1
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Signal: category_push (≥30% in one category)
+    for comp_name, cats in comp_categories.items():
+        comp_total = sum(cats.values())
+        if comp_total < 3:
+            continue
+        top_cat, top_count = cats.most_common(1)[0]
+        pct = round(top_count / comp_total * 100)
+        if pct >= 30:
+            signals.append({
+                "type": "category_push",
+                "icon": "Target",
+                "title": f"{comp_name} concentre {pct}% sur {top_cat}",
+                "description": f"{comp_name} consacre {pct}% de ses publicités à la catégorie \"{top_cat}\" ({top_count} pubs sur {comp_total}). Une stratégie de positionnement claire.",
+                "competitor": comp_name,
+                "metric": f"{pct}%",
+                "severity": "high" if pct >= 50 else "medium",
+            })
+
+    # Signal: score_leader (avg_score ≥ 75)
+    if competitor_stats:
+        leader = competitor_stats[0]
+        if leader["avg_score"] >= 75:
+            signals.append({
+                "type": "score_leader",
+                "icon": "Trophy",
+                "title": f"{leader['competitor']} domine en qualité créative",
+                "description": f"{leader['competitor']} a le meilleur score créatif moyen ({leader['avg_score']}/100) sur {leader['count']} publicités analysées. Stratégie : {leader['top_concept']} / {leader['top_tone']}.",
+                "competitor": leader["competitor"],
+                "metric": f"{leader['avg_score']}/100",
+                "severity": "high",
+            })
+
+    # Signal: format_dominant (≥50% one format)
+    for comp_name, fmts in comp_formats.items():
+        fmt_total = sum(fmts.values())
+        if fmt_total < 3:
+            continue
+        top_fmt, top_count = fmts.most_common(1)[0]
+        pct = round(top_count / fmt_total * 100)
+        if pct >= 50:
+            fmt_label = {"VIDEO": "la vidéo", "IMAGE": "l'image statique", "CAROUSEL": "le carrousel"}.get(top_fmt, top_fmt)
+            signals.append({
+                "type": "format_dominant",
+                "icon": "Layers",
+                "title": f"{comp_name} mise sur {fmt_label} ({pct}%)",
+                "description": f"{comp_name} utilise {fmt_label} dans {pct}% de ses créatifs ({top_count}/{fmt_total}). Un choix de format assumé.",
+                "competitor": comp_name,
+                "metric": f"{pct}%",
+                "severity": "medium",
+            })
+
+    # Signal: tone_shift (dominant tone different from market)
+    if len(comp_tones) >= 2:
+        market_top_tones = set(t for t, _ in tone_counter.most_common(2))
+        for comp_name, tones in comp_tones.items():
+            if sum(tones.values()) < 3:
+                continue
+            top_tone = tones.most_common(1)[0][0]
+            if top_tone not in market_top_tones:
+                signals.append({
+                    "type": "tone_shift",
+                    "icon": "Palette",
+                    "title": f"{comp_name} se démarque avec un ton {top_tone}",
+                    "description": f"Alors que le marché privilégie {', '.join(market_top_tones)}, {comp_name} adopte un ton \"{top_tone}\" différenciateur.",
+                    "competitor": comp_name,
+                    "metric": top_tone,
+                    "severity": "medium",
+                })
+
+    # Signal: price_strategy (≥40% with price)
+    for comp_name, price_data in comp_prices.items():
+        if price_data["total"] < 3:
+            continue
+        pct = round(price_data["with_price"] / price_data["total"] * 100)
+        if pct >= 40:
+            signals.append({
+                "type": "price_strategy",
+                "icon": "Tag",
+                "title": f"{comp_name} affiche des prix ({pct}% des pubs)",
+                "description": f"{comp_name} intègre des prix dans {pct}% de ses visuels. Une stratégie agressive de conversion directe.",
+                "competitor": comp_name,
+                "metric": f"{pct}%",
+                "severity": "high" if pct >= 60 else "medium",
+            })
+
+    # Signal: recent_surge (≥5 new ads in 7 days)
+    for comp_name, count in comp_recent.items():
+        if count >= 5:
+            signals.append({
+                "type": "recent_surge",
+                "icon": "TrendingUp",
+                "title": f"{comp_name} a lancé {count} pubs cette semaine",
+                "description": f"{comp_name} a démarré {count} nouvelles publicités dans les 7 derniers jours. Une campagne en cours ou un temps fort commercial.",
+                "competitor": comp_name,
+                "metric": str(count),
+                "severity": "high" if count >= 10 else "medium",
+            })
+
+    # Signal: geo_concentration
+    for comp_name, locs in comp_locations.items():
+        loc_total = sum(locs.values())
+        if loc_total < 3:
+            continue
+        top_loc, top_count = locs.most_common(1)[0]
+        pct = round(top_count / loc_total * 100)
+        if pct >= 40:
+            signals.append({
+                "type": "geo_concentration",
+                "icon": "MapPin",
+                "title": f"{comp_name} concentre ses pubs sur {top_loc}",
+                "description": f"{comp_name} cible {top_loc} dans {pct}% de ses publicités géo-ciblées ({top_count}/{loc_total}).",
+                "competitor": comp_name,
+                "metric": f"{pct}%",
+                "severity": "medium",
+            })
+
+    # Sort by severity (high first), then limit
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    signals.sort(key=lambda s: severity_order.get(s["severity"], 2))
+    return signals[:7]
+
+
+def _build_geo_analysis(rows: list) -> list[dict]:
+    """Build geographic analysis from location_audience data."""
+    location_stats: dict[str, dict] = {}
+
+    for ad, comp_name in rows:
+        if not ad.location_audience:
+            continue
+        try:
+            locations = json.loads(ad.location_audience) if isinstance(ad.location_audience, str) else ad.location_audience
+            if not isinstance(locations, list):
+                continue
+            for loc in locations:
+                name = loc.get("name", "") if isinstance(loc, dict) else str(loc)
+                if not name:
+                    continue
+                if name not in location_stats:
+                    location_stats[name] = {"ad_count": 0, "competitors": set(), "categories": Counter()}
+                location_stats[name]["ad_count"] += 1
+                location_stats[name]["competitors"].add(comp_name)
+                if ad.product_category:
+                    location_stats[name]["categories"][ad.product_category] += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Convert to list, sort by ad_count
+    geo = []
+    for loc_name, data in location_stats.items():
+        top_cat = data["categories"].most_common(1)[0][0] if data["categories"] else ""
+        geo.append({
+            "location": loc_name,
+            "ad_count": data["ad_count"],
+            "competitors": sorted(data["competitors"]),
+            "top_category": top_cat,
+        })
+
+    geo.sort(key=lambda g: g["ad_count"], reverse=True)
+    return geo[:15]

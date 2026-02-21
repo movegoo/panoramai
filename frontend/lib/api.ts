@@ -965,6 +965,21 @@ export interface CreativeInsights {
   subcategories: { subcategory: string; count: number; pct: number }[];
   objectives: { objective: string; count: number; pct: number }[];
   recommendations: string[];
+  signals: {
+    type: string;
+    icon: string;
+    title: string;
+    description: string;
+    competitor: string;
+    metric: string;
+    severity: "high" | "medium" | "low";
+  }[];
+  geo_analysis: {
+    location: string;
+    ad_count: number;
+    competitors: string[];
+    top_category: string;
+  }[];
 }
 
 export const creativeAPI = {

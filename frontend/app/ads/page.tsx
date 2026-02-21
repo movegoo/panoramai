@@ -54,6 +54,9 @@ import {
   Trophy,
   Lightbulb,
   Loader2,
+  HelpCircle,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 
@@ -2646,6 +2649,33 @@ export default function AdsPage() {
               </div>
             </div>
 
+            {/* Score Expliqué */}
+            <details className="rounded-xl bg-muted/30 border px-4 py-3 group">
+              <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden">
+                <HelpCircle className="h-3.5 w-3.5 text-violet-500" />
+                <span>Comment est calculé le score créatif ?</span>
+                <ChevronDown className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground border-t pt-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Impact visuel (30%)</span> — contraste, composition, accroche visuelle</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-pink-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Clarté du message (25%)</span> — compréhension immédiate de l&apos;offre</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Exécution professionnelle (25%)</span> — qualité graphique, cohérence de marque</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Persuasion (20%)</span> — incitation à l&apos;action, urgence, désirabilité</div>
+                </div>
+              </div>
+            </details>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* Top concepts */}
               {creativeInsights.concepts.length > 0 && (
@@ -2802,6 +2832,89 @@ export default function AdsPage() {
               </div>
             )}
 
+            {/* Signaux JARVIS Intelligence */}
+            {creativeInsights.signals && creativeInsights.signals.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100">
+                    <Zap className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-semibold">Signaux Intelligence</h4>
+                    <p className="text-[10px] text-muted-foreground">{creativeInsights.signals.length} signal{creativeInsights.signals.length > 1 ? "x" : ""} détecté{creativeInsights.signals.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {creativeInsights.signals.map((s, i) => (
+                    <div key={i} className={`flex gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm ${
+                      s.severity === "high" ? "bg-red-50/50 border-red-200" :
+                      s.severity === "medium" ? "bg-amber-50/50 border-amber-200" :
+                      "bg-blue-50/50 border-blue-200"
+                    }`}>
+                      <div className={`shrink-0 mt-0.5 ${
+                        s.severity === "high" ? "text-red-500" :
+                        s.severity === "medium" ? "text-amber-500" :
+                        "text-blue-500"
+                      }`}>
+                        {s.severity === "high" ? <AlertTriangle className="h-4 w-4" /> :
+                         s.severity === "medium" ? <TrendingUp className="h-4 w-4" /> :
+                         <Info className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold leading-snug">{s.title}</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{s.description}</p>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">{s.competitor}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{s.metric}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Répartition Géographique */}
+            {creativeInsights.geo_analysis && creativeInsights.geo_analysis.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100">
+                    <MapPin className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-semibold">Couverture Géographique</h4>
+                    <p className="text-[10px] text-muted-foreground">{creativeInsights.geo_analysis.length} zone{creativeInsights.geo_analysis.length > 1 ? "s" : ""} de diffusion</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {creativeInsights.geo_analysis.slice(0, 10).map((g) => {
+                    const maxAds = creativeInsights.geo_analysis[0]?.ad_count || 1;
+                    return (
+                      <div key={g.location} className="p-3 rounded-xl border bg-card hover:bg-accent/30 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium truncate">{g.location}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5">{g.ad_count} pub{g.ad_count > 1 ? "s" : ""}</div>
+                          </div>
+                          {g.top_category && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">{g.top_category}</span>
+                          )}
+                        </div>
+                        <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.round((g.ad_count / maxAds) * 100)}%` }} />
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {g.competitors.map((c) => (
+                            <span key={c} className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Recommendations */}
             {creativeInsights.recommendations.length > 0 && (
               <div>
@@ -2810,9 +2923,9 @@ export default function AdsPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {creativeInsights.recommendations.map((r, i) => (
-                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-gradient-to-br from-violet-50/50 to-indigo-50/50 border border-violet-100">
+                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-muted/30 border">
                       <Sparkles className="h-4 w-4 text-violet-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-foreground/80 leading-relaxed">{r}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{r}</p>
                     </div>
                   ))}
                 </div>
