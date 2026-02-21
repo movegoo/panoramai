@@ -1531,11 +1531,7 @@ export default function AdsPage() {
   const { data: swrSnapAds } = useAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all");
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
-  const cachedInsights = useMemo(() => {
-    if (typeof window === "undefined") return undefined;
-    try { const v = localStorage.getItem("creative_insights"); return v ? JSON.parse(v) as CreativeInsights : undefined; } catch { return undefined; }
-  }, []);
-  const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights", { fallbackData: cachedInsights });
+  const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights");
 
   // Merge SWR data into state when available
   useEffect(() => {
@@ -1556,12 +1552,6 @@ export default function AdsPage() {
   useEffect(() => {
     if (swrBrand?.company_name) setBrandName(swrBrand.company_name);
   }, [swrBrand]);
-
-  useEffect(() => {
-    if (creativeInsights && creativeInsights.total_analyzed > 0) {
-      try { localStorage.setItem("creative_insights", JSON.stringify(creativeInsights)); } catch {}
-    }
-  }, [creativeInsights]);
 
   // If no ads at all after SWR load, loading is still false (empty state)
   useEffect(() => {
