@@ -812,6 +812,88 @@ async def _fetch_ads_background(competitor_id: int, competitor_name: str, facebo
                 logger.warning(f"Child pages keyword search failed for {competitor.name}: {e}")
 
         _fetch_status[task_key]["child_pages_new"] = child_new
+
+        # ── Auto-analyze creatives while URLs are still fresh ──
+        analyzed_count = 0
+        analyze_errors = 0
+        try:
+            from services.creative_analyzer import creative_analyzer
+            import os
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+            if anthropic_key or creative_analyzer.api_key:
+                SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
+                ads_to_analyze = db.query(Ad).filter(
+                    Ad.competitor_id == competitor_id,
+                    Ad.creative_analyzed_at.is_(None),
+                    Ad.creative_url.isnot(None),
+                    Ad.creative_url != "",
+                ).limit(100).all()
+
+                _fetch_status[task_key]["step"] = f"analyzing_creatives (0/{len(ads_to_analyze)})"
+                logger.info(f"Auto-analyzing {len(ads_to_analyze)} creatives for {competitor_name}")
+
+                for i, ad in enumerate(ads_to_analyze):
+                    url = ad.creative_url or ""
+                    fmt = (ad.display_format or "").upper()
+                    if fmt == "VIDEO" or any(p in url for p in SKIP_URL_PATTERNS):
+                        ad.creative_analyzed_at = datetime.utcnow()
+                        ad.creative_score = 0
+                        ad.creative_summary = "Format non analysable" if fmt == "VIDEO" else "URL non analysable"
+                        continue
+
+                    try:
+                        result = await asyncio.wait_for(
+                            creative_analyzer.analyze_creative(
+                                creative_url=url,
+                                ad_text=ad.ad_text or "",
+                                platform="meta",
+                                ad_id=ad.ad_id or "",
+                            ),
+                            timeout=60,
+                        )
+                        if result:
+                            ad.creative_analysis = json.dumps(result, ensure_ascii=False)
+                            ad.creative_concept = result.get("concept", "")[:100]
+                            ad.creative_hook = result.get("hook", "")[:500]
+                            ad.creative_tone = result.get("tone", "")[:100]
+                            ad.creative_text_overlay = result.get("text_overlay", "")
+                            ad.creative_dominant_colors = json.dumps(result.get("dominant_colors", []))
+                            ad.creative_has_product = result.get("has_product", False)
+                            ad.creative_has_face = result.get("has_face", False)
+                            ad.creative_has_logo = result.get("has_logo", False)
+                            ad.creative_layout = result.get("layout", "")[:50]
+                            ad.creative_cta_style = result.get("cta_style", "")[:50]
+                            ad.creative_score = result.get("score", 0)
+                            ad.creative_tags = json.dumps(result.get("tags", []), ensure_ascii=False)
+                            ad.creative_summary = result.get("summary", "")
+                            ad.product_category = result.get("product_category", "")[:100]
+                            ad.product_subcategory = result.get("product_subcategory", "")[:100]
+                            ad.ad_objective = result.get("ad_objective", "")[:50]
+                            ad.creative_analyzed_at = datetime.utcnow()
+                            analyzed_count += 1
+                        else:
+                            ad.creative_analyzed_at = datetime.utcnow()
+                            ad.creative_score = 0
+                            analyze_errors += 1
+                    except Exception as e:
+                        logger.warning(f"Creative analysis failed for {ad.ad_id}: {e}")
+                        ad.creative_analyzed_at = datetime.utcnow()
+                        ad.creative_score = 0
+                        analyze_errors += 1
+
+                    if (i + 1) % 5 == 0:
+                        db.commit()
+                        _fetch_status[task_key]["step"] = f"analyzing_creatives ({i+1}/{len(ads_to_analyze)})"
+
+                    await asyncio.sleep(0.5)  # Rate limit Claude API
+
+                db.commit()
+                logger.info(f"Creative analysis for {competitor_name}: {analyzed_count} OK, {analyze_errors} errors")
+        except Exception as e:
+            logger.warning(f"Creative analysis step failed for {competitor_name}: {e}")
+
+        _fetch_status[task_key]["analyzed"] = analyzed_count
+        _fetch_status[task_key]["analyze_errors"] = analyze_errors
         _fetch_status[task_key]["method"] = "page_id" if use_page_id else "keyword_search"
         _fetch_status[task_key]["facebook_page_id"] = page_id_used
         _fetch_status[task_key]["status"] = "completed"
@@ -819,8 +901,9 @@ async def _fetch_ads_background(competitor_id: int, competitor_name: str, facebo
         _fetch_status[task_key]["message"] = (
             f"Fetched {len(ads_data)} ads for {competitor_name}"
             + (f" + {child_new} from child pages" if child_new else "")
+            + (f" | Analyzed {analyzed_count} creatives" if analyzed_count else "")
         )
-        logger.info(f"Fetch completed for {competitor_name}: {new_count} new, {updated_count} updated, {child_new} child")
+        logger.info(f"Fetch completed for {competitor_name}: {new_count} new, {updated_count} updated, {child_new} child, {analyzed_count} analyzed")
 
     except Exception as e:
         logger.error(f"Fetch background task failed for {competitor_name}: {e}")
