@@ -574,6 +574,10 @@ def _run_migrations(engine):
             ("competitors", "child_page_ids", "TEXT"),
             ("ads", "payer", "VARCHAR(500)"),
             ("ads", "beneficiary", "VARCHAR(500)"),
+            # Product classification (AI-powered, LSA taxonomy)
+            ("ads", "product_category", "VARCHAR(100)"),
+            ("ads", "product_subcategory", "VARCHAR(100)"),
+            ("ads", "ad_objective", "VARCHAR(50)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
@@ -597,6 +601,8 @@ def _run_migrations(engine):
             ("ads", "creative_concept"),
             ("ads", "creative_tone"),
             ("ads", "creative_score"),
+            ("ads", "product_category"),
+            ("ads", "ad_objective"),
         ]
         existing_indexes = {}
         for table in existing_tables:
