@@ -45,7 +45,7 @@ const TYPE_LABELS: Record<string, string> = {
   branding: "Branding",
   performance: "Performance",
   dts: "Drive-to-Store",
-  unknown: "Non classifi\u00e9",
+  unknown: "Non classifié",
 };
 
 function periodToDates(days: PeriodDays): { start: string; end: string } {
@@ -198,9 +198,9 @@ export default function AdsOverviewPage() {
             <KPICard
               icon={Euro}
               iconBg="bg-amber-100 text-amber-600"
-              label="Budget estim\u00e9 total"
+              label="Budget estimé total"
               value={formatBudget(totals.spend_min || 0, totals.spend_max || 0)}
-              sub="estimation CPM 3\u20ac"
+              sub="estimation CPM 3€"
             />
             <KPICard
               icon={Users}
@@ -243,7 +243,7 @@ export default function AdsOverviewPage() {
               <p className="text-xs text-muted-foreground mb-4">
                 {sovMetric === "ads"
                   ? "Proportion du nombre de pubs par concurrent"
-                  : "Proportion du budget estim\u00e9 par concurrent"}
+                  : "Proportion du budget estimé par concurrent"}
               </p>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">

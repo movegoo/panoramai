@@ -44,9 +44,9 @@ const navigation = [
     name: "Veille",
     items: [
       { name: "Concurrents", href: "/competitors", icon: Users },
-      { name: "Publicit\u00e9s", href: "/ads", icon: Megaphone },
+      { name: "Publicités", href: "/ads", icon: Megaphone },
       { name: "Part de Voix", href: "/ads-overview", icon: PieChart },
-      { name: "R\u00e9seaux sociaux", href: "/social", icon: Activity },
+      { name: "Réseaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
       { name: "SEO", href: "/seo", icon: Globe },
       { name: "GEO", href: "/geo-tracking", icon: Sparkles },
