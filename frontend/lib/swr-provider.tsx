@@ -23,7 +23,7 @@ function localStorageProvider() {
     window.addEventListener("beforeunload", () => {
       try {
         // Only persist api: keys (skip internal SWR keys), limit size
-        const entries = [...map.entries()].filter(([k]) => k.startsWith("api:"));
+        const entries = Array.from(map.entries()).filter(([k]) => k.startsWith("api:"));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
       } catch {}
     });
