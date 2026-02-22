@@ -12,8 +12,9 @@ import io
 import json
 
 import random
-from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User
+from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User, UserAdvertiser, AdvertiserCompetitor
 from core.auth import get_current_user, get_optional_user
+from core.permissions import parse_advertiser_header
 from services.geodata import (
     geodata_service,
     haversine_distance,
@@ -101,9 +102,10 @@ async def list_stores(
     x_advertiser_id: str | None = Header(None),
 ):
     """Liste les magasins de l'enseigne."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        query = query.filter(Advertiser.user_id == user.id)
+        query = query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         query = query.filter(Advertiser.id == int(x_advertiser_id))
     brand = query.first()
@@ -129,9 +131,10 @@ async def create_store(
     x_advertiser_id: str | None = Header(None),
 ):
     """Ajoute un magasin."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
@@ -187,9 +190,10 @@ async def upload_stores(
     - store_type
     - surface_m2
     """
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
@@ -325,9 +329,10 @@ async def analyze_zone(
     total_pop = sum(c["population"] for c in communes_with_data)
 
     # Cherche les concurrents proches (autres magasins en base)
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
@@ -409,9 +414,10 @@ async def get_map_data(
     Retourne les magasins et les données par commune
     pour superposition cartographique.
     """
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
@@ -549,9 +555,11 @@ async def get_all_competitor_stores(
     from sqlalchemy import func
 
     # Get the user's competitor IDs to filter store locations
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
     user_comp_query = db.query(Competitor.id).filter(Competitor.is_active == True)
     if user:
-        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
         user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     user_comp_ids = [row[0] for row in user_comp_query.all()]
@@ -645,9 +653,11 @@ async def get_competitor_stores_geo(
     x_advertiser_id: str | None = Header(None),
 ):
     """Magasins d'un concurrent spécifique."""
-    # Verify competitor belongs to this user
+    # Verify competitor belongs to this user via join tables
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
     comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    if user and comp and comp.user_id != user.id:
+    if user and comp and comp.id not in comp_ids_from_adv:
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
     if x_advertiser_id and comp and comp.advertiser_id != int(x_advertiser_id):
         raise HTTPException(status_code=404, detail="Concurrent non trouvé")
@@ -706,9 +716,11 @@ async def get_catchment_zones(
     ]
 
     # 2. Load competitor stores (BANCO source)
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
     user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
     if user:
-        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
         user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors_list = user_comp_query.all()
@@ -913,9 +925,11 @@ async def enrich_gmb_demo(
     Passer force=true pour régénérer toutes les notes (rafraîchir).
     """
     # Filter stores by user's competitors
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
     user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
     if user:
-        user_comp_query = user_comp_query.filter(Competitor.user_id == user.id)
+        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
         user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors_list = user_comp_query.all()
@@ -1138,9 +1152,10 @@ async def analyze_zone_enriched(
     enrichment = await datagouv_service.enrich_zone_analysis(communes_in_zone)
 
     # Concurrents
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()
