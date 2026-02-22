@@ -1208,3 +1208,14 @@ def list_sectors() -> list:
         {"code": code, "name": data["name"], "competitors_count": len(data["competitors"])}
         for code, data in SECTORS.items()
     ]
+
+
+def find_brand_in_sectors(name: str) -> dict | None:
+    """Find a brand by name (case-insensitive) across all sectors.
+    Returns the competitor dict with sector info, or None."""
+    name_lower = name.lower().strip()
+    for sector_code, sector_data in SECTORS.items():
+        for comp in sector_data.get("competitors", []):
+            if comp["name"].lower() == name_lower:
+                return {**comp, "sector": sector_code, "sector_name": sector_data["name"]}
+    return None

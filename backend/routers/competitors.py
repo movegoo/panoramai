@@ -452,8 +452,13 @@ async def create_competitor(
             Competitor.is_active == True,
         ).first()
 
+    is_reused = comp is not None
+
     if not comp:
-        # Create new competitor
+        # Complement fields from sectors database before creating
+        from core.sectors import find_brand_in_sectors
+        sector_data = find_brand_in_sectors(data.name)
+
         comp = Competitor(
             name=data.name,
             website=data.website,
@@ -465,13 +470,21 @@ async def create_competitor(
             youtube_channel_id=data.youtube_channel_id,
             snapchat_entity_name=data.snapchat_entity_name,
         )
+        # Fill missing fields from sectors DB
+        if sector_data:
+            for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
+                       "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
+                if sector_data.get(f) and not getattr(comp, f, None):
+                    setattr(comp, f, sector_data[f])
         db.add(comp)
         db.flush()
     else:
-        # Complement missing fields
+        # Complement missing fields from request + sectors DB
+        from core.sectors import find_brand_in_sectors
+        sector_data = find_brand_in_sectors(data.name)
         for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
                    "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
-            new_val = getattr(data, f, None)
+            new_val = getattr(data, f, None) or (sector_data.get(f) if sector_data else None)
             if new_val and not getattr(comp, f, None):
                 setattr(comp, f, new_val)
 
@@ -487,12 +500,30 @@ async def create_competitor(
     db.commit()
     db.refresh(comp)
 
-    # Auto-fetch all data synchronously (reliable, no silent failures)
-    try:
-        await _auto_enrich_competitor(comp.id, comp)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Auto-enrich failed for '{comp.name}': {e}")
+    # Skip enrichment if data is recent (< 24h) — shared brand optimization
+    skip_enrich = False
+    if is_reused:
+        from datetime import datetime, timedelta
+        fresh_threshold = datetime.utcnow() - timedelta(hours=24)
+        has_recent = (
+            db.query(InstagramData.id).filter(
+                InstagramData.competitor_id == comp.id,
+                InstagramData.recorded_at > fresh_threshold,
+            ).first() is not None
+            or db.query(AppData.id).filter(
+                AppData.competitor_id == comp.id,
+                AppData.recorded_at > fresh_threshold,
+            ).first() is not None
+        )
+        if has_recent:
+            skip_enrich = True
+
+    if not skip_enrich:
+        try:
+            await _auto_enrich_competitor(comp.id, comp)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Auto-enrich failed for '{comp.name}': {e}")
 
     return CompetitorCard(
         id=comp.id,
