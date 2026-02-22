@@ -713,6 +713,46 @@ def _backfill_is_brand(engine):
         logging.getLogger(__name__).warning(f"is_brand backfill warning: {e}")
 
 
+def deduplicate_competitors(engine) -> int:
+    """Merge duplicate competitors (by facebook_page_id then by name). Returns count of merged."""
+    from sqlalchemy import text
+
+    is_pg = DATABASE_URL.startswith("postgresql")
+    agg_fn = "STRING_AGG(id::text, ',')" if is_pg else "GROUP_CONCAT(id)"
+    true_val = "true" if is_pg else "1"
+
+    merged_ids: set[int] = set()
+
+    with engine.begin() as conn:
+        # 1. Find duplicates by facebook_page_id
+        dupes_by_fbid = conn.execute(text(
+            f'SELECT LOWER(facebook_page_id), {agg_fn} as ids '
+            'FROM competitors '
+            f"WHERE facebook_page_id IS NOT NULL AND facebook_page_id != '' AND is_active = {true_val} "
+            'GROUP BY LOWER(facebook_page_id) HAVING COUNT(*) > 1'
+        )).fetchall()
+
+        for row in dupes_by_fbid:
+            ids = [int(x) for x in row[1].split(",")]
+            _merge_competitor_group(conn, ids, merged_ids)
+
+        # 2. Find duplicates by exact lowercase name (skip already merged)
+        dupes_by_name = conn.execute(text(
+            f'SELECT LOWER(name), {agg_fn} as ids '
+            'FROM competitors '
+            f'WHERE is_active = {true_val} '
+            'GROUP BY LOWER(name) HAVING COUNT(*) > 1'
+        )).fetchall()
+
+        for row in dupes_by_name:
+            ids = [int(x) for x in row[1].split(",")]
+            ids = [i for i in ids if i not in merged_ids]
+            if len(ids) > 1:
+                _merge_competitor_group(conn, ids, merged_ids)
+
+    return len(merged_ids)
+
+
 def _migrate_join_tables(engine):
     """Populate user_advertisers and advertiser_competitors from legacy FK columns, then deduplicate competitors."""
     try:
@@ -746,42 +786,12 @@ def _migrate_join_tables(engine):
                 '  WHERE ac.advertiser_id = competitors.advertiser_id AND ac.competitor_id = competitors.id)'
             ))
 
-        # --- 3: Deduplicate competitors (separate transaction) ---
-        with engine.begin() as conn:
-            if is_pg:
-                agg_fn = "STRING_AGG(id::text, ',')"
-            else:
-                agg_fn = "GROUP_CONCAT(id)"
-
-            true_val = "true" if is_pg else "1"
-
-            # 3a. Find duplicates by facebook_page_id
-            dupes_by_fbid = conn.execute(text(
-                f'SELECT LOWER(facebook_page_id), {agg_fn} as ids '
-                'FROM competitors '
-                f"WHERE facebook_page_id IS NOT NULL AND facebook_page_id != '' AND is_active = {true_val} "
-                'GROUP BY LOWER(facebook_page_id) HAVING COUNT(*) > 1'
-            )).fetchall()
-
-            merged_ids = set()
-
-            for row in dupes_by_fbid:
-                ids = [int(x) for x in row[1].split(",")]
-                _merge_competitor_group(conn, ids, merged_ids)
-
-            # 3b. Find duplicates by exact lowercase name (skip already merged)
-            dupes_by_name = conn.execute(text(
-                f'SELECT LOWER(name), {agg_fn} as ids '
-                'FROM competitors '
-                f'WHERE is_active = {true_val} '
-                'GROUP BY LOWER(name) HAVING COUNT(*) > 1'
-            )).fetchall()
-
-            for row in dupes_by_name:
-                ids = [int(x) for x in row[1].split(",")]
-                ids = [i for i in ids if i not in merged_ids]
-                if len(ids) > 1:
-                    _merge_competitor_group(conn, ids, merged_ids)
+        # --- 3: Deduplicate competitors ---
+        try:
+            deduplicate_competitors(engine)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Dedup warning: {e}")
 
     except Exception as e:
         import logging

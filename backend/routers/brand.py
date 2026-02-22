@@ -107,12 +107,14 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         .first()
     )
     if not comp:
-        # Fallback: match by name
+        # Fallback: match by name (case-insensitive, including non-brand)
+        from sqlalchemy import func as sa_func
         comp = db.query(Competitor).filter(
-            Competitor.name == brand.company_name,
+            sa_func.lower(Competitor.name) == brand.company_name.lower(),
             Competitor.is_active == True,
-            Competitor.is_brand == True,
         ).first()
+        if comp:
+            comp.is_brand = True
 
     if not comp:
         comp = Competitor(

@@ -328,6 +328,9 @@ export default function AdminPage() {
   const [pagesLoading, setPagesLoading] = useState(false);
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
 
+  // Dedup state
+  const [deduplicating, setDeduplicating] = useState(false);
+
   // User editing state
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [editUserData, setEditUserData] = useState<{ name: string; email: string }>({ name: "", email: "" });
@@ -536,6 +539,26 @@ export default function AdminPage() {
                     </option>
                   ))}
                 </select>
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                  disabled={deduplicating}
+                  onClick={async () => {
+                    if (!confirm("Fusionner les concurrents en doublon ? Cette action est irreversible.")) return;
+                    setDeduplicating(true);
+                    try {
+                      const res = await adminAPI.deduplicate();
+                      alert(res.message);
+                      loadPagesAudit(selectedSector || undefined);
+                    } catch (e: any) {
+                      alert(e.message || "Erreur");
+                    } finally {
+                      setDeduplicating(false);
+                    }
+                  }}
+                >
+                  <Layers className="h-3 w-3" />
+                  {deduplicating ? "..." : "Dedupliquer"}
+                </button>
               </div>
             </div>
 

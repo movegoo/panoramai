@@ -14,9 +14,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 
 from database import (
-    get_db, User, Advertiser, Competitor,
+    get_db, engine, User, Advertiser, Competitor,
     Ad, InstagramData, TikTokData, YouTubeData, AppData, StoreLocation,
     PromptTemplate, Store, AdvertiserCompetitor,
+    deduplicate_competitors,
 )
 from core.auth import get_current_user
 from core.sectors import SECTORS, list_sectors
@@ -505,6 +506,48 @@ async def pages_audit(
             "platforms": platforms,
         })
 
+    # Deduplicate competitors with same lowercase name within each sector
+    for code in sector_groups:
+        by_name: dict[str, list] = {}
+        for c in sector_groups[code]:
+            by_name.setdefault(c["name"].lower(), []).append(c)
+        merged = []
+        for group in by_name.values():
+            if len(group) == 1:
+                merged.append(group[0])
+                continue
+            # Pick canonical: the one with most Facebook detected pages
+            canonical = max(group, key=lambda g: len(g["platforms"]["facebook"]["detected_pages"]))
+            # Merge detected pages from others into canonical
+            seen_page_ids = {p["page_id"] for p in canonical["platforms"]["facebook"]["detected_pages"]}
+            for other in group:
+                if other["id"] == canonical["id"]:
+                    continue
+                for page in other["platforms"]["facebook"]["detected_pages"]:
+                    if page["page_id"] not in seen_page_ids:
+                        canonical["platforms"]["facebook"]["detected_pages"].append(page)
+                        seen_page_ids.add(page["page_id"])
+                # Merge child_page_ids
+                for cid in other["platforms"]["facebook"]["child_page_ids"]:
+                    if cid not in canonical["platforms"]["facebook"]["child_page_ids"]:
+                        canonical["platforms"]["facebook"]["child_page_ids"].append(cid)
+                # Merge snapchat detected pages
+                snap_names = {s["page_name"] for s in canonical["platforms"]["snapchat"].get("detected_pages", [])}
+                for sp in other["platforms"]["snapchat"].get("detected_pages", []):
+                    if sp["page_name"] not in snap_names:
+                        canonical["platforms"]["snapchat"]["detected_pages"].append(sp)
+                        snap_names.add(sp["page_name"])
+                # Take configured handles if canonical lacks them
+                for plat in ("instagram", "tiktok", "youtube", "playstore", "appstore"):
+                    if not canonical["platforms"][plat].get("configured") and other["platforms"][plat].get("configured"):
+                        canonical["platforms"][plat] = other["platforms"][plat]
+            # Recount facebook total
+            canonical["platforms"]["facebook"]["total_pages"] = len(
+                set(p["page_id"] for p in canonical["platforms"]["facebook"]["detected_pages"])
+            )
+            merged.append(canonical)
+        sector_groups[code] = merged
+
     # Build final response
     result = []
     for code, comps in sorted(sector_groups.items()):
@@ -605,6 +648,19 @@ async def delete_detected_page(
 
     db.commit()
     return result
+
+
+# ── Deduplication ─────────────────────────────────────────────────────────────
+
+@router.post("/deduplicate")
+async def deduplicate(
+    user: User = Depends(get_current_user),
+):
+    """Merge duplicate competitors by facebook_page_id and name. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+    merged = deduplicate_competitors(engine)
+    return {"merged": merged, "message": f"{merged} doublon(s) fusionné(s)"}
 
 
 # ── User Management ──────────────────────────────────────────────────────────

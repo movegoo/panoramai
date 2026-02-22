@@ -1023,6 +1023,8 @@ export const adminAPI = {
       method: "POST",
       body: JSON.stringify({ competitor_id: competitorId, platform, page_id: pageId }),
     }),
+  deduplicate: () =>
+    fetchAPI<{ merged: number; message: string }>("/admin/deduplicate", { method: "POST" }),
 };
 
 // Creative Analysis API
