@@ -15,6 +15,7 @@ SECTORS = {
                 "instagram_username": "carrefourfrance",
                 "tiktok_username": "carrefourfrance",
                 "youtube_channel_id": "UCNQ_I8AhYrV9y1uTWVNTTtA",
+                "snapchat_entity_name": "Carrefour",
             },
             {
                 "name": "Leclerc",
@@ -24,6 +25,7 @@ SECTORS = {
                 "instagram_username": "leclerc",
                 "tiktok_username": "leclerc",
                 "youtube_channel_id": "UCrnLMg8vyroKjPQS-IX7Opg",
+                "snapchat_entity_name": "E.Leclerc",
             },
             {
                 "name": "Auchan",
@@ -33,6 +35,7 @@ SECTORS = {
                 "instagram_username": "auchan_france",
                 "tiktok_username": "auchan_fr",
                 "youtube_channel_id": "UCmciQZyg87a2bz9OYP8Lpdg",
+                "snapchat_entity_name": "Auchan",
             },
             {
                 "name": "Intermarché",
@@ -42,6 +45,7 @@ SECTORS = {
                 "instagram_username": "intermarche",
                 "tiktok_username": "intermarche_france",
                 "youtube_channel_id": "UC2pAIqBgaTxNbNRLPfsZdnw",
+                "snapchat_entity_name": "Intermarché",
             },
             {
                 "name": "Lidl",
@@ -51,6 +55,7 @@ SECTORS = {
                 "instagram_username": "lidlfrance",
                 "tiktok_username": "lidlfrance",
                 "youtube_channel_id": "UCRMu2Bs7litn7jfnrh-STXA",
+                "snapchat_entity_name": "Lidl",
             },
             {
                 "name": "Monoprix",

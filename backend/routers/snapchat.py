@@ -167,6 +167,92 @@ async def fetch_snapchat_ads(
     }
 
 
+@router.post("/discover-entity/{competitor_id}")
+async def discover_snapchat_entity(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Discover the Snapchat entity name for a competitor via Apify.
+
+    Searches Snapchat ads by competitor name, extracts brand/profile names
+    from results, and optionally stores the best match.
+    """
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
+
+    result = await apify_snapchat.discover_entity_names(query=competitor.name)
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Snapchat discovery error: {result.get('error', 'Unknown')}",
+        )
+
+    entities = result.get("entities", [])
+
+    # Auto-store the best match if not already set
+    stored = False
+    if entities and not competitor.snapchat_entity_name:
+        best = entities[0]["name"]
+        competitor.snapchat_entity_name = best
+        db.commit()
+        stored = True
+
+    return {
+        "competitor_id": competitor_id,
+        "competitor_name": competitor.name,
+        "entities": entities,
+        "total_ads": result.get("total_ads", 0),
+        "stored": stored,
+        "snapchat_entity_name": competitor.snapchat_entity_name,
+    }
+
+
+@router.post("/discover-entities")
+async def discover_all_snapchat_entities(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Discover Snapchat entity names for all competitors missing one."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    results = []
+    for comp in competitors:
+        if comp.snapchat_entity_name:
+            results.append({
+                "competitor": comp.name,
+                "status": "already_set",
+                "snapchat_entity_name": comp.snapchat_entity_name,
+            })
+            continue
+
+        try:
+            result = await apify_snapchat.discover_entity_names(query=comp.name)
+            if not result.get("success"):
+                results.append({"competitor": comp.name, "status": "error", "error": result.get("error")})
+                continue
+
+            entities = result.get("entities", [])
+            if entities:
+                best = entities[0]["name"]
+                comp.snapchat_entity_name = best
+                db.commit()
+                results.append({
+                    "competitor": comp.name,
+                    "status": "discovered",
+                    "snapchat_entity_name": best,
+                    "alternatives": [e["name"] for e in entities[1:4]],
+                })
+            else:
+                results.append({"competitor": comp.name, "status": "not_found"})
+        except Exception as e:
+            results.append({"competitor": comp.name, "status": "error", "error": str(e)})
+
+    return {"message": "Snapchat entity discovery complete", "results": results}
+
+
 @router.post("/ads/fetch-all")
 async def fetch_all_snapchat_ads(
     db: Session = Depends(get_db),

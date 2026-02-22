@@ -116,4 +116,32 @@ class ApifySnapchatService:
         }
 
 
+    async def discover_entity_names(self, query: str, country: str = "FR") -> dict:
+        """Search Snapchat ads and extract unique brand/profile names.
+
+        Returns a list of discovered entity names from ad results,
+        useful for auto-populating snapchat_entity_name.
+        """
+        result = await self.search_snapchat_ads(query=query, country=country)
+        if not result.get("success"):
+            return result
+
+        # Extract unique brand/profile names from ads
+        entity_counts: dict[str, int] = {}
+        for ad in result.get("ads", []):
+            name = ad.get("page_name", "").strip()
+            if name:
+                entity_counts[name] = entity_counts.get(name, 0) + 1
+
+        # Sort by frequency (most ads = most likely the right entity)
+        entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)
+
+        return {
+            "success": True,
+            "query": query,
+            "entities": [{"name": name, "ads_count": count} for name, count in entities],
+            "total_ads": result.get("ads_count", 0),
+        }
+
+
 apify_snapchat = ApifySnapchatService()

@@ -203,7 +203,7 @@ async def list_competitors(
         if not ref:
             continue
         for f in ["facebook_page_id", "playstore_app_id", "appstore_app_id", "instagram_username",
-                  "tiktok_username", "youtube_channel_id", "website"]:
+                  "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "website"]:
             if ref.get(f) and not getattr(comp, f, None):
                 setattr(comp, f, ref[f])
                 patched = True
@@ -1061,6 +1061,68 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor) -> dict:
         except Exception as e:
             logger.warning(f"Google Ads failed for '{comp.name}': {e}")
             results["google_ads_error"] = str(e)
+
+    # Snapchat Ads (via Apify)
+    snap_query = comp.snapchat_entity_name or comp.name
+    try:
+        from services.apify_snapchat import apify_snapchat
+        from database import SessionLocal
+        snap_result = await apify_snapchat.search_snapchat_ads(query=snap_query)
+        if snap_result.get("success"):
+            db = SessionLocal()
+            try:
+                new_count = 0
+                for ad in snap_result.get("ads", []):
+                    ad_id = ad.get("snap_id", "")
+                    if not ad_id:
+                        continue
+                    if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                        continue
+                    new_ad = Ad(
+                        competitor_id=competitor_id,
+                        ad_id=ad_id,
+                        platform="snapchat",
+                        creative_url=ad.get("creative_url", ""),
+                        ad_text=ad.get("ad_text", ""),
+                        title=ad.get("title", "")[:200] if ad.get("title") else None,
+                        start_date=ad.get("start_date"),
+                        is_active=ad.get("is_active", False),
+                        impressions_min=ad.get("impressions", 0),
+                        impressions_max=ad.get("impressions", 0),
+                        publisher_platforms=json.dumps(["SNAPCHAT"]),
+                        page_name=ad.get("page_name", ""),
+                        display_format=ad.get("display_format", "SNAP"),
+                        ad_library_url="https://adsgallery.snap.com/",
+                    )
+                    db.add(new_ad)
+                    new_count += 1
+                if new_count:
+                    db.commit()
+
+                # Auto-discover entity name if not set
+                if not comp.snapchat_entity_name and snap_result.get("ads"):
+                    names: dict[str, int] = {}
+                    for ad in snap_result["ads"]:
+                        pn = (ad.get("page_name") or "").strip()
+                        if pn:
+                            names[pn] = names.get(pn, 0) + 1
+                    if names:
+                        best_name = max(names, key=names.get)
+                        db_comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+                        if db_comp:
+                            db_comp.snapchat_entity_name = best_name
+                            db.commit()
+                            logger.info(f"Auto-discovered snapchat_entity_name='{best_name}' for '{comp.name}'")
+
+                logger.info(f"Snapchat Ads: {new_count} new for '{comp.name}'")
+                results["snapchat_ads"] = new_count
+            finally:
+                db.close()
+        else:
+            results["snapchat_ads_error"] = snap_result.get("error", "Failed")
+    except Exception as e:
+        logger.warning(f"Snapchat Ads failed for '{comp.name}': {e}")
+        results["snapchat_ads_error"] = str(e)
 
     logger.info(f"Auto-enrichment complete for '{comp.name}'")
     return results
