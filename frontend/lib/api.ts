@@ -1026,6 +1026,11 @@ export const adminAPI = {
     }),
   deduplicate: () =>
     fetchAPI<{ merged: number; message: string }>("/admin/deduplicate", { method: "POST" }),
+  updateCompetitor: (id: number, data: Partial<CompetitorCreate>) =>
+    fetchAPI<{ message: string; updated_fields: string[]; competitor: Competitor }>(`/admin/competitors/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
 };
 
 // Freshness API

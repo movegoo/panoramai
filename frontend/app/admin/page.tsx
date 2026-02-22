@@ -108,13 +108,39 @@ function PlatformBadge({ platform, count, configured }: { platform: string; coun
 function CompetitorPagesRow({
   comp,
   onDelete,
+  onUpdate,
 }: {
   comp: PagesAuditCompetitor;
   onDelete: (competitorId: number, platform: string, pageId?: string) => Promise<void>;
+  onUpdate?: (competitorId: number, field: string, value: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
   const p = comp.platforms;
+
+  const startEdit = (field: string, currentValue: string) => {
+    setEditingField(field);
+    setEditValue(currentValue || "");
+  };
+
+  const saveEdit = async () => {
+    if (!editingField || !onUpdate) return;
+    setSaving(true);
+    try {
+      await onUpdate(comp.id, editingField, editValue);
+      setEditingField(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
 
   const handleDelete = async (platform: string, pageId?: string) => {
     const label = pageId || platform;
@@ -206,23 +232,47 @@ function CompetitorPagesRow({
           {(["instagram", "tiktok", "youtube", "playstore", "appstore"] as const).map((key) => {
             const plat = p[key];
             const cfg = PLATFORM_CONFIG[key];
-            if (!plat.handle) return null;
+            const fieldMap: Record<string, string> = { instagram: "instagram_username", tiktok: "tiktok_username", youtube: "youtube_channel_id", playstore: "playstore_app_id", appstore: "appstore_app_id" };
+            const fieldName = fieldMap[key];
             const Icon = cfg.icon;
             return (
               <div key={key} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-                  <span className="text-xs font-medium text-foreground">{cfg.label}</span>
-                  <span className="text-[11px] text-muted-foreground font-mono">{plat.handle}</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Icon className={`h-3.5 w-3.5 ${cfg.color} shrink-0`} />
+                  <span className="text-xs font-medium text-foreground shrink-0">{cfg.label}</span>
+                  {editingField === fieldName ? (
+                    <div className="flex items-center gap-1 flex-1">
+                      <input
+                        autoFocus
+                        className="text-[11px] font-mono bg-background border rounded px-2 py-0.5 flex-1 min-w-0"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
+                      />
+                      <button onClick={saveEdit} disabled={saving} className="p-0.5 rounded hover:bg-emerald-50 text-emerald-600"><Save className="h-3 w-3" /></button>
+                      <button onClick={cancelEdit} className="p-0.5 rounded hover:bg-muted text-muted-foreground"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-muted-foreground font-mono truncate">{plat.handle || "—"}</span>
+                      {onUpdate && (
+                        <button onClick={() => startEdit(fieldName, plat.handle || "")} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0">
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
-                <button
-                  className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
-                  disabled={deleting === `${key}:`}
-                  onClick={() => handleDelete(key)}
-                  title={`Supprimer ${cfg.label}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                {!editingField && plat.handle && (
+                  <button
+                    className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                    disabled={deleting === `${key}:`}
+                    onClick={() => handleDelete(key)}
+                    title={`Supprimer ${cfg.label}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -402,6 +452,11 @@ export default function AdminPage() {
 
   const handleDeletePage = async (competitorId: number, platform: string, pageId?: string) => {
     await adminAPI.deletePage(competitorId, platform, pageId);
+    loadPagesAudit(selectedSector || undefined);
+  };
+
+  const handleUpdateCompetitor = async (competitorId: number, field: string, value: string) => {
+    await adminAPI.updateCompetitor(competitorId, { [field]: value || null });
     loadPagesAudit(selectedSector || undefined);
   };
 
@@ -615,6 +670,7 @@ export default function AdminPage() {
                               key={comp.id}
                               comp={comp}
                               onDelete={handleDeletePage}
+                              onUpdate={handleUpdateCompetitor}
                             />
                           ))}
                         </div>

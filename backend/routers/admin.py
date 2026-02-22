@@ -797,3 +797,59 @@ async def delete_user(
     db.commit()
 
     return {"message": f"Utilisateur '{email}' supprimé"}
+
+
+# ── Competitor editing (admin) ────────────────────────────────────────────────
+
+class CompetitorEditRequest(BaseModel):
+    name: str | None = None
+    website: str | None = None
+    facebook_page_id: str | None = None
+    instagram_username: str | None = None
+    tiktok_username: str | None = None
+    youtube_channel_id: str | None = None
+    playstore_app_id: str | None = None
+    appstore_app_id: str | None = None
+    snapchat_entity_name: str | None = None
+
+
+@router.put("/competitors/{competitor_id}")
+async def admin_update_competitor(
+    competitor_id: int,
+    body: CompetitorEditRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update any competitor's handles/info. Admin only, no ownership check."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent introuvable")
+
+    updated = []
+    update_data = body.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(comp, field, value)
+        updated.append(field)
+
+    db.commit()
+    db.refresh(comp)
+
+    return {
+        "message": f"Concurrent '{comp.name}' mis à jour",
+        "updated_fields": updated,
+        "competitor": {
+            "id": comp.id,
+            "name": comp.name,
+            "website": comp.website,
+            "facebook_page_id": comp.facebook_page_id,
+            "instagram_username": comp.instagram_username,
+            "tiktok_username": comp.tiktok_username,
+            "youtube_channel_id": comp.youtube_channel_id,
+            "playstore_app_id": comp.playstore_app_id,
+            "appstore_app_id": comp.appstore_app_id,
+            "snapchat_entity_name": comp.snapchat_entity_name,
+        },
+    }
