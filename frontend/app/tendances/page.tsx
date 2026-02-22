@@ -101,6 +101,8 @@ const METRIC_CATEGORIES = [
       { key: "yt_subscribers", label: "Abonnes YouTube", icon: <Youtube className="h-3.5 w-3.5" />, source: "youtube", field: "subscribers", format: "number" },
       { key: "yt_views", label: "Vues YouTube", icon: <Eye className="h-3.5 w-3.5" />, source: "youtube", field: "total_views", format: "number" },
       { key: "yt_engagement", label: "Engagement YouTube", icon: <Heart className="h-3.5 w-3.5" />, source: "youtube", field: "engagement_rate", format: "percent" },
+      { key: "snap_ads", label: "Pubs Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "ads_count", format: "number" },
+      { key: "snap_impressions", label: "Impressions Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "impressions", format: "number" },
     ],
   },
   {
@@ -123,8 +125,6 @@ const METRIC_CATEGORIES = [
       { key: "ads_active", label: "Pubs actives", icon: <Target className="h-3.5 w-3.5" />, source: "ads", field: "active_count", format: "number" },
       { key: "ads_spend", label: "Budget pub (max)", icon: <BarChart3 className="h-3.5 w-3.5" />, source: "ads", field: "spend_max", format: "euro" },
       { key: "ads_reach", label: "Couverture EU", icon: <Globe className="h-3.5 w-3.5" />, source: "ads", field: "total_reach", format: "number" },
-      { key: "snap_ads", label: "Pubs Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "ads_count", format: "number" },
-      { key: "snap_impressions", label: "Impressions Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "impressions", format: "number" },
     ],
   },
 ];
