@@ -222,6 +222,12 @@ export interface DashboardCompetitorApp {
   version?: string;
 }
 
+export interface DashboardCompetitorSnapchat {
+  ads_count: number;
+  total_impressions: number;
+  entity_name?: string;
+}
+
 export interface DashboardCompetitor {
   id: number;
   name: string;
@@ -233,6 +239,7 @@ export interface DashboardCompetitor {
   youtube: DashboardCompetitorYouTube | null;
   playstore: DashboardCompetitorApp | null;
   appstore: DashboardCompetitorApp | null;
+  snapchat: DashboardCompetitorSnapchat | null;
   total_social: number;
   avg_app_rating: number | null;
   rank_among_all?: number;

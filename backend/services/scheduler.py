@@ -123,6 +123,10 @@ class DataCollectionScheduler:
         if competitor.youtube_channel_id:
             await self._fetch_youtube(db, competitor, name)
 
+        # Snapchat Ads (via entity name)
+        if competitor.snapchat_entity_name:
+            await self._fetch_snapchat(db, competitor, name)
+
         # Google Ads (via domain)
         if competitor.website:
             await self._fetch_google_ads(db, competitor, name)
@@ -202,6 +206,52 @@ class DataCollectionScheduler:
                 logger.info(f"Ads: {new_count} new ads stored for {name}")
         except Exception as e:
             logger.error(f"Ads fetch failed for {name}: {e}")
+
+    async def _fetch_snapchat(self, db: Session, competitor: Competitor, name: str):
+        """Fetch Snapchat ads via Apify."""
+        try:
+            from services.apify_snapchat import apify_snapchat
+            import json
+
+            entity_name = competitor.snapchat_entity_name
+            result = await apify_snapchat.search_snapchat_ads(query=entity_name)
+
+            if not result.get("success"):
+                logger.warning(f"Snapchat fetch returned no data for {name}: {result.get('error')}")
+                return
+
+            new_count = 0
+            for ad_data in result.get("ads", []):
+                ad_id = ad_data.get("snap_id", "")
+                if not ad_id:
+                    continue
+                if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                    continue
+
+                new_ad = Ad(
+                    competitor_id=competitor.id,
+                    ad_id=ad_id,
+                    platform="snapchat",
+                    creative_url=ad_data.get("creative_url", ""),
+                    ad_text=ad_data.get("ad_text", ""),
+                    title=ad_data.get("title", "")[:200] if ad_data.get("title") else None,
+                    start_date=ad_data.get("start_date"),
+                    is_active=ad_data.get("is_active", False),
+                    impressions_min=ad_data.get("impressions", 0),
+                    impressions_max=ad_data.get("impressions", 0),
+                    publisher_platforms=json.dumps(["SNAPCHAT"]),
+                    page_name=ad_data.get("page_name", ""),
+                    display_format=ad_data.get("display_format", "SNAP"),
+                    ad_library_url="https://adsgallery.snap.com/",
+                )
+                db.add(new_ad)
+                new_count += 1
+
+            if new_count:
+                db.commit()
+                logger.info(f"Snapchat: {new_count} new ads stored for {name}")
+        except Exception as e:
+            logger.error(f"Snapchat fetch failed for {name}: {e}")
 
     async def _fetch_google_ads(self, db: Session, competitor: Competitor, name: str):
         """Fetch Google Ads from Transparency Center."""

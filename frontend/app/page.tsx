@@ -122,6 +122,7 @@ function RankingIcon({ icon }: { icon: string }) {
     case "instagram": return <Instagram className={c} />;
     case "music": return <Music className={c} />;
     case "youtube": return <Youtube className={c} />;
+    case "ghost": return <SnapchatIcon className={c} />;
     case "star": return <Star className={c} />;
     case "heart": return <Heart className={c} />;
     case "users": return <Users className={c} />;
@@ -139,6 +140,14 @@ function FormatIcon({ format }: { format: string }) {
     case "DCO": return <Zap className={c} />;
     default: return <Megaphone className={c} />;
   }
+}
+
+function SnapchatIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor">
+      <path d="M12.206.793c.99 0 4.347.276 5.93 3.821.529 1.193.403 3.219.299 4.847l-.003.06c-.012.18-.022.345-.03.51.075.045.203.09.401.09.3-.016.659-.12.959-.289.165-.093.333-.14.502-.14.356 0 .655.192.753.462a.671.671 0 01-.071.586c-.13.2-.336.328-.484.39-.36.153-.81.263-1.264.387-.089.025-.178.049-.266.075-.222.066-.272.18-.275.246-.005.094.052.2.133.308.395.532.88 1.01 1.443 1.42.405.294.862.485 1.205.594a1.032 1.032 0 01.574.392c.078.12.14.282.042.488-.162.342-.561.542-1.186.595-.063.005-.133.025-.212.046-.168.046-.378.104-.671.104-.107 0-.22-.01-.34-.035-.2-.045-.37-.076-.528-.076-.162 0-.255.03-.295.063-.09.075-.236.329-.364.553a4.864 4.864 0 01-.643.906c-.39.405-.894.785-1.538 1.163-.553.327-1.2.626-1.92.89-.15.055-.26.104-.339.149.006.074.006.148 0 .222-.03.362-.18.604-.427.704-.16.065-.348.094-.55.094-.258 0-.553-.056-.816-.106-.361-.07-.734-.142-1.114-.142-.088 0-.175.004-.262.014-.287.033-.566.1-.84.17-.375.094-.764.19-1.189.19-.05 0-.1-.001-.149-.005-.234-.015-.435-.094-.58-.226a.815.815 0 01-.248-.541c0-.046.003-.091.01-.137.019-.12.04-.248.04-.38a.68.68 0 00-.007-.09c-.067-.03-.165-.075-.302-.125-.716-.262-1.362-.56-1.914-.886-.644-.378-1.148-.758-1.538-1.163a4.86 4.86 0 01-.643-.906c-.128-.224-.274-.478-.365-.553-.04-.033-.133-.063-.295-.063-.158 0-.329.031-.528.076-.12.025-.233.035-.34.035-.293 0-.503-.058-.671-.104-.079-.021-.149-.041-.212-.046-.625-.053-1.024-.253-1.186-.595-.098-.206-.036-.368.042-.488a1.032 1.032 0 01.574-.392c.343-.109.8-.3 1.205-.594.564-.41 1.048-.888 1.443-1.42.081-.108.138-.214.133-.308-.003-.066-.053-.18-.275-.246-.088-.026-.177-.05-.266-.075-.454-.124-.903-.234-1.264-.387a1.135 1.135 0 01-.484-.39.671.671 0 01-.071-.586c.098-.27.397-.462.753-.462.17 0 .337.047.502.14.3.17.659.273.96.289.197 0 .325-.045.4-.09a12.794 12.794 0 01-.032-.57c-.104-1.628-.23-3.654.3-4.847C5.654 1.069 9.01.793 10 .793h.045l.161.001z"/>
+    </svg>
+  );
 }
 
 function AppleIcon({ className }: { className?: string }) {
@@ -721,6 +730,7 @@ export default function DashboardPage() {
   const igRanking = buildPlatformRanking(c => c.instagram?.followers);
   const ttRanking = buildPlatformRanking(c => c.tiktok?.followers);
   const ytRanking = buildPlatformRanking(c => c.youtube?.subscribers);
+  const snapRanking = buildPlatformRanking(c => c.snapchat?.ads_count);
   const psRanking = buildAppRanking("playstore");
   const asRanking = buildAppRanking("appstore");
 
@@ -774,11 +784,12 @@ export default function DashboardPage() {
           </div>
 
           {/* Platform leader cards - comparative ranking */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { key: "instagram", ranking: igRanking, icon: <Instagram className="h-4 w-4" />, label: "Instagram", accent: "pink", unit: "followers", isRating: false },
               { key: "tiktok", ranking: ttRanking, icon: <Music className="h-4 w-4" />, label: "TikTok", accent: "cyan", unit: "followers", isRating: false },
               { key: "youtube", ranking: ytRanking, icon: <Youtube className="h-4 w-4" />, label: "YouTube", accent: "red", unit: "abonnés", isRating: false },
+              { key: "snapchat", ranking: snapRanking, icon: <SnapchatIcon className="h-4 w-4" />, label: "Snapchat", accent: "yellow", unit: "pubs", isRating: false },
               { key: "playstore", ranking: psRanking, icon: <Smartphone className="h-4 w-4" />, label: "Play Store", accent: "emerald", unit: "note", isRating: true },
               { key: "appstore", ranking: asRanking, icon: <AppleIcon className="h-4 w-4" />, label: "App Store", accent: "blue", unit: "note", isRating: true },
             ].filter(p => p.ranking.length > 0).map((platform) => {
@@ -789,6 +800,7 @@ export default function DashboardPage() {
                 pink: { text: "text-pink-400", badge: "bg-pink-500/20 text-pink-300", bar: "bg-pink-400" },
                 cyan: { text: "text-cyan-400", badge: "bg-cyan-500/20 text-cyan-300", bar: "bg-cyan-400" },
                 red: { text: "text-red-400", badge: "bg-red-500/20 text-red-300", bar: "bg-red-400" },
+                yellow: { text: "text-yellow-400", badge: "bg-yellow-500/20 text-yellow-300", bar: "bg-yellow-400" },
                 emerald: { text: "text-emerald-400", badge: "bg-emerald-500/20 text-emerald-300", bar: "bg-emerald-400" },
                 blue: { text: "text-blue-400", badge: "bg-blue-500/20 text-blue-300", bar: "bg-blue-400" },
               };
@@ -1203,7 +1215,7 @@ export default function DashboardPage() {
           {[...competitors].sort((a, b) => b.score - a.score).map((comp) => {
             const maxSocial = Math.max(...competitors.map((c) => c.total_social), 1);
             const socialPct = (comp.total_social / maxSocial) * 100;
-            const { instagram: ig, tiktok: tt, youtube: yt, playstore: ps, appstore: as_ } = comp;
+            const { instagram: ig, tiktok: tt, youtube: yt, snapchat: snap, playstore: ps, appstore: as_ } = comp;
 
             // Find ad data for this competitor
             const compAds = adI.competitor_summary.find(c => c.id === comp.id);
@@ -1254,7 +1266,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Metrics grid */}
-                <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
                   <div className={`rounded-xl px-3 py-2.5 ${ig ? "bg-pink-50/70" : "bg-muted/30"}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <Instagram className="h-3.5 w-3.5 text-pink-500" />
@@ -1282,6 +1294,16 @@ export default function DashboardPage() {
                     </div>
                     {yt ? (
                       <div className="text-sm font-bold tabular-nums">{formatNumber(yt.subscribers)}</div>
+                    ) : <div className="text-xs text-muted-foreground">&mdash;</div>}
+                  </div>
+
+                  <div className={`rounded-xl px-3 py-2.5 ${snap && snap.ads_count > 0 ? "bg-yellow-50/70" : "bg-muted/30"}`}>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <SnapchatIcon className="h-3.5 w-3.5 text-yellow-500" />
+                      <span className="text-[10px] text-yellow-600 font-semibold uppercase">Snap</span>
+                    </div>
+                    {snap && snap.ads_count > 0 ? (
+                      <div className="text-sm font-bold tabular-nums">{snap.ads_count} <span className="text-[10px] font-normal text-muted-foreground">pubs</span></div>
                     ) : <div className="text-xs text-muted-foreground">&mdash;</div>}
                   </div>
 
@@ -1362,6 +1384,9 @@ export default function DashboardPage() {
                     <span className="inline-flex items-center gap-1"><Youtube className="h-3 w-3 text-red-500" />YT</span>
                   </th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><SnapchatIcon className="h-3 w-3 text-yellow-500" />Snap</span>
+                  </th>
+                  <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />Apps</span>
                   </th>
                   <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -1414,6 +1439,9 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {comp.youtube ? formatNumber(comp.youtube.subscribers) : <span className="text-muted-foreground">&mdash;</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {comp.snapchat && comp.snapchat.ads_count > 0 ? comp.snapchat.ads_count : <span className="text-muted-foreground">&mdash;</span>}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {comp.avg_app_rating ? comp.avg_app_rating.toFixed(1) : <span className="text-muted-foreground">&mdash;</span>}

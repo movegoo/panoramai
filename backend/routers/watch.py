@@ -385,6 +385,26 @@ async def get_dashboard_data(
     ps_latest_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "playstore")
     as_latest_map = _batch_load_latest(db, AppData, comp_ids, AppData.store == "appstore")
 
+    # Snapchat ads: batch-load counts + impressions per competitor
+    snap_data_map = {}
+    if comp_ids:
+        snap_rows = db.query(
+            Ad.competitor_id,
+            func.count(Ad.id).label("cnt"),
+            func.coalesce(func.sum(Ad.impressions_min), 0).label("imp"),
+        ).filter(
+            Ad.competitor_id.in_(comp_ids),
+            Ad.platform == "snapchat",
+        ).group_by(Ad.competitor_id).all()
+        for row in snap_rows:
+            snap_data_map[row.competitor_id] = {
+                "ads_count": row.cnt,
+                "total_impressions": row.imp,
+            }
+
+    # Build entity_name lookup for snap
+    snap_entity_map = {c.id: c.snapchat_entity_name for c in competitors if c.snapchat_entity_name}
+
     competitor_data = []
 
     for comp in competitors:
@@ -482,6 +502,16 @@ async def get_dashboard_data(
             total_social if total_social > 0 else None,
         )
 
+        # Snapchat
+        snap_raw = snap_data_map.get(comp.id)
+        snap_data = None
+        if snap_raw and snap_raw["ads_count"] > 0:
+            snap_data = {
+                "ads_count": snap_raw["ads_count"],
+                "total_impressions": snap_raw["total_impressions"],
+                "entity_name": snap_entity_map.get(comp.id),
+            }
+
         competitor_data.append({
             "id": comp.id,
             "name": comp.name,
@@ -493,6 +523,7 @@ async def get_dashboard_data(
             "youtube": yt_data,
             "playstore": ps_data,
             "appstore": as_data,
+            "snapchat": snap_data,
             "total_social": total_social,
             "avg_app_rating": avg_rating,
         })
@@ -536,6 +567,7 @@ async def get_dashboard_data(
             "youtube": None,
             "playstore": None,
             "appstore": None,
+            "snapchat": None,
             "total_social": 0,
             "avg_app_rating": None,
         }
@@ -714,6 +746,12 @@ def _get_platform_leaders(competitors: list) -> dict:
     if aps:
         leader = max(aps, key=lambda x: x["appstore"]["rating"])
         leaders["appstore"] = {"leader": leader["name"], "value": leader["appstore"]["rating"], "logo_url": leader.get("logo_url")}
+
+    # Snapchat (by ads count)
+    snap = [c for c in competitors if c.get("snapchat") and c["snapchat"]["ads_count"] > 0]
+    if snap:
+        leader = max(snap, key=lambda x: x["snapchat"]["ads_count"])
+        leaders["snapchat"] = {"leader": leader["name"], "value": leader["snapchat"]["ads_count"], "logo_url": leader.get("logo_url")}
 
     return leaders
 
@@ -1076,7 +1114,28 @@ def _build_rankings(competitor_data: list, brand_name: str) -> list:
             } for i, c in enumerate(yt_ranked)],
         })
 
-    # 5. App rating ranking (avg of both stores)
+    # 5. Snapchat Ads ranking
+    snap_ranked = sorted(
+        [c for c in competitor_data if c.get("snapchat") and c["snapchat"]["ads_count"] > 0],
+        key=lambda x: x["snapchat"]["ads_count"], reverse=True
+    )
+    if snap_ranked:
+        rankings.append({
+            "id": "snapchat",
+            "label": "Snapchat Ads",
+            "icon": "ghost",
+            "entries": [{
+                "rank": i + 1,
+                "name": c["name"],
+                "logo_url": c.get("logo_url"),
+                "value": c["snapchat"]["ads_count"],
+                "formatted": f"{c['snapchat']['ads_count']} pubs",
+                "is_brand": c["name"].lower() == brand_name.lower(),
+                "extra": f"{format_number(c['snapchat']['total_impressions'])} imp." if c["snapchat"].get("total_impressions") else None,
+            } for i, c in enumerate(snap_ranked)],
+        })
+
+    # 6. App rating ranking (avg of both stores)
     app_ranked = sorted(
         [c for c in competitor_data if c["avg_app_rating"]],
         key=lambda x: x["avg_app_rating"], reverse=True
