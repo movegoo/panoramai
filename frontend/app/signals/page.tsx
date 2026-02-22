@@ -62,6 +62,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; icon: typeof Instagram }>
   appstore: { label: "App Store", icon: Smartphone },
   meta_ads: { label: "Meta Ads", icon: Megaphone },
   facebook: { label: "Facebook", icon: Globe },
+  snapchat: { label: "Snapchat", icon: Megaphone },
 };
 
 function SeverityBadge({ severity }: { severity: string }) {

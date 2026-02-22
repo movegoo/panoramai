@@ -12,7 +12,7 @@ import logging
 
 from database import (
     get_db, Competitor, Ad, InstagramData, TikTokData,
-    YouTubeData, AppData, AdSnapshot, User
+    YouTubeData, AppData, AdSnapshot, User,
 )
 from core.auth import get_current_user
 from core.permissions import get_user_competitors, get_user_competitor_ids, parse_advertiser_header
@@ -63,6 +63,7 @@ async def get_timeseries(
             "playstore": _get_app_series(db, comp_id, "playstore", start, end),
             "appstore": _get_app_series(db, comp_id, "appstore", start, end),
             "ads": _get_ads_series(db, comp_id, start, end),
+            "snapchat": _get_snapchat_series(db, comp_id, start, end),
         }
         result[str(comp_id)] = comp_data
 
@@ -185,6 +186,30 @@ def _get_app_series(db: Session, comp_id: int, store: str, start: datetime, end:
         "rating": [{"date": r.recorded_at.isoformat(), "value": r.rating} for r in rows],
         "reviews_count": [{"date": r.recorded_at.isoformat(), "value": r.reviews_count} for r in rows],
         "downloads": [{"date": r.recorded_at.isoformat(), "value": r.downloads_numeric} for r in rows if r.downloads_numeric],
+    }
+
+
+def _get_snapchat_series(db: Session, comp_id: int, start: datetime, end: datetime) -> dict:
+    """Snapchat ads count timeseries from Ad table (platform=snapchat)."""
+    rows = (
+        db.query(
+            func.date(Ad.start_date).label("day"),
+            func.count(Ad.id).label("ads_count"),
+            func.coalesce(func.sum(Ad.impressions_min), 0).label("impressions"),
+        )
+        .filter(
+            Ad.competitor_id == comp_id,
+            Ad.platform == "snapchat",
+            Ad.start_date >= start,
+            Ad.start_date <= end,
+        )
+        .group_by(func.date(Ad.start_date))
+        .order_by(func.date(Ad.start_date))
+        .all()
+    )
+    return {
+        "ads_count": [{"date": str(r.day), "value": r.ads_count} for r in rows],
+        "impressions": [{"date": str(r.day), "value": int(r.impressions)} for r in rows],
     }
 
 
@@ -333,6 +358,21 @@ def _compute_deltas(db: Session, comp_id: int, start: datetime, end: datetime) -
             int(ad_latest.reach or 0),
             int(ad_prev.reach or 0) if ad_prev else None
         )
+
+    # Snapchat Ads
+    snap_latest_count = db.query(func.count(Ad.id)).filter(
+        Ad.competitor_id == comp_id,
+        Ad.platform == "snapchat",
+    ).scalar() or 0
+
+    snap_impressions = db.query(func.coalesce(func.sum(Ad.impressions_min), 0)).filter(
+        Ad.competitor_id == comp_id,
+        Ad.platform == "snapchat",
+    ).scalar() or 0
+
+    if snap_latest_count > 0:
+        metrics["snap_ads"] = {"value": snap_latest_count, "previous": None, "delta": None, "delta_pct": None}
+        metrics["snap_impressions"] = {"value": int(snap_impressions), "previous": None, "delta": None, "delta_pct": None}
 
     return metrics
 

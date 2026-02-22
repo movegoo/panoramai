@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+from sqlalchemy import func
+
 from database import get_db, Competitor, Ad, User
 from services.apify_snapchat import apify_snapchat
 from core.auth import get_current_user
@@ -63,6 +65,44 @@ def _serialize_snap_ad(ad: Ad) -> dict:
         "creative_summary": ad.creative_summary,
         "creative_analyzed_at": ad.creative_analyzed_at.isoformat() if ad.creative_analyzed_at else None,
     }
+
+
+@router.get("/comparison")
+async def compare_snapchat(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Compare Snapchat ads metrics across all tracked competitors."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+
+    rows = (
+        db.query(
+            Ad.competitor_id,
+            func.count(Ad.id).label("ads_count"),
+            func.coalesce(func.sum(Ad.impressions_min), 0).label("impressions_total"),
+        )
+        .filter(
+            Ad.competitor_id.in_([c.id for c in competitors]),
+            Ad.platform == "snapchat",
+        )
+        .group_by(Ad.competitor_id)
+        .all()
+    )
+    snap_map = {r.competitor_id: {"ads_count": r.ads_count, "impressions_total": int(r.impressions_total)} for r in rows}
+
+    return [
+        {
+            "competitor_id": c.id,
+            "competitor_name": c.name,
+            "ads_count": snap_map.get(c.id, {}).get("ads_count", 0),
+            "impressions_total": snap_map.get(c.id, {}).get("impressions_total", 0),
+            "entity_name": c.snapchat_entity_name,
+        }
+        for c in competitors
+        if snap_map.get(c.id) or c.snapchat_entity_name
+    ]
 
 
 @router.get("/ads/all")

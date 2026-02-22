@@ -34,6 +34,7 @@ interface CompetitorTrends {
   playstore: MetricSeries;
   appstore: MetricSeries;
   ads: MetricSeries;
+  snapchat: MetricSeries;
 }
 
 interface TimeseriesResponse {
@@ -61,6 +62,14 @@ interface SummaryResponse {
   date_from: string;
   date_to: string;
   competitors: CompetitorSummary[];
+}
+
+function SnapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.2 2c-3.3 0-5.8 1.6-6.8 4.4-.3.9-.4 1.9-.4 3v1.5c-.5-.1-1.1-.2-1.5 0-.5.2-.7.7-.5 1.2.2.4.5.6.9.7.2.1.5.1.7.1.1.1.2.3.2.5-.2.8-.5 1.5-1 2.1-.6.8-1.3 1.4-2.1 1.8-.5.2-.8.7-.7 1.2.1.5.4.8.9 1 .7.2 1.4.3 2.1.5.1.3.3.8.5 1.1.2.3.5.5.9.5.3 0 .7-.1 1.2-.3.7-.2 1.5-.5 2.7-.5s2 .3 2.7.5c.4.2.8.3 1.2.3.4 0 .7-.2.9-.5.2-.3.3-.7.5-1.1.7-.1 1.4-.3 2.1-.5.5-.2.8-.5.9-1 .1-.5-.2-1-.7-1.2-.8-.4-1.6-1-2.1-1.8-.5-.6-.8-1.3-1-2.1 0-.2.1-.4.2-.5.2 0 .5 0 .7-.1.4-.1.7-.3.9-.7.2-.5 0-1-.5-1.2-.4-.2-1-.1-1.5 0V9.4c0-1.1-.1-2.1-.4-3C18 3.6 15.5 2 12.2 2z" />
+    </svg>
+  );
 }
 
 /* ─── Constants ─────────────────────────────────── */
@@ -92,6 +101,8 @@ const METRIC_CATEGORIES = [
       { key: "yt_subscribers", label: "Abonnes YouTube", icon: <Youtube className="h-3.5 w-3.5" />, source: "youtube", field: "subscribers", format: "number" },
       { key: "yt_views", label: "Vues YouTube", icon: <Eye className="h-3.5 w-3.5" />, source: "youtube", field: "total_views", format: "number" },
       { key: "yt_engagement", label: "Engagement YouTube", icon: <Heart className="h-3.5 w-3.5" />, source: "youtube", field: "engagement_rate", format: "percent" },
+      { key: "snap_ads", label: "Pubs Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "ads_count", format: "number" },
+      { key: "snap_impressions", label: "Impressions Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "impressions", format: "number" },
     ],
   },
   {

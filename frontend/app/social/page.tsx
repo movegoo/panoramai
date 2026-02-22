@@ -8,10 +8,12 @@ import {
   instagramAPI,
   tiktokAPI,
   youtubeAPI,
+  snapchatAPI,
   brandAPI,
   socialContentAPI,
   CompetitorListItem,
   ContentInsights,
+  SnapchatComparison,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
@@ -115,6 +117,7 @@ export default function SocialPage() {
   const [igComparison, setIgComparison] = useState<any[]>([]);
   const [ttComparison, setTtComparison] = useState<any[]>([]);
   const [ytComparison, setYtComparison] = useState<any[]>([]);
+  const [scComparison, setScComparison] = useState<SnapchatComparison[]>([]);
   const [brandName, setBrandName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
@@ -132,6 +135,7 @@ export default function SocialPage() {
   const { data: swrIg } = useAPI<any[]>(`/instagram/comparison?days=${periodDays}`);
   const { data: swrTt } = useAPI<any[]>(`/tiktok/comparison?days=${periodDays}`);
   const { data: swrYt } = useAPI<any[]>(`/youtube/comparison?days=${periodDays}`);
+  const { data: swrSc } = useAPI<SnapchatComparison[]>("/snapchat/comparison");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
   const { data: swrCi } = useAPI<ContentInsights>(`/social-content/insights${contentPlatform ? `?platform=${contentPlatform}` : ""}`);
 
@@ -148,6 +152,9 @@ export default function SocialPage() {
   useEffect(() => {
     if (swrYt) setYtComparison(swrYt);
   }, [swrYt]);
+  useEffect(() => {
+    if (swrSc) setScComparison(swrSc);
+  }, [swrSc]);
   useEffect(() => {
     if (swrBrand?.company_name) setBrandName(swrBrand.company_name);
   }, [swrBrand]);
@@ -358,18 +365,22 @@ export default function SocialPage() {
 
   // Cross-platform overview
   const crossPlatformData = useMemo(() => {
-    const competitorMap = new Map<number, { id: number; name: string; ig: any; tt: any; yt: any }>();
+    const competitorMap = new Map<number, { id: number; name: string; ig: any; tt: any; yt: any; sc: SnapchatComparison | null }>();
     igComparison.forEach(c => {
-      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null, sc: null });
       competitorMap.get(c.competitor_id)!.ig = c;
     });
     ttComparison.forEach(c => {
-      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null, sc: null });
       competitorMap.get(c.competitor_id)!.tt = c;
     });
     ytComparison.forEach(c => {
-      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null });
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null, sc: null });
       competitorMap.get(c.competitor_id)!.yt = c;
+    });
+    scComparison.forEach(c => {
+      if (!competitorMap.has(c.competitor_id)) competitorMap.set(c.competitor_id, { id: c.competitor_id, name: c.competitor_name, ig: null, tt: null, yt: null, sc: null });
+      competitorMap.get(c.competitor_id)!.sc = c;
     });
     return Array.from(competitorMap.values())
       .map(c => ({
@@ -382,10 +393,10 @@ export default function SocialPage() {
           if (c.yt?.subscriber_growth_7d != null) growths.push(c.yt.subscriber_growth_7d);
           return growths.length > 0 ? growths.reduce((a, b) => a + b, 0) / growths.length : 0;
         })(),
-        platformCount: (c.ig ? 1 : 0) + (c.tt ? 1 : 0) + (c.yt ? 1 : 0),
+        platformCount: (c.ig ? 1 : 0) + (c.tt ? 1 : 0) + (c.yt ? 1 : 0) + (c.sc && c.sc.ads_count > 0 ? 1 : 0),
       }))
       .sort((a, b) => b.totalReach - a.totalReach);
-  }, [igComparison, ttComparison, ytComparison]);
+  }, [igComparison, ttComparison, ytComparison, scComparison]);
 
   // Current platform data
   const currentData = platform === "instagram" ? igComparison : platform === "tiktok" ? ttComparison : ytComparison;
@@ -473,12 +484,13 @@ export default function SocialPage() {
             <ExportMenu
               variant="dark"
               filename="social_vue_ensemble"
-              data={crossPlatformData.map(c => ({ name: c.name, ig_followers: c.ig?.followers, tt_followers: c.tt?.followers, yt_subscribers: c.yt?.subscribers, total: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) }))}
+              data={crossPlatformData.map(c => ({ name: c.name, ig_followers: c.ig?.followers, tt_followers: c.tt?.followers, yt_subscribers: c.yt?.subscribers, snap_ads: c.sc?.ads_count || 0, total: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) }))}
               columns={[
                 { key: "name", label: "Concurrent" },
                 { key: "ig_followers", label: "Instagram" },
                 { key: "tt_followers", label: "TikTok" },
                 { key: "yt_subscribers", label: "YouTube" },
+                { key: "snap_ads", label: "Snap Ads" },
                 { key: "total", label: "Audience totale" },
               ]}
             />
@@ -492,6 +504,7 @@ export default function SocialPage() {
                   <th className="text-right pb-3 font-semibold">Instagram</th>
                   <th className="text-right pb-3 font-semibold">TikTok</th>
                   <th className="text-right pb-3 font-semibold">YouTube</th>
+                  <th className="text-right pb-3 font-semibold">Snap Ads</th>
                   <th className="text-right pb-3 font-semibold">Audience totale</th>
                   <th className="text-right pb-3 font-semibold">Tendance 7j</th>
                 </tr>
@@ -522,6 +535,9 @@ export default function SocialPage() {
                     </td>
                     <td className="py-2.5 text-right text-sm tabular-nums">
                       {c.yt ? <span className="text-red-300">{formatNumber(c.yt.subscribers)}</span> : <span className="text-white/20">&mdash;</span>}
+                    </td>
+                    <td className="py-2.5 text-right text-sm tabular-nums">
+                      {c.sc && c.sc.ads_count > 0 ? <span className="text-yellow-300">{c.sc.ads_count} pubs</span> : <span className="text-white/20">&mdash;</span>}
                     </td>
                     <td className="py-2.5 text-right">
                       <span className="text-sm font-bold tabular-nums">{formatNumber(c.totalReach)}</span>

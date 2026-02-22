@@ -219,3 +219,72 @@ class TestDashboardSnapchat:
         assert snap_ranking["label"] == "Snapchat Ads"
         assert len(snap_ranking["entries"]) == 1
         assert snap_ranking["entries"][0]["value"] == 1
+
+
+class TestSnapchatComparison:
+    """Test /snapchat/comparison endpoint."""
+
+    def test_comparison_empty(self, client, adv_headers, test_competitor, db):
+        """Comparison returns empty when no Snapchat data."""
+        resp = client.get("/api/snapchat/comparison", headers=adv_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data, list)
+
+    def test_comparison_with_ads(self, client, adv_headers, test_competitor, db):
+        """Comparison returns ads count and impressions."""
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_entity_name = "Test Entity"
+        db.commit()
+
+        for i in range(3):
+            db.add(Ad(
+                competitor_id=comp.id,
+                ad_id=f"snap_comp_{i}",
+                platform="snapchat",
+                impressions_min=1000 * (i + 1),
+                is_active=True,
+            ))
+        db.commit()
+
+        resp = client.get("/api/snapchat/comparison", headers=adv_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        entry = next(c for c in data if c["competitor_id"] == comp.id)
+        assert entry["ads_count"] == 3
+        assert entry["impressions_total"] == 6000
+        assert entry["entity_name"] == "Test Entity"
+
+
+class TestTrendsSnapchat:
+    """Test Snapchat data in trends API."""
+
+    def test_timeseries_includes_snapchat(self, client, adv_headers, test_competitor, db):
+        """Timeseries should include snapchat field for each competitor."""
+        resp = client.get("/api/trends/timeseries?date_from=2025-01-01&date_to=2026-12-31", headers=adv_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        for comp_id, comp_data in data["competitors"].items():
+            assert "snapchat" in comp_data
+            assert "ads_count" in comp_data["snapchat"]
+            assert "impressions" in comp_data["snapchat"]
+
+    def test_summary_includes_snap_metrics(self, client, adv_headers, test_competitor, db):
+        """Summary should include snap_ads metric when ads exist."""
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        db.add(Ad(
+            competitor_id=comp.id,
+            ad_id="snap_trend_1",
+            platform="snapchat",
+            impressions_min=5000,
+            is_active=True,
+        ))
+        db.commit()
+
+        resp = client.get("/api/trends/summary?date_from=2025-01-01&date_to=2026-12-31", headers=adv_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        comp_entry = next(c for c in data["competitors"] if c["competitor_id"] == comp.id)
+        assert "snap_ads" in comp_entry["metrics"]
+        assert comp_entry["metrics"]["snap_ads"]["value"] == 1

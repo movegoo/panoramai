@@ -750,12 +750,23 @@ export const googleAdsAPI = {
 };
 
 // Snapchat Ads API
+export interface SnapchatComparison {
+  competitor_id: number;
+  competitor_name: string;
+  ads_count: number;
+  impressions_total: number;
+  entity_name?: string;
+}
+
 export const snapchatAPI = {
   getAllAds: () =>
     fetchAPI<(Ad & { competitor_name: string })[]>("/snapchat/ads/all"),
 
   getAds: (competitorId: number) =>
     fetchAPI<Ad[]>(`/snapchat/ads/${competitorId}`),
+
+  getComparison: () =>
+    fetchAPI<SnapchatComparison[]>("/snapchat/comparison"),
 
   fetchAds: (competitorId: number) =>
     fetchAPI<{ message: string; ads_detected: number; new_stored: number }>(
