@@ -42,10 +42,11 @@ import {
   Music,
   Youtube,
   Layers,
+  Megaphone,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
-type Platform = "instagram" | "tiktok" | "youtube";
+type Platform = "instagram" | "tiktok" | "youtube" | "snapchat";
 type RankingView = "audience" | "engagement" | "growth" | "efficiency";
 
 const PLATFORM_CONFIG = {
@@ -81,6 +82,17 @@ const PLATFORM_CONFIG = {
     border: "border-red-200 dark:border-red-900",
     link: (channelId: string) => `https://youtube.com/channel/${channelId}`,
     linkLabel: () => "YouTube",
+  },
+  snapchat: {
+    label: "Snapchat",
+    gradient: "from-yellow-400 via-yellow-300 to-yellow-500",
+    darkBg: "from-yellow-950 via-yellow-900 to-yellow-950",
+    accent: "text-yellow-500",
+    dot: "bg-yellow-400",
+    lightBg: "bg-yellow-50 dark:bg-yellow-950/30",
+    border: "border-yellow-200 dark:border-yellow-900",
+    link: () => "https://adsgallery.snap.com/",
+    linkLabel: (entity: string) => entity || "Snapchat Ads",
   },
 };
 
@@ -261,6 +273,7 @@ export default function SocialPage() {
         if (platform === "instagram") return c.active_channels.includes("instagram");
         if (platform === "tiktok") return c.active_channels.includes("tiktok");
         if (platform === "youtube") return c.active_channels.includes("youtube");
+        if (platform === "snapchat") return true; // Snapchat fetches for all
         return false;
       });
       for (const c of relevantCompetitors) {
@@ -268,6 +281,7 @@ export default function SocialPage() {
           if (platform === "instagram") await instagramAPI.fetch(c.id);
           if (platform === "tiktok") await tiktokAPI.fetch(c.id);
           if (platform === "youtube") await youtubeAPI.fetch(c.id);
+          if (platform === "snapchat") await snapchatAPI.fetchAds(c.id);
         } catch {}
       }
       const [ig, tt, yt] = await Promise.allSettled([
@@ -398,12 +412,25 @@ export default function SocialPage() {
       .sort((a, b) => b.totalReach - a.totalReach);
   }, [igComparison, ttComparison, ytComparison, scComparison]);
 
-  // Current platform data
-  const currentData = platform === "instagram" ? igComparison : platform === "tiktok" ? ttComparison : ytComparison;
+  // Current platform data — Snapchat uses comparison format mapped to common shape
+  const snapAsRanking = useMemo(() => scComparison.map(c => ({
+    competitor_id: c.competitor_id,
+    competitor_name: c.competitor_name,
+    followers: c.ads_count,
+    ads_count: c.ads_count,
+    impressions_total: c.impressions_total,
+    entity_name: c.entity_name,
+  })), [scComparison]);
+  const currentData = platform === "instagram" ? igComparison : platform === "tiktok" ? ttComparison : platform === "youtube" ? ytComparison : snapAsRanking;
   const config = PLATFORM_CONFIG[platform];
 
   // Get ranking metric
   function getRankingValue(c: any): number {
+    if (platform === "snapchat") {
+      if (rankingView === "audience") return c.ads_count || 0;
+      if (rankingView === "engagement") return c.impressions_total || 0;
+      return c.ads_count || 0;
+    }
     if (rankingView === "audience") return platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
     if (rankingView === "engagement") {
       if (platform === "instagram") return c.engagement_rate || 0;
@@ -420,6 +447,11 @@ export default function SocialPage() {
   }
 
   function getRankingLabel(): string {
+    if (platform === "snapchat") {
+      if (rankingView === "audience") return "pubs actives";
+      if (rankingView === "engagement") return "impressions";
+      return "pubs actives";
+    }
     if (rankingView === "audience") return platform === "youtube" ? "abonnes" : "followers";
     if (rankingView === "engagement") return platform === "tiktok" ? "likes/video" : "engagement";
     if (rankingView === "growth") return "croissance 7j";
@@ -432,6 +464,7 @@ export default function SocialPage() {
   }
 
   function formatRankingValue(val: number): string {
+    if (platform === "snapchat") return formatNumber(Math.round(val));
     if (rankingView === "engagement") return platform === "tiktok" ? formatNumber(Math.round(val)) : `${val.toFixed(2)}%`;
     if (rankingView === "growth") return `${val > 0 ? "+" : ""}${val.toFixed(1)}%`;
     return formatNumber(Math.round(val));
@@ -555,9 +588,9 @@ export default function SocialPage() {
 
       {/* Platform selector */}
       <div className="flex items-center gap-1 p-1 rounded-full bg-card border border-border w-fit">
-        {(["instagram", "tiktok", "youtube"] as Platform[]).map((p) => {
+        {(["instagram", "tiktok", "youtube", "snapchat"] as Platform[]).map((p) => {
           const pConfig = PLATFORM_CONFIG[p];
-          const pData = p === "instagram" ? igComparison : p === "tiktok" ? ttComparison : ytComparison;
+          const pData = p === "instagram" ? igComparison : p === "tiktok" ? ttComparison : p === "youtube" ? ytComparison : scComparison;
           const isActive = platform === p;
           return (
             <button
@@ -598,7 +631,7 @@ export default function SocialPage() {
           {/* ── Ranking View Selector ── */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mr-1">Classer par</span>
-            {RANKING_VIEWS_BASE.map(rv => (
+            {(platform === "snapchat" ? RANKING_VIEWS_BASE.filter(rv => rv.key === "audience" || rv.key === "engagement") : RANKING_VIEWS_BASE).map(rv => (
               <button
                 key={rv.key}
                 onClick={() => setRankingView(rv.key)}
@@ -668,7 +701,7 @@ export default function SocialPage() {
 
                   {/* Secondary metrics */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {rankingView !== "audience" && (
+                    {platform !== "snapchat" && rankingView !== "audience" && (
                       <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                         <Users className="h-3 w-3" />{formatNumber(followers)}
                       </span>
@@ -720,6 +753,20 @@ export default function SocialPage() {
                         )}
                       </>
                     )}
+                    {platform === "snapchat" && (
+                      <>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            {formatNumber(c.impressions_total || 0)} impressions
+                          </span>
+                        )}
+                        {c.entity_name && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            {c.entity_name}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -752,7 +799,7 @@ export default function SocialPage() {
                 <thead>
                   <tr className="bg-muted/30">
                     <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
-                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : "Followers"}</th>
+                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : platform === "snapchat" ? "Pubs actives" : "Followers"}</th>
                     {platform === "instagram" && (
                       <>
                         <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
@@ -774,12 +821,20 @@ export default function SocialPage() {
                         <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
                       </>
                     )}
-                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">7j</th>
+                    {platform === "snapchat" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Impressions</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Entity</th>
+                      </>
+                    )}
+                    {platform !== "snapchat" && (
+                      <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">7j</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.map((c, i) => {
-                    const val = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
+                    const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.ads_count || 0) : (c.followers || 0);
                     const brand = isBrand(c.competitor_name);
                     return (
                       <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
@@ -821,9 +876,17 @@ export default function SocialPage() {
                             <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
                           </>
                         )}
-                        <td className="px-4 py-3 text-right">
-                          <GrowthBadge value={c.follower_growth_7d ?? c.subscriber_growth_7d} />
-                        </td>
+                        {platform === "snapchat" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.impressions_total || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{c.entity_name || "\u2014"}</td>
+                          </>
+                        )}
+                        {platform !== "snapchat" && (
+                          <td className="px-4 py-3 text-right">
+                            <GrowthBadge value={c.follower_growth_7d ?? c.subscriber_growth_7d} />
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -893,6 +956,7 @@ export default function SocialPage() {
             { key: "instagram", label: "Instagram", icon: <Instagram className="h-3 w-3" /> },
             { key: "tiktok", label: "TikTok", icon: <Music className="h-3 w-3" /> },
             { key: "youtube", label: "YouTube", icon: <Youtube className="h-3 w-3" /> },
+            { key: "snapchat", label: "Snapchat", icon: <Megaphone className="h-3 w-3" /> },
           ] as { key: string | null; label: string; icon: React.ReactNode }[]).map((p) => {
             const isActive = contentPlatform === p.key;
             return (
