@@ -37,12 +37,21 @@ async def debug_creative_db(db: Session = Depends(get_db)):
     # Users
     users = db.query(User).all()
     user_info = [{"id": u.id, "email": u.email} for u in users]
+    # Advertisers
+    from database import Advertiser
+    advertisers = db.query(Advertiser).all()
+    adv_info = [{"id": a.id, "name": a.name, "user_id": a.user_id} for a in advertisers]
+    # Competitors with advertiser_id
+    all_comps = db.query(Competitor).filter(Competitor.user_id == 1).all()
+    comp_adv = [{"id": c.id, "name": c.name, "advertiser_id": c.advertiser_id} for c in all_comps]
     return {
         "total_ads": total,
         "analyzed": analyzed,
         "with_score": with_score,
         "users": user_info,
         "analyzed_by_competitor": comp_analysis,
+        "advertisers": adv_info,
+        "user1_competitors_advertiser_id": comp_adv,
     }
 
 # Formats that have a static image to analyze
