@@ -14,10 +14,11 @@ from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from database import get_db, Competitor, SerpResult, Advertiser, User
+from database import get_db, Competitor, SerpResult, Advertiser, User, AdvertiserCompetitor, UserAdvertiser
 from services.scrapecreators import scrapecreators
 from core.auth import get_current_user, get_optional_user
 from core.sectors import get_sector_label
+from core.permissions import parse_advertiser_header
 
 logger = logging.getLogger(__name__)
 
@@ -335,12 +336,16 @@ SECTOR_SEO_KEYWORDS: dict[str, list[str]] = {
 
 
 def _get_user_brand(db: Session, user: User | None, x_advertiser_id: str | None = None) -> Advertiser | None:
-    """Get the user's brand (Advertiser), scoped by advertiser_id when switching brands."""
-    query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Advertiser.id == int(x_advertiser_id))
+    """Get the user's brand (Advertiser) via UserAdvertiser join table."""
+    if not user:
+        return None
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if not user_adv_ids:
+        return None
+    query = db.query(Advertiser).filter(Advertiser.is_active == True, Advertiser.id.in_(user_adv_ids))
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    if adv_id:
+        query = query.filter(Advertiser.id == adv_id)
     return query.first()
 
 
@@ -373,32 +378,27 @@ def _extract_domain(url: str) -> str:
         return ""
 
 
-def _fix_orphan_competitors(db: Session, user: User, x_advertiser_id: str | None = None):
-    """Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser."""
-    orphan_count = db.query(Competitor).filter(
-        Competitor.is_active == True, Competitor.user_id == user.id, Competitor.advertiser_id == None,
-    ).count()
-    if orphan_count > 0:
-        first_adv = db.query(Advertiser).filter(
-            Advertiser.user_id == user.id, Advertiser.is_active == True,
-        ).order_by(Advertiser.id).first()
-        if first_adv:
-            db.query(Competitor).filter(
-                Competitor.is_active == True, Competitor.user_id == user.id, Competitor.advertiser_id == None,
-            ).update({"advertiser_id": first_adv.id})
-            db.commit()
-
-
 def _get_user_competitors(db: Session, user: User | None, x_advertiser_id: str | None = None) -> list[Competitor]:
-    """Get active competitors scoped to user."""
-    if user:
-        _fix_orphan_competitors(db, user, x_advertiser_id)
-    query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
-    return query.all()
+    """Get active competitors via AdvertiserCompetitor + UserAdvertiser join tables."""
+    if not user:
+        return []
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    if adv_id:
+        return db.query(Competitor).join(
+            AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id
+        ).filter(
+            AdvertiserCompetitor.advertiser_id == adv_id,
+            Competitor.is_active == True,
+        ).all()
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if not user_adv_ids:
+        return []
+    return db.query(Competitor).join(
+        AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id
+    ).filter(
+        AdvertiserCompetitor.advertiser_id.in_(user_adv_ids),
+        Competitor.is_active == True,
+    ).distinct().all()
 
 
 def _build_domain_map(competitors: list[Competitor]) -> dict[str, int]:
