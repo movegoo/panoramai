@@ -1,10 +1,11 @@
 """Tests for Snapchat integration in scheduler and watch dashboard."""
 import json
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from database import Competitor, Ad, AdvertiserCompetitor
+from database import Competitor, Ad, SnapchatData, AdvertiserCompetitor
 
 
 class TestSchedulerFetchSnapchat:
@@ -288,3 +289,150 @@ class TestTrendsSnapchat:
         comp_entry = next(c for c in data["competitors"] if c["competitor_id"] == comp.id)
         assert "snap_ads" in comp_entry["metrics"]
         assert comp_entry["metrics"]["snap_ads"]["value"] == 1
+
+
+class TestSchedulerFetchSnapchatProfile:
+    """Test _fetch_snapchat_profile stores SnapchatData correctly."""
+
+    MOCK_PROFILE = {
+        "success": True,
+        "subscribers": 125000,
+        "title": "Carrefour France",
+        "story_count": 5,
+        "spotlight_count": 8,
+        "total_views": 500000,
+        "total_shares": 1200,
+        "total_comments": 300,
+        "engagement_rate": 401.2,
+        "profile_picture_url": "https://example.com/avatar.jpg",
+    }
+
+    @pytest.mark.asyncio
+    async def test_fetch_profile_stores_data(self, db, test_competitor):
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_username = "carrefourfrance"
+        db.commit()
+
+        with patch(
+            "services.scrapecreators.scrapecreators.fetch_snapchat_profile",
+            new_callable=AsyncMock,
+            return_value=self.MOCK_PROFILE,
+        ):
+            from services.scheduler import scheduler
+            await scheduler._fetch_snapchat_profile(db, comp, comp.name)
+
+        data = db.query(SnapchatData).filter(SnapchatData.competitor_id == comp.id).first()
+        assert data is not None
+        assert data.subscribers == 125000
+        assert data.spotlight_count == 8
+        assert data.engagement_rate == 401.2
+
+    @pytest.mark.asyncio
+    async def test_fetch_profile_skips_without_username(self, db, test_competitor):
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        assert comp.snapchat_username is None
+
+        from services.scheduler import scheduler
+
+        with patch.object(scheduler, "_fetch_ads", new_callable=AsyncMock), \
+             patch.object(scheduler, "_fetch_snapchat", new_callable=AsyncMock), \
+             patch.object(scheduler, "_fetch_snapchat_profile", new_callable=AsyncMock) as mock_prof, \
+             patch.object(scheduler, "_fetch_google_ads", new_callable=AsyncMock):
+            await scheduler._fetch_competitor_data(db, comp)
+
+        mock_prof.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_profile_rate_limiting(self, db, test_competitor):
+        """Should skip fetch if data less than 1 hour old."""
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_username = "carrefourfrance"
+        db.commit()
+
+        # Insert recent data
+        db.add(SnapchatData(
+            competitor_id=comp.id,
+            subscribers=100000,
+            recorded_at=datetime.utcnow() - timedelta(minutes=30),
+        ))
+        db.commit()
+
+        with patch(
+            "services.scrapecreators.scrapecreators.fetch_snapchat_profile",
+            new_callable=AsyncMock,
+        ) as mock_fetch:
+            from services.scheduler import scheduler
+            await scheduler._fetch_snapchat_profile(db, comp, comp.name)
+
+        mock_fetch.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_profile_allows_after_1h(self, db, test_competitor):
+        """Should fetch if data is more than 1 hour old."""
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_username = "carrefourfrance"
+        db.commit()
+
+        # Insert old data
+        db.add(SnapchatData(
+            competitor_id=comp.id,
+            subscribers=100000,
+            recorded_at=datetime.utcnow() - timedelta(hours=2),
+        ))
+        db.commit()
+
+        with patch(
+            "services.scrapecreators.scrapecreators.fetch_snapchat_profile",
+            new_callable=AsyncMock,
+            return_value=self.MOCK_PROFILE,
+        ):
+            from services.scheduler import scheduler
+            await scheduler._fetch_snapchat_profile(db, comp, comp.name)
+
+        data = db.query(SnapchatData).filter(SnapchatData.competitor_id == comp.id).order_by(SnapchatData.recorded_at.desc()).first()
+        assert data.subscribers == 125000
+
+    @pytest.mark.asyncio
+    async def test_fetch_competitor_data_calls_profile(self, db, test_competitor):
+        """_fetch_competitor_data should call _fetch_snapchat_profile when username set."""
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_username = "carrefourfrance"
+        db.commit()
+
+        from services.scheduler import scheduler
+
+        with patch.object(scheduler, "_fetch_ads", new_callable=AsyncMock), \
+             patch.object(scheduler, "_fetch_snapchat", new_callable=AsyncMock), \
+             patch.object(scheduler, "_fetch_snapchat_profile", new_callable=AsyncMock) as mock_prof, \
+             patch.object(scheduler, "_fetch_google_ads", new_callable=AsyncMock):
+            await scheduler._fetch_competitor_data(db, comp)
+
+        mock_prof.assert_called_once_with(db, comp, comp.name)
+
+
+class TestDashboardSnapchatProfile:
+    """Test Snapchat profile data appears in watch dashboard."""
+
+    def test_dashboard_includes_subscribers(self, client, adv_headers, test_competitor, db):
+        comp = db.query(Competitor).filter(Competitor.id == test_competitor.id).first()
+        comp.snapchat_username = "carrefourfrance"
+        db.commit()
+
+        db.add(SnapchatData(
+            competitor_id=comp.id,
+            subscribers=125000,
+            engagement_rate=5.2,
+            spotlight_count=10,
+        ))
+        db.commit()
+
+        resp = client.get("/api/watch/dashboard", headers=adv_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+
+        all_entries = data["competitors"] + ([data["brand"]] if data.get("brand") else [])
+        comp_entry = next((c for c in all_entries if c["id"] == comp.id), None)
+        assert comp_entry is not None
+        assert comp_entry["snapchat"]["subscribers"] == 125000
+        assert comp_entry["snapchat"]["engagement_rate"] == 5.2
+        assert comp_entry["snapchat"]["spotlight_count"] == 10

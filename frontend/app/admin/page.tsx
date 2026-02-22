@@ -289,6 +289,9 @@ function CompetitorPagesRow({
                   {p.snapchat.handle && (
                     <span className="text-[11px] text-muted-foreground font-mono">{p.snapchat.handle}</span>
                   )}
+                  {p.snapchat.username && (
+                    <span className="text-[11px] text-muted-foreground font-mono">@{p.snapchat.username}</span>
+                  )}
                 </div>
                 {p.snapchat.handle && (
                   <button

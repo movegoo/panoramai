@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 import json
 
-from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, User, AdvertiserCompetitor, UserAdvertiser
+from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, SnapchatData, Ad, User, AdvertiserCompetitor, UserAdvertiser
 from models.schemas import (
     WatchOverview, MarketPosition, KeyMetric, Trend, TrendDirection,
     Alert, AlertsList, AlertType, AlertSeverity, Channel,
@@ -402,6 +402,9 @@ async def get_dashboard_data(
                 "total_impressions": row.imp,
             }
 
+    # Snapchat profile data: batch-load latest SnapchatData
+    snap_profile_map = _batch_load_latest(db, SnapchatData, comp_ids) if comp_ids else {}
+
     # Build entity_name lookup for snap
     snap_entity_map = {c.id: c.snapchat_entity_name for c in competitors if c.snapchat_entity_name}
 
@@ -504,12 +507,16 @@ async def get_dashboard_data(
 
         # Snapchat
         snap_raw = snap_data_map.get(comp.id)
+        snap_profile = snap_profile_map.get(comp.id)
         snap_data = None
-        if snap_raw and snap_raw["ads_count"] > 0:
+        if (snap_raw and snap_raw["ads_count"] > 0) or snap_profile:
             snap_data = {
-                "ads_count": snap_raw["ads_count"],
-                "total_impressions": snap_raw["total_impressions"],
+                "ads_count": snap_raw["ads_count"] if snap_raw else 0,
+                "total_impressions": snap_raw["total_impressions"] if snap_raw else 0,
                 "entity_name": snap_entity_map.get(comp.id),
+                "subscribers": snap_profile.subscribers if snap_profile else None,
+                "engagement_rate": snap_profile.engagement_rate if snap_profile else None,
+                "spotlight_count": snap_profile.spotlight_count if snap_profile else None,
             }
 
         competitor_data.append({

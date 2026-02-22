@@ -481,8 +481,9 @@ async def pages_audit(
             },
             "snapchat": {
                 "handle": comp.snapchat_entity_name,
-                "configured": bool(comp.snapchat_entity_name),
+                "configured": bool(comp.snapchat_entity_name) or bool(comp.snapchat_username),
                 "detected_pages": snap_pages_map.get(comp.id, []),
+                "username": comp.snapchat_username,
             },
             "playstore": {
                 "handle": comp.playstore_app_id,

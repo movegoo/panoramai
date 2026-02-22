@@ -91,8 +91,8 @@ const PLATFORM_CONFIG = {
     dot: "bg-yellow-400",
     lightBg: "bg-yellow-50 dark:bg-yellow-950/30",
     border: "border-yellow-200 dark:border-yellow-900",
-    link: () => "https://adsgallery.snap.com/",
-    linkLabel: (entity: string) => entity || "Snapchat Ads",
+    link: (handle: string) => handle ? `https://www.snapchat.com/add/${handle}` : "https://adsgallery.snap.com/",
+    linkLabel: (handle: string) => handle ? `@${handle}` : "Snapchat Ads",
   },
 };
 
@@ -399,7 +399,7 @@ export default function SocialPage() {
     return Array.from(competitorMap.values())
       .map(c => ({
         ...c,
-        totalReach: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0),
+        totalReach: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) + (c.sc?.subscribers || 0),
         avgGrowth: (() => {
           const growths: number[] = [];
           if (c.ig?.follower_growth_7d != null) growths.push(c.ig.follower_growth_7d);
@@ -416,10 +416,14 @@ export default function SocialPage() {
   const snapAsRanking = useMemo(() => scComparison.map(c => ({
     competitor_id: c.competitor_id,
     competitor_name: c.competitor_name,
-    followers: c.ads_count,
+    followers: c.subscribers || c.ads_count,
+    subscribers: c.subscribers,
     ads_count: c.ads_count,
     impressions_total: c.impressions_total,
     entity_name: c.entity_name,
+    engagement_rate: c.engagement_rate,
+    spotlight_count: c.spotlight_count,
+    story_count: c.story_count,
   })), [scComparison]);
   const currentData = platform === "instagram" ? igComparison : platform === "tiktok" ? ttComparison : platform === "youtube" ? ytComparison : snapAsRanking;
   const config = PLATFORM_CONFIG[platform];
@@ -427,9 +431,9 @@ export default function SocialPage() {
   // Get ranking metric
   function getRankingValue(c: any): number {
     if (platform === "snapchat") {
-      if (rankingView === "audience") return c.ads_count || 0;
-      if (rankingView === "engagement") return c.impressions_total || 0;
-      return c.ads_count || 0;
+      if (rankingView === "audience") return c.subscribers || c.ads_count || 0;
+      if (rankingView === "engagement") return c.engagement_rate || c.impressions_total || 0;
+      return c.subscribers || c.ads_count || 0;
     }
     if (rankingView === "audience") return platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
     if (rankingView === "engagement") {
@@ -448,9 +452,9 @@ export default function SocialPage() {
 
   function getRankingLabel(): string {
     if (platform === "snapchat") {
-      if (rankingView === "audience") return "pubs actives";
-      if (rankingView === "engagement") return "impressions";
-      return "pubs actives";
+      if (rankingView === "audience") return scComparison.some(c => c.subscribers) ? "subscribers" : "pubs actives";
+      if (rankingView === "engagement") return scComparison.some(c => c.engagement_rate) ? "engagement" : "impressions";
+      return scComparison.some(c => c.subscribers) ? "subscribers" : "pubs actives";
     }
     if (rankingView === "audience") return platform === "youtube" ? "abonnes" : "followers";
     if (rankingView === "engagement") return platform === "tiktok" ? "likes/video" : "engagement";
@@ -570,7 +574,7 @@ export default function SocialPage() {
                       {c.yt ? <span className="text-red-300">{formatNumber(c.yt.subscribers)}</span> : <span className="text-white/20">&mdash;</span>}
                     </td>
                     <td className="py-2.5 text-right text-sm tabular-nums">
-                      {c.sc && c.sc.ads_count > 0 ? <span className="text-yellow-300">{c.sc.ads_count} pubs</span> : <span className="text-white/20">&mdash;</span>}
+                      {c.sc?.subscribers ? <span className="text-yellow-300">{formatNumber(c.sc.subscribers)}</span> : c.sc && c.sc.ads_count > 0 ? <span className="text-yellow-300">{c.sc.ads_count} pubs</span> : <span className="text-white/20">&mdash;</span>}
                     </td>
                     <td className="py-2.5 text-right">
                       <span className="text-sm font-bold tabular-nums">{formatNumber(c.totalReach)}</span>
@@ -799,7 +803,7 @@ export default function SocialPage() {
                 <thead>
                   <tr className="bg-muted/30">
                     <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
-                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : platform === "snapchat" ? "Pubs actives" : "Followers"}</th>
+                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : platform === "snapchat" ? (scComparison.some(c => c.subscribers) ? "Subscribers" : "Pubs actives") : "Followers"}</th>
                     {platform === "instagram" && (
                       <>
                         <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
@@ -823,8 +827,9 @@ export default function SocialPage() {
                     )}
                     {platform === "snapchat" && (
                       <>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Impressions</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Entity</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Engagement" : "Impressions"}</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Spotlights" : "Entity"}</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Stories" : "Pubs"}</th>
                       </>
                     )}
                     {platform !== "snapchat" && (
@@ -834,7 +839,7 @@ export default function SocialPage() {
                 </thead>
                 <tbody>
                   {sorted.map((c, i) => {
-                    const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.ads_count || 0) : (c.followers || 0);
+                    const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.subscribers || c.ads_count || 0) : (c.followers || 0);
                     const brand = isBrand(c.competitor_name);
                     return (
                       <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
@@ -878,8 +883,9 @@ export default function SocialPage() {
                         )}
                         {platform === "snapchat" && (
                           <>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.impressions_total || 0)}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{c.entity_name || "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{scComparison.some(sc => sc.subscribers) ? `${(c.engagement_rate || 0).toFixed(2)}%` : formatNumber(c.impressions_total || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.spotlight_count ?? "\u2014") : (c.entity_name || "\u2014")}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.story_count ?? "\u2014") : (c.ads_count || 0)}</td>
                           </>
                         )}
                         {platform !== "snapchat" && (

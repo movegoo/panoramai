@@ -48,6 +48,7 @@ class Competitor(Base):
     tiktok_username = Column(String(100))
     youtube_channel_id = Column(String(100))
     snapchat_entity_name = Column(String(255))
+    snapchat_username = Column(String(100))
     logo_url = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -62,6 +63,7 @@ class Competitor(Base):
     app_data = relationship("AppData", back_populates="competitor")
     tiktok_data = relationship("TikTokData", back_populates="competitor")
     youtube_data = relationship("YouTubeData", back_populates="competitor")
+    snapchat_data = relationship("SnapchatData", back_populates="competitor")
 
 
 class Ad(Base):
@@ -214,6 +216,25 @@ class YouTubeData(Base):
     competitor = relationship("Competitor", back_populates="youtube_data")
 
 
+class SnapchatData(Base):
+    __tablename__ = "snapchat_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    subscribers = Column(BigInteger)
+    title = Column(String(255))
+    story_count = Column(Integer)
+    spotlight_count = Column(Integer)
+    total_views = Column(BigInteger)
+    total_shares = Column(Integer)
+    total_comments = Column(Integer)
+    engagement_rate = Column(Float)
+    profile_picture_url = Column(String(1000))
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", back_populates="snapchat_data")
+
+
 class StoreLocation(Base):
     """Store location data from BANCO database."""
     __tablename__ = "store_locations"
@@ -285,6 +306,7 @@ class Advertiser(Base):
     tiktok_username = Column(String(100))
     youtube_channel_id = Column(String(100))
     snapchat_entity_name = Column(String(255))
+    snapchat_username = Column(String(100))
     logo_url = Column(String(500))
     contact_email = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -604,6 +626,8 @@ def _run_migrations(engine):
             ("ads", "ad_objective", "VARCHAR(50)"),
             ("competitors", "snapchat_entity_name", "VARCHAR(255)"),
             ("advertisers", "snapchat_entity_name", "VARCHAR(255)"),
+            ("competitors", "snapchat_username", "VARCHAR(100)"),
+            ("advertisers", "snapchat_username", "VARCHAR(100)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
@@ -849,17 +873,17 @@ def _merge_competitor_group(conn, ids: list[int], merged_ids: set[int]):
         # Complement canonical with missing fields from duplicate
         canonical = conn.execute(text(
             'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
-            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, logo_url '
+            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, snapchat_username, logo_url '
             'FROM competitors WHERE id = :cid'
         ), {"cid": best_id}).fetchone()
         donor = conn.execute(text(
             'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
-            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, logo_url '
+            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, snapchat_username, logo_url '
             'FROM competitors WHERE id = :cid'
         ), {"cid": other_id}).fetchone()
 
         fields = ["website", "facebook_page_id", "instagram_username", "playstore_app_id",
-                   "appstore_app_id", "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "logo_url"]
+                   "appstore_app_id", "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "snapchat_username", "logo_url"]
         for i, field in enumerate(fields):
             if not canonical[i] and donor[i]:
                 conn.execute(text(

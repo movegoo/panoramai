@@ -12,8 +12,9 @@ from sqlalchemy import desc
 
 from sqlalchemy import func
 
-from database import get_db, Competitor, Ad, User
+from database import get_db, Competitor, Ad, User, SnapchatData
 from services.apify_snapchat import apify_snapchat
+from services.scrapecreators import scrapecreators
 from core.auth import get_current_user
 from core.permissions import verify_competitor_ownership, get_user_competitors, parse_advertiser_header
 
@@ -67,6 +68,90 @@ def _serialize_snap_ad(ad: Ad) -> dict:
     }
 
 
+@router.post("/profile/fetch")
+async def fetch_snapchat_profile(
+    competitor_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Fetch and store Snapchat profile data for a competitor."""
+    competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
+
+    username = competitor.snapchat_username
+    if not username:
+        raise HTTPException(status_code=400, detail="No snapchat_username configured for this competitor")
+
+    result = await scrapecreators.fetch_snapchat_profile(username)
+    if not result.get("success"):
+        raise HTTPException(status_code=503, detail=f"Snapchat profile fetch error: {result.get('error', 'Unknown')}")
+
+    snap_data = SnapchatData(
+        competitor_id=competitor_id,
+        subscribers=result.get("subscribers", 0),
+        title=result.get("title", ""),
+        story_count=result.get("story_count", 0),
+        spotlight_count=result.get("spotlight_count", 0),
+        total_views=result.get("total_views", 0),
+        total_shares=result.get("total_shares", 0),
+        total_comments=result.get("total_comments", 0),
+        engagement_rate=result.get("engagement_rate", 0),
+        profile_picture_url=result.get("profile_picture_url", ""),
+    )
+    db.add(snap_data)
+    db.commit()
+
+    return {
+        "message": f"Snapchat profile fetched for {competitor.name}",
+        "subscribers": result.get("subscribers", 0),
+        "story_count": result.get("story_count", 0),
+        "spotlight_count": result.get("spotlight_count", 0),
+        "engagement_rate": result.get("engagement_rate", 0),
+    }
+
+
+@router.get("/profile/comparison")
+async def compare_snapchat_profiles(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Compare Snapchat profile metrics across all tracked competitors."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
+    comp_ids = [c.id for c in competitors]
+
+    # Get latest SnapchatData per competitor
+    from sqlalchemy import func as sqlfunc
+    sub = db.query(
+        SnapchatData.competitor_id,
+        sqlfunc.max(SnapchatData.recorded_at).label("max_at"),
+    ).filter(SnapchatData.competitor_id.in_(comp_ids)).group_by(SnapchatData.competitor_id).subquery()
+
+    rows = db.query(SnapchatData).join(
+        sub,
+        (SnapchatData.competitor_id == sub.c.competitor_id) & (SnapchatData.recorded_at == sub.c.max_at),
+    ).all()
+    snap_map = {r.competitor_id: r for r in rows}
+
+    result = []
+    for c in competitors:
+        sd = snap_map.get(c.id)
+        if sd:
+            result.append({
+                "competitor_id": c.id,
+                "competitor_name": c.name,
+                "subscribers": sd.subscribers,
+                "engagement_rate": sd.engagement_rate,
+                "spotlight_count": sd.spotlight_count,
+                "story_count": sd.story_count,
+                "total_views": sd.total_views,
+            })
+
+    result.sort(key=lambda x: x["subscribers"] or 0, reverse=True)
+    return result
+
+
 @router.get("/comparison")
 async def compare_snapchat(
     db: Session = Depends(get_db),
@@ -92,6 +177,21 @@ async def compare_snapchat(
     )
     snap_map = {r.competitor_id: {"ads_count": r.ads_count, "impressions_total": int(r.impressions_total)} for r in rows}
 
+    # Also load latest profile data
+    comp_ids = [c.id for c in competitors]
+    profile_map = {}
+    if comp_ids:
+        from sqlalchemy import func as sqlfunc
+        sub = db.query(
+            SnapchatData.competitor_id,
+            sqlfunc.max(SnapchatData.recorded_at).label("max_at"),
+        ).filter(SnapchatData.competitor_id.in_(comp_ids)).group_by(SnapchatData.competitor_id).subquery()
+        profile_rows = db.query(SnapchatData).join(
+            sub,
+            (SnapchatData.competitor_id == sub.c.competitor_id) & (SnapchatData.recorded_at == sub.c.max_at),
+        ).all()
+        profile_map = {r.competitor_id: r for r in profile_rows}
+
     return [
         {
             "competitor_id": c.id,
@@ -99,9 +199,13 @@ async def compare_snapchat(
             "ads_count": snap_map.get(c.id, {}).get("ads_count", 0),
             "impressions_total": snap_map.get(c.id, {}).get("impressions_total", 0),
             "entity_name": c.snapchat_entity_name,
+            "subscribers": profile_map[c.id].subscribers if c.id in profile_map else None,
+            "engagement_rate": profile_map[c.id].engagement_rate if c.id in profile_map else None,
+            "spotlight_count": profile_map[c.id].spotlight_count if c.id in profile_map else None,
+            "story_count": profile_map[c.id].story_count if c.id in profile_map else None,
         }
         for c in competitors
-        if snap_map.get(c.id) or c.snapchat_entity_name
+        if snap_map.get(c.id) or c.snapchat_entity_name or c.id in profile_map
     ]
 
 

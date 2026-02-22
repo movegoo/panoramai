@@ -12,6 +12,7 @@ export interface Competitor {
   playstore_app_id?: string;
   appstore_app_id?: string;
   snapchat_entity_name?: string;
+  snapchat_username?: string;
   created_at: string;
   updated_at: string;
   is_active: boolean;
@@ -38,6 +39,7 @@ export interface CompetitorListItem {
   playstore_app_id?: string;
   appstore_app_id?: string;
   snapchat_entity_name?: string;
+  snapchat_username?: string;
   created_at?: string;
 }
 
@@ -51,6 +53,7 @@ export interface CompetitorCreate {
   playstore_app_id?: string;
   appstore_app_id?: string;
   snapchat_entity_name?: string;
+  snapchat_username?: string;
 }
 
 export interface DashboardStats {
@@ -756,6 +759,10 @@ export interface SnapchatComparison {
   ads_count: number;
   impressions_total: number;
   entity_name?: string;
+  subscribers?: number;
+  engagement_rate?: number;
+  spotlight_count?: number;
+  story_count?: number;
 }
 
 export const snapchatAPI = {
@@ -779,6 +786,15 @@ export const snapchatAPI = {
       "/snapchat/ads/fetch-all",
       { method: "POST" }
     ),
+
+  fetchProfile: (competitorId: number) =>
+    fetchAPI<{ message: string; subscribers: number; engagement_rate: number }>(
+      `/snapchat/profile/fetch?competitor_id=${competitorId}`,
+      { method: "POST" }
+    ),
+
+  getProfileComparison: () =>
+    fetchAPI<SnapchatComparison[]>("/snapchat/profile/comparison"),
 };
 
 // Brand / Mon Compte API
@@ -981,7 +997,7 @@ export interface CompetitorPlatforms {
   instagram: { handle: string | null; configured: boolean };
   tiktok: { handle: string | null; configured: boolean };
   youtube: { handle: string | null; configured: boolean };
-  snapchat: { handle: string | null; configured: boolean; detected_pages: SnapDetectedPage[] };
+  snapchat: { handle: string | null; username: string | null; configured: boolean; detected_pages: SnapDetectedPage[] };
   playstore: { handle: string | null; configured: boolean };
   appstore: { handle: string | null; configured: boolean };
   google: { ads_count: number; configured: boolean };

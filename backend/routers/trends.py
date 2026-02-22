@@ -12,7 +12,7 @@ import logging
 
 from database import (
     get_db, Competitor, Ad, InstagramData, TikTokData,
-    YouTubeData, AppData, AdSnapshot, User,
+    YouTubeData, AppData, AdSnapshot, User, SnapchatData,
 )
 from core.auth import get_current_user
 from core.permissions import get_user_competitors, get_user_competitor_ids, parse_advertiser_header
@@ -190,8 +190,9 @@ def _get_app_series(db: Session, comp_id: int, store: str, start: datetime, end:
 
 
 def _get_snapchat_series(db: Session, comp_id: int, start: datetime, end: datetime) -> dict:
-    """Snapchat ads count timeseries from Ad table (platform=snapchat)."""
-    rows = (
+    """Snapchat ads count timeseries + profile data from SnapchatData."""
+    # Ads timeseries
+    ad_rows = (
         db.query(
             func.date(Ad.start_date).label("day"),
             func.count(Ad.id).label("ads_count"),
@@ -207,9 +208,25 @@ def _get_snapchat_series(db: Session, comp_id: int, start: datetime, end: dateti
         .order_by(func.date(Ad.start_date))
         .all()
     )
+
+    # Profile timeseries
+    profile_rows = (
+        db.query(SnapchatData)
+        .filter(
+            SnapchatData.competitor_id == comp_id,
+            SnapchatData.recorded_at >= start,
+            SnapchatData.recorded_at <= end,
+        )
+        .order_by(SnapchatData.recorded_at)
+        .all()
+    )
+
     return {
-        "ads_count": [{"date": str(r.day), "value": r.ads_count} for r in rows],
-        "impressions": [{"date": str(r.day), "value": int(r.impressions)} for r in rows],
+        "ads_count": [{"date": str(r.day), "value": r.ads_count} for r in ad_rows],
+        "impressions": [{"date": str(r.day), "value": int(r.impressions)} for r in ad_rows],
+        "subscribers": [{"date": r.recorded_at.isoformat(), "value": r.subscribers} for r in profile_rows],
+        "engagement_rate": [{"date": r.recorded_at.isoformat(), "value": r.engagement_rate} for r in profile_rows],
+        "spotlight_count": [{"date": r.recorded_at.isoformat(), "value": r.spotlight_count} for r in profile_rows],
     }
 
 
@@ -373,6 +390,21 @@ def _compute_deltas(db: Session, comp_id: int, start: datetime, end: datetime) -
     if snap_latest_count > 0:
         metrics["snap_ads"] = {"value": snap_latest_count, "previous": None, "delta": None, "delta_pct": None}
         metrics["snap_impressions"] = {"value": int(snap_impressions), "previous": None, "delta": None, "delta_pct": None}
+
+    # Snapchat Profile
+    sc_latest = db.query(SnapchatData).filter(
+        SnapchatData.competitor_id == comp_id,
+        SnapchatData.recorded_at <= end,
+    ).order_by(SnapchatData.recorded_at.desc()).first()
+
+    sc_prev = db.query(SnapchatData).filter(
+        SnapchatData.competitor_id == comp_id,
+        SnapchatData.recorded_at <= start,
+    ).order_by(SnapchatData.recorded_at.desc()).first()
+
+    if sc_latest:
+        metrics["snap_subscribers"] = _delta(sc_latest.subscribers, sc_prev.subscribers if sc_prev else None)
+        metrics["snap_engagement"] = _delta(sc_latest.engagement_rate, sc_prev.engagement_rate if sc_prev else None)
 
     return metrics
 

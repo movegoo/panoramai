@@ -310,6 +310,66 @@ class ScrapeCreatorsAPI:
         return data if not data.get("success") else {"success": True, "videos": [], "count": 0}
 
     # =========================================================================
+    # Snapchat
+    # =========================================================================
+
+    async def fetch_snapchat_profile(self, handle: str) -> Dict:
+        """
+        Fetch Snapchat profile data.
+
+        Returns: subscribers, title, story_count, spotlight_count, total_views, etc.
+        """
+        handle = handle.lstrip("@")
+        data = await self._get("/v1/snapchat/profile", {"handle": handle})
+
+        if not data.get("success"):
+            return data
+
+        try:
+            subscribers = data.get("subscriberCount", 0) or 0
+            title = data.get("title", "") or ""
+            profile_pic = data.get("profilePictureUrl", "") or data.get("bitmoji", {}).get("avatarUrl", "") or ""
+
+            # Parse curated highlights (stories)
+            curated = data.get("curatedHighlights", []) or []
+            story_count = len(curated)
+
+            # Parse spotlight highlights
+            spotlights = data.get("spotlightHighlights", []) or []
+            spotlight_count = len(spotlights)
+            total_views = 0
+            total_shares = 0
+            total_comments = 0
+            for sp in spotlights:
+                total_views += sp.get("viewCount", 0) or 0
+                total_shares += sp.get("shareCount", 0) or 0
+                total_comments += sp.get("commentCount", 0) or 0
+
+            # Engagement rate: (views + shares + comments) / subscribers
+            engagement_rate = 0.0
+            if subscribers > 0:
+                engagement_rate = round(
+                    ((total_views + total_shares + total_comments) / subscribers) * 100, 2
+                )
+
+            return {
+                "success": True,
+                "subscribers": subscribers,
+                "title": title,
+                "profile_picture_url": profile_pic,
+                "story_count": story_count,
+                "spotlight_count": spotlight_count,
+                "total_views": total_views,
+                "total_shares": total_shares,
+                "total_comments": total_comments,
+                "engagement_rate": engagement_rate,
+                "credits_remaining": data.get("credits_remaining"),
+            }
+        except (KeyError, TypeError) as e:
+            logger.error(f"Error parsing Snapchat response for {handle}: {e}")
+            return {"success": False, "error": f"Parse error: {e}"}
+
+    # =========================================================================
     # Facebook
     # =========================================================================
 

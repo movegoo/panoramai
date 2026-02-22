@@ -57,7 +57,7 @@ def get_active_channels(comp: Competitor) -> List[str]:
         channels.append("tiktok")
     if comp.youtube_channel_id:
         channels.append("youtube")
-    if comp.snapchat_entity_name:
+    if comp.snapchat_entity_name or comp.snapchat_username:
         channels.append("snapchat")
     return channels
 
@@ -203,7 +203,7 @@ async def list_competitors(
         if not ref:
             continue
         for f in ["facebook_page_id", "playstore_app_id", "appstore_app_id", "instagram_username",
-                  "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "website"]:
+                  "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "snapchat_username", "website"]:
             if ref.get(f) and not getattr(comp, f, None):
                 setattr(comp, f, ref[f])
                 patched = True
@@ -254,6 +254,7 @@ async def list_competitors(
             "playstore_app_id": comp.playstore_app_id,
             "appstore_app_id": comp.appstore_app_id,
             "snapchat_entity_name": comp.snapchat_entity_name,
+            "snapchat_username": comp.snapchat_username,
             "global_score": score,
             "rank": 0,  # Sera calculé après tri
             "app_rating": playstore.rating if playstore else None,
@@ -401,6 +402,7 @@ async def get_competitor(
         tiktok_username=comp.tiktok_username,
         youtube_channel_id=comp.youtube_channel_id,
         snapchat_entity_name=comp.snapchat_entity_name,
+        snapchat_username=comp.snapchat_username,
         global_score=my_score,
         rank=rank,
         channels=channels,
@@ -469,11 +471,12 @@ async def create_competitor(
             tiktok_username=data.tiktok_username,
             youtube_channel_id=data.youtube_channel_id,
             snapchat_entity_name=data.snapchat_entity_name,
+            snapchat_username=data.snapchat_username,
         )
         # Fill missing fields from sectors DB
         if sector_data:
             for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
-                       "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
+                       "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "snapchat_username"]:
                 if sector_data.get(f) and not getattr(comp, f, None):
                     setattr(comp, f, sector_data[f])
         db.add(comp)
@@ -483,7 +486,7 @@ async def create_competitor(
         from core.sectors import find_brand_in_sectors
         sector_data = find_brand_in_sectors(data.name)
         for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
-                   "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
+                   "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "snapchat_username"]:
             new_val = getattr(data, f, None) or (sector_data.get(f) if sector_data else None)
             if new_val and not getattr(comp, f, None):
                 setattr(comp, f, new_val)
@@ -536,6 +539,7 @@ async def create_competitor(
         playstore_app_id=comp.playstore_app_id,
         appstore_app_id=comp.appstore_app_id,
         snapchat_entity_name=comp.snapchat_entity_name,
+        snapchat_username=comp.snapchat_username,
         global_score=0,
         rank=len(get_advertiser_competitor_ids(db, adv_id)) if adv_id else 0,
         active_channels=get_active_channels(comp),
@@ -591,6 +595,8 @@ async def update_competitor(
             "instagram_username": comp.instagram_username,
             "tiktok_username": comp.tiktok_username,
             "youtube_channel_id": comp.youtube_channel_id,
+            "snapchat_entity_name": comp.snapchat_entity_name,
+            "snapchat_username": comp.snapchat_username,
         }
     }
 
@@ -1092,6 +1098,38 @@ async def _auto_enrich_competitor(competitor_id: int, comp: Competitor) -> dict:
         except Exception as e:
             logger.warning(f"Google Ads failed for '{comp.name}': {e}")
             results["google_ads_error"] = str(e)
+
+    # Snapchat Profile (via ScrapeCreators)
+    if comp.snapchat_username:
+        try:
+            from services.scrapecreators import scrapecreators
+            from database import SnapchatData, SessionLocal
+            result = await scrapecreators.fetch_snapchat_profile(comp.snapchat_username)
+            if result.get("success"):
+                db = SessionLocal()
+                try:
+                    db.add(SnapchatData(
+                        competitor_id=competitor_id,
+                        subscribers=result.get("subscribers", 0),
+                        title=result.get("title", ""),
+                        story_count=result.get("story_count", 0),
+                        spotlight_count=result.get("spotlight_count", 0),
+                        total_views=result.get("total_views", 0),
+                        total_shares=result.get("total_shares", 0),
+                        total_comments=result.get("total_comments", 0),
+                        engagement_rate=result.get("engagement_rate", 0),
+                        profile_picture_url=result.get("profile_picture_url", ""),
+                    ))
+                    db.commit()
+                    logger.info(f"Snapchat profile fetched for '{comp.name}'")
+                    results["snapchat_profile"] = result.get("subscribers", 0)
+                finally:
+                    db.close()
+            else:
+                results["snapchat_profile_error"] = result.get("error", "Failed")
+        except Exception as e:
+            logger.warning(f"Snapchat profile failed for '{comp.name}': {e}")
+            results["snapchat_profile_error"] = str(e)
 
     # Snapchat Ads (via Apify)
     snap_query = comp.snapchat_entity_name or comp.name

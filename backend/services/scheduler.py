@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad
+from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, SnapchatData
 from core.config import settings
 from core.trends import parse_download_count
 
@@ -122,6 +122,10 @@ class DataCollectionScheduler:
 
         if competitor.youtube_channel_id:
             await self._fetch_youtube(db, competitor, name)
+
+        # Snapchat profile (via username)
+        if competitor.snapchat_username:
+            await self._fetch_snapchat_profile(db, competitor, name)
 
         # Snapchat Ads (via entity name)
         if competitor.snapchat_entity_name:
@@ -458,6 +462,45 @@ class DataCollectionScheduler:
                 logger.info(f"YouTube data fetched for {name}")
         except Exception as e:
             logger.error(f"YouTube fetch failed for {name}: {e}")
+
+    async def _fetch_snapchat_profile(self, db: Session, competitor: Competitor, name: str):
+        """Fetch Snapchat profile data via ScrapeCreators."""
+        try:
+            from services.scrapecreators import scrapecreators
+
+            # Rate limit: skip if last fetch was less than 1 hour ago
+            latest = (
+                db.query(SnapchatData)
+                .filter(SnapchatData.competitor_id == competitor.id)
+                .order_by(SnapchatData.recorded_at.desc())
+                .first()
+            )
+            if latest and (datetime.utcnow() - latest.recorded_at).total_seconds() < 3600:
+                logger.debug(f"Snapchat profile: skipping {name} (fetched <1h ago)")
+                return
+
+            result = await scrapecreators.fetch_snapchat_profile(competitor.snapchat_username)
+            if not result.get("success"):
+                logger.warning(f"Snapchat profile fetch returned no data for {name}: {result.get('error')}")
+                return
+
+            snap_data = SnapchatData(
+                competitor_id=competitor.id,
+                subscribers=result.get("subscribers", 0),
+                title=result.get("title", ""),
+                story_count=result.get("story_count", 0),
+                spotlight_count=result.get("spotlight_count", 0),
+                total_views=result.get("total_views", 0),
+                total_shares=result.get("total_shares", 0),
+                total_comments=result.get("total_comments", 0),
+                engagement_rate=result.get("engagement_rate", 0),
+                profile_picture_url=result.get("profile_picture_url", ""),
+            )
+            db.add(snap_data)
+            db.commit()
+            logger.info(f"Snapchat profile fetched for {name}: {result.get('subscribers', 0)} subscribers")
+        except Exception as e:
+            logger.error(f"Snapchat profile fetch failed for {name}: {e}")
 
     async def daily_snapshots_and_signals(self):
         """Take ad snapshots and run signal detection after daily collection."""
