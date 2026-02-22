@@ -11,48 +11,15 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, Ad, Competitor, User, SystemSetting
+from database import get_db, Ad, Competitor, User, SystemSetting, AdvertiserCompetitor, UserAdvertiser
 from services.creative_analyzer import creative_analyzer
 from core.auth import get_current_user
+from core.permissions import parse_advertiser_header, get_user_competitor_ids
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
-@router.get("/debug-db")
-async def debug_creative_db(db: Session = Depends(get_db)):
-    """Temporary debug endpoint — check creative analysis state in DB."""
-    from sqlalchemy import func
-    total = db.query(Ad).count()
-    analyzed = db.query(Ad).filter(Ad.creative_analyzed_at.isnot(None)).count()
-    with_score = db.query(Ad).filter(Ad.creative_score > 0).count()
-    # Which competitors have analyzed ads?
-    analyzed_by_comp = db.query(
-        Competitor.id, Competitor.name, Competitor.user_id, func.count(Ad.id)
-    ).join(Ad, Ad.competitor_id == Competitor.id).filter(
-        Ad.creative_score > 0
-    ).group_by(Competitor.id).all()
-    comp_analysis = [{"id": c[0], "name": c[1], "user_id": c[2], "analyzed_count": c[3]} for c in analyzed_by_comp]
-    # Users
-    users = db.query(User).all()
-    user_info = [{"id": u.id, "email": u.email} for u in users]
-    # Advertisers
-    from database import Advertiser
-    advertisers = db.query(Advertiser).all()
-    adv_info = [{"id": a.id, "name": a.name, "user_id": a.user_id} for a in advertisers]
-    # Competitors with advertiser_id
-    all_comps = db.query(Competitor).filter(Competitor.user_id == 1).all()
-    comp_adv = [{"id": c.id, "name": c.name, "advertiser_id": c.advertiser_id} for c in all_comps]
-    return {
-        "total_ads": total,
-        "analyzed": analyzed,
-        "with_score": with_score,
-        "users": user_info,
-        "analyzed_by_competitor": comp_analysis,
-        "advertisers": adv_info,
-        "user1_competitors_advertiser_id": comp_adv,
-    }
 
 # Formats that have a static image to analyze
 ANALYZABLE_FORMATS = {"IMAGE", "CAROUSEL", "DPA", "DCO", "", None}
@@ -75,15 +42,16 @@ async def analyze_all_creatives(
     x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze ad creatives. Use force=true to re-analyze already analyzed ads."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp_ids = get_user_competitor_ids(db, user, adv_id) if user else []
+
     if force:
         # Reset ALL analyzed ads so they get re-analyzed with current prompt
         reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
             Ad.creative_analyzed_at.isnot(None),
         )
         if user:
-            reset_query = reset_query.filter(Competitor.user_id == user.id)
-        if x_advertiser_id:
-            reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+            reset_query = reset_query.filter(Competitor.id.in_(comp_ids))
         reset_count = 0
         for ad in reset_query.all():
             ad.creative_analyzed_at = None
@@ -106,9 +74,7 @@ async def analyze_all_creatives(
             Ad.creative_score == 0,
         )
         if user:
-            reset_query = reset_query.filter(Competitor.user_id == user.id)
-        if x_advertiser_id:
-            reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+            reset_query = reset_query.filter(Competitor.id.in_(comp_ids))
         for ad in reset_query.all():
             ad.creative_analyzed_at = None
             ad.creative_score = None
@@ -122,9 +88,7 @@ async def analyze_all_creatives(
     )
 
     if user:
-        query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        query = query.filter(Competitor.id.in_(comp_ids))
 
     # Skip VIDEO format and non-image URLs (Google Ads syndication, etc.)
     SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
@@ -148,9 +112,7 @@ async def analyze_all_creatives(
     # Count remaining for this user
     remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
     if user:
-        remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        remaining_query = remaining_query.join(Competitor).filter(Competitor.id.in_(comp_ids))
 
     if not ads_to_analyze:
         return {"message": "No ads to analyze", "analyzed": 0, "errors": 0, "remaining": remaining_query.count()}
@@ -222,9 +184,7 @@ async def analyze_all_creatives(
 
     remaining_query = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None))
     if user:
-        remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        remaining_query = remaining_query.join(Competitor).filter(Competitor.id.in_(comp_ids))
     remaining = remaining_query.count()
 
     return {
@@ -260,15 +220,16 @@ async def reset_failed_analyses(
     x_advertiser_id: str | None = Header(None),
 ):
     """Reset ads that were marked as analyzed but have score=0 (failed analyses)."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp_ids = get_user_competitor_ids(db, user, adv_id) if user else []
+
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
         Ad.creative_analyzed_at.isnot(None),
         Ad.creative_score == 0,
     )
 
     if user:
-        query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        query = query.filter(Competitor.id.in_(comp_ids))
 
     ads = query.all()
     count = 0
@@ -289,8 +250,10 @@ async def get_creative_insights(
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated creative intelligence across all analyzed ads."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp_ids = get_user_competitor_ids(db, user, adv_id) if user else []
     try:
-        return _compute_insights(db, user, x_advertiser_id)
+        return _compute_insights(db, user, comp_ids)
     except Exception as e:
         logger.error(f"Error computing creative insights: {e}", exc_info=True)
         return {
@@ -312,7 +275,7 @@ async def get_creative_insights(
         }
 
 
-def _compute_insights(db: Session, user: User | None, x_advertiser_id: str | None):
+def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
     query = db.query(Ad, Competitor.name).join(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(
@@ -321,9 +284,7 @@ def _compute_insights(db: Session, user: User | None, x_advertiser_id: str | Non
     )
 
     if user:
-        query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+        query = query.filter(Competitor.id.in_(comp_ids))
 
     rows = query.all()
 
