@@ -46,6 +46,8 @@ import {
   Layers,
   Pencil,
   Key,
+  Activity,
+  RefreshCw,
 } from "lucide-react";
 import { FreshnessBadge } from "@/components/freshness-badge";
 
@@ -384,6 +386,14 @@ export default function AdminPage() {
   // Dedup state
   const [deduplicating, setDeduplicating] = useState(false);
 
+  // Re-enrich state
+  const [reEnrichingAll, setReEnrichingAll] = useState(false);
+  const [reEnrichingId, setReEnrichingId] = useState<number | null>(null);
+
+  // Data health state
+  const [dataHealth, setDataHealth] = useState<any>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
   // Freshness state
   const [freshness, setFreshness] = useState<FreshnessData | null>(null);
 
@@ -603,6 +613,25 @@ export default function AdminPage() {
                   ))}
                 </select>
                 <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                  disabled={reEnrichingAll}
+                  onClick={async () => {
+                    if (!confirm("Re-enrichir tous les concurrents ? Cela peut prendre plusieurs minutes.")) return;
+                    setReEnrichingAll(true);
+                    try {
+                      const res = await adminAPI.reEnrichAll();
+                      alert(res.message);
+                    } catch (e: any) {
+                      alert(e.message || "Erreur");
+                    } finally {
+                      setReEnrichingAll(false);
+                    }
+                  }}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {reEnrichingAll ? "Enrichissement..." : "Re-enrichir tout"}
+                </button>
+                <button
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
                   disabled={deduplicating}
                   onClick={async () => {
@@ -678,6 +707,128 @@ export default function AdminPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* ============= DATA HEALTH SECTION ============= */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-500" />
+                Santé des données
+              </h2>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                disabled={healthLoading}
+                onClick={async () => {
+                  setHealthLoading(true);
+                  try {
+                    const res = await adminAPI.getDataHealth();
+                    setDataHealth(res);
+                  } catch (e: any) {
+                    alert(e.message || "Erreur");
+                  } finally {
+                    setHealthLoading(false);
+                  }
+                }}
+              >
+                {healthLoading ? "Chargement..." : "Analyser"}
+              </button>
+            </div>
+
+            {dataHealth && (
+              <div className="space-y-3">
+                {/* Coverage */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {Object.entries(dataHealth.coverage as Record<string, { count: number; pct: number }>).map(([key, val]) => (
+                    <div key={key} className="text-center rounded-lg bg-muted/30 p-2">
+                      <div className={`text-lg font-bold ${val.pct >= 80 ? "text-emerald-600" : val.pct >= 50 ? "text-amber-600" : "text-red-600"}`}>{val.pct}%</div>
+                      <div className="text-[10px] text-muted-foreground capitalize">{key}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Warnings */}
+                {dataHealth.never_enriched.length > 0 && (
+                  <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                    <div className="text-xs font-semibold text-red-700 mb-1">Jamais enrichis ({dataHealth.never_enriched.length})</div>
+                    <div className="flex flex-wrap gap-1">
+                      {dataHealth.never_enriched.map((c: any) => (
+                        <span key={c.id} className="text-[11px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{c.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {dataHealth.stale.length > 0 && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+                    <div className="text-xs font-semibold text-amber-700 mb-1">Données périmées &gt; 7j ({dataHealth.stale.length})</div>
+                    <div className="flex flex-wrap gap-1">
+                      {dataHealth.stale.map((c: any) => (
+                        <span key={c.id} className="text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{c.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Health table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-border text-left text-muted-foreground">
+                        <th className="px-2 py-1.5 font-medium">Concurrent</th>
+                        <th className="px-2 py-1.5 font-medium text-center">Instagram</th>
+                        <th className="px-2 py-1.5 font-medium text-center">TikTok</th>
+                        <th className="px-2 py-1.5 font-medium text-center">YouTube</th>
+                        <th className="px-2 py-1.5 font-medium text-center">Ads</th>
+                        <th className="px-2 py-1.5 font-medium text-center">Play Store</th>
+                        <th className="px-2 py-1.5 font-medium text-center">App Store</th>
+                        <th className="px-2 py-1.5 font-medium text-center">Dernière maj</th>
+                        <th className="px-2 py-1.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dataHealth.report.map((r: any) => {
+                        const dotColor = (ts: string | null) => {
+                          if (!ts) return "bg-gray-300";
+                          const h = (Date.now() - new Date(ts).getTime()) / 3600000;
+                          return h < 24 ? "bg-emerald-500" : h < 72 ? "bg-amber-500" : "bg-red-500";
+                        };
+                        return (
+                          <tr key={r.id} className="border-b border-border/30 hover:bg-muted/20">
+                            <td className="px-2 py-1.5 font-medium text-foreground">{r.name}</td>
+                            {["instagram", "tiktok", "youtube", "ads", "playstore", "appstore"].map((k) => (
+                              <td key={k} className="px-2 py-1.5 text-center">
+                                <span className={`inline-block h-2 w-2 rounded-full ${dotColor(r.sources?.[k])}`} />
+                              </td>
+                            ))}
+                            <td className="px-2 py-1.5 text-center text-muted-foreground">
+                              {r.latest ? new Date(r.latest).toLocaleDateString("fr-FR") : "—"}
+                            </td>
+                            <td className="px-2 py-1.5">
+                              <button
+                                className="text-violet-600 hover:text-violet-800 disabled:opacity-30"
+                                disabled={reEnrichingId === r.id}
+                                onClick={async () => {
+                                  setReEnrichingId(r.id);
+                                  try {
+                                    await adminAPI.reEnrich(r.id);
+                                    const res = await adminAPI.getDataHealth();
+                                    setDataHealth(res);
+                                  } catch {} finally { setReEnrichingId(null); }
+                                }}
+                                title="Re-enrichir"
+                              >
+                                <Sparkles className="h-3 w-3" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

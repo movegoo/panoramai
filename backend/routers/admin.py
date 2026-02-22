@@ -853,3 +853,162 @@ async def admin_update_competitor(
             "snapchat_entity_name": comp.snapchat_entity_name,
         },
     }
+
+
+# ── Re-enrichment ────────────────────────────────────────────────────────────
+
+@router.post("/re-enrich/{competitor_id}")
+async def admin_re_enrich(
+    competitor_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Force re-enrichment of a single competitor. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent introuvable")
+
+    from routers.competitors import _auto_enrich_competitor
+    results = await _auto_enrich_competitor(comp.id, comp)
+    return {
+        "message": f"Re-enrichissement terminé pour '{comp.name}'",
+        "competitor_id": comp.id,
+        "results": results,
+    }
+
+
+@router.post("/re-enrich-all")
+async def admin_re_enrich_all(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Re-enrich ALL active competitors. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    from routers.competitors import _auto_enrich_competitor
+
+    summary = []
+    for comp in competitors:
+        try:
+            results = await _auto_enrich_competitor(comp.id, comp)
+            summary.append({"id": comp.id, "name": comp.name, "status": "ok", "results": results})
+        except Exception as e:
+            summary.append({"id": comp.id, "name": comp.name, "status": "error", "error": str(e)})
+
+    ok = sum(1 for s in summary if s["status"] == "ok")
+    return {
+        "message": f"Re-enrichissement terminé: {ok}/{len(competitors)} OK",
+        "total": len(competitors),
+        "ok": ok,
+        "errors": len(competitors) - ok,
+        "details": summary,
+    }
+
+
+# ── Data health ──────────────────────────────────────────────────────────────
+
+@router.get("/data-health")
+async def admin_data_health(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Data health report: stale data, missing data, coverage. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    from datetime import timedelta
+    now = datetime.utcnow()
+    stale_threshold = now - timedelta(days=7)
+
+    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    comp_ids = [c.id for c in competitors]
+
+    # Latest timestamps per competitor per source
+    def _latest_map(model, extra_filter=None):
+        q = db.query(model.competitor_id, func.max(model.recorded_at).label("latest"))
+        if extra_filter is not None:
+            q = q.filter(extra_filter)
+        return dict(q.filter(model.competitor_id.in_(comp_ids)).group_by(model.competitor_id).all())
+
+    ig_map = _latest_map(InstagramData)
+    tt_map = _latest_map(TikTokData)
+    yt_map = _latest_map(YouTubeData)
+    ps_map = _latest_map(AppData, AppData.store == "playstore")
+    as_map = _latest_map(AppData, AppData.store == "appstore")
+
+    # Ad latest per competitor
+    ad_map = dict(
+        db.query(Ad.competitor_id, func.max(Ad.created_at).label("latest"))
+        .filter(Ad.competitor_id.in_(comp_ids))
+        .group_by(Ad.competitor_id)
+        .all()
+    )
+
+    report = []
+    never_enriched = []
+    stale = []
+    coverage = {"instagram": 0, "tiktok": 0, "youtube": 0, "playstore": 0, "appstore": 0, "ads": 0}
+
+    for comp in competitors:
+        sources = {
+            "instagram": ig_map.get(comp.id),
+            "tiktok": tt_map.get(comp.id),
+            "youtube": yt_map.get(comp.id),
+            "playstore": ps_map.get(comp.id),
+            "appstore": as_map.get(comp.id),
+            "ads": ad_map.get(comp.id),
+        }
+        all_ts = [v for v in sources.values() if v]
+        latest = max(all_ts) if all_ts else None
+
+        # Coverage
+        for key, ts in sources.items():
+            if ts:
+                coverage[key] += 1
+
+        # Never enriched
+        if not all_ts:
+            never_enriched.append({"id": comp.id, "name": comp.name})
+            report.append({"id": comp.id, "name": comp.name, "latest": None, "sources": {k: None for k in sources}, "status": "never"})
+            continue
+
+        # Stale
+        is_stale = latest and latest < stale_threshold
+        if is_stale:
+            stale.append({"id": comp.id, "name": comp.name, "latest": latest.isoformat()})
+
+        # Missing handles with no data
+        missing = []
+        if comp.instagram_username and not ig_map.get(comp.id):
+            missing.append("instagram")
+        if comp.tiktok_username and not tt_map.get(comp.id):
+            missing.append("tiktok")
+        if comp.youtube_channel_id and not yt_map.get(comp.id):
+            missing.append("youtube")
+        if comp.playstore_app_id and not ps_map.get(comp.id):
+            missing.append("playstore")
+        if comp.appstore_app_id and not as_map.get(comp.id):
+            missing.append("appstore")
+
+        report.append({
+            "id": comp.id,
+            "name": comp.name,
+            "latest": latest.isoformat() if latest else None,
+            "sources": {k: (v.isoformat() if v else None) for k, v in sources.items()},
+            "status": "stale" if is_stale else "ok",
+            "missing_data": missing,
+        })
+
+    total = len(competitors) or 1
+    return {
+        "total_competitors": len(competitors),
+        "never_enriched": never_enriched,
+        "stale": stale,
+        "coverage": {k: {"count": v, "pct": round(v / total * 100)} for k, v in coverage.items()},
+        "report": report,
+    }

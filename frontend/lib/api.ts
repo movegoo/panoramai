@@ -1031,6 +1031,18 @@ export const adminAPI = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  reEnrich: (competitorId: number) =>
+    fetchAPI<{ message: string; results: Record<string, any> }>(`/admin/re-enrich/${competitorId}`, { method: "POST" }),
+  reEnrichAll: () =>
+    fetchAPI<{ message: string; total: number; ok: number; errors: number; details: any[] }>("/admin/re-enrich-all", { method: "POST" }),
+  getDataHealth: () =>
+    fetchAPI<{
+      total_competitors: number;
+      never_enriched: { id: number; name: string }[];
+      stale: { id: number; name: string; latest: string }[];
+      coverage: Record<string, { count: number; pct: number }>;
+      report: any[];
+    }>("/admin/data-health"),
 };
 
 // Freshness API
