@@ -11,11 +11,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from database import get_db, Advertiser, Competitor, User
+from database import get_db, Advertiser, Competitor, User, AdvertiserCompetitor, UserAdvertiser
 from models.schemas import BrandSetup
 from core.sectors import get_sector_label, get_competitors_for_sector, list_sectors, SECTORS
 from core.auth import get_current_user, get_optional_user, get_current_advertiser
 from core.utils import get_logo_url
+from core.permissions import parse_advertiser_header
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +36,19 @@ def count_configured_channels(brand: Advertiser) -> int:
 
 
 def get_current_brand(db: Session, user: User | None = None, advertiser_id: int | None = None) -> Advertiser:
-    """Récupère l'enseigne courante, filtrée par user si authentifié."""
+    """Récupère l'enseigne courante via user_advertisers join table."""
     if user:
-        from core.auth import claim_orphans
-        claim_orphans(db, user)
-    query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
+        user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+        if not user_adv_ids:
+            raise HTTPException(status_code=404, detail="Aucune enseigne configurée. Utilisez POST /api/brand/setup pour commencer.")
+        query = db.query(Advertiser).filter(Advertiser.is_active == True, Advertiser.id.in_(user_adv_ids))
+    else:
+        query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if advertiser_id:
         query = query.filter(Advertiser.id == advertiser_id)
     brand = query.first()
     if not brand:
-        raise HTTPException(
-            status_code=404,
-            detail="Aucune enseigne configurée. Utilisez POST /api/brand/setup pour commencer."
-        )
+        raise HTTPException(status_code=404, detail="Aucune enseigne configurée. Utilisez POST /api/brand/setup pour commencer.")
     return brand
 
 
@@ -95,23 +94,27 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
     This ensures the brand's social/app data gets fetched and appears
     in rankings alongside competitors.
     """
-    comp = db.query(Competitor).filter(
-        Competitor.advertiser_id == brand.id,
-        Competitor.is_active == True,
-    ).first()
+    # Find existing brand competitor via join table
+    comp = (
+        db.query(Competitor)
+        .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+        .filter(
+            AdvertiserCompetitor.advertiser_id == brand.id,
+            AdvertiserCompetitor.is_brand == True,
+            Competitor.is_active == True,
+        )
+        .first()
+    )
     if not comp:
-        # Fallback: match by name for legacy records
+        # Fallback: match by name
         comp = db.query(Competitor).filter(
             Competitor.name == brand.company_name,
             Competitor.is_active == True,
-            Competitor.advertiser_id == None,
-            *([Competitor.user_id == user.id] if user else []),
+            Competitor.is_brand == True,
         ).first()
 
     if not comp:
         comp = Competitor(
-            user_id=user.id if user else None,
-            advertiser_id=brand.id,
             name=brand.company_name,
             website=brand.website,
             logo_url=get_logo_url(brand.website),
@@ -123,6 +126,10 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
             is_brand=True,
         )
         db.add(comp)
+        db.flush()
+
+        # Create advertiser-competitor link
+        db.add(AdvertiserCompetitor(advertiser_id=brand.id, competitor_id=comp.id, is_brand=True))
         db.commit()
         db.refresh(comp)
 
@@ -132,7 +139,6 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
     else:
         # Sync fields from brand to competitor
-        comp.advertiser_id = brand.id
         comp.is_brand = True
         comp.website = brand.website
         comp.logo_url = get_logo_url(brand.website)
@@ -141,6 +147,15 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         comp.instagram_username = brand.instagram_username
         comp.tiktok_username = brand.tiktok_username
         comp.youtube_channel_id = brand.youtube_channel_id
+
+        # Ensure link exists
+        existing_link = db.query(AdvertiserCompetitor).filter(
+            AdvertiserCompetitor.advertiser_id == brand.id,
+            AdvertiserCompetitor.competitor_id == comp.id,
+        ).first()
+        if not existing_link:
+            db.add(AdvertiserCompetitor(advertiser_id=brand.id, competitor_id=comp.id, is_brand=True))
+
         db.commit()
         db.refresh(comp)
 
@@ -168,10 +183,11 @@ async def list_brands(
     user: User = Depends(get_current_user),
 ):
     """Liste toutes les enseignes de l'utilisateur."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     brands = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id,
+        Advertiser.id.in_(user_adv_ids),
         Advertiser.is_active == True,
-    ).order_by(Advertiser.id).all()
+    ).order_by(Advertiser.id).all() if user_adv_ids else []
     return [
         {
             "id": b.id,
@@ -198,7 +214,6 @@ async def setup_brand(
         )
 
     brand = Advertiser(
-        user_id=user.id if user else None,
         company_name=data.company_name,
         sector=data.sector,
         website=data.website,
@@ -210,6 +225,10 @@ async def setup_brand(
         youtube_channel_id=data.youtube_channel_id,
     )
     db.add(brand)
+    db.flush()
+
+    # Create user-advertiser link
+    db.add(UserAdvertiser(user_id=user.id, advertiser_id=brand.id, role="owner"))
     db.commit()
     db.refresh(brand)
 
@@ -222,11 +241,16 @@ async def setup_brand(
             continue
         suggestions.append(_suggestion_to_dict(comp, data.sector))
 
-    competitors_count = db.query(Competitor).filter(
-        Competitor.is_active == True,
-        (Competitor.is_brand == False) | (Competitor.is_brand == None),
-        Competitor.advertiser_id == brand.id,
-    ).count()
+    competitors_count = (
+        db.query(AdvertiserCompetitor)
+        .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+        .filter(
+            AdvertiserCompetitor.advertiser_id == brand.id,
+            AdvertiserCompetitor.is_brand == False,
+            Competitor.is_active == True,
+        )
+        .count()
+    )
 
     return JSONResponse(content={
         "brand": _brand_to_dict(brand, competitors_count),
@@ -245,12 +269,16 @@ async def get_brand_profile(
     """Récupère le profil de mon enseigne."""
     adv_id = advertiser_id or (int(x_advertiser_id) if x_advertiser_id else None)
     brand = get_current_brand(db, user, advertiser_id=adv_id)
-    competitors_count = db.query(Competitor).filter(
-        Competitor.is_active == True,
-        (Competitor.is_brand == False) | (Competitor.is_brand == None),
-        *([Competitor.user_id == user.id] if user else []),
-        *([Competitor.advertiser_id == brand.id] if brand else []),
-    ).count()
+    competitors_count = (
+        db.query(AdvertiserCompetitor)
+        .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+        .filter(
+            AdvertiserCompetitor.advertiser_id == brand.id,
+            AdvertiserCompetitor.is_brand == False,
+            Competitor.is_active == True,
+        )
+        .count()
+    )
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
 
@@ -309,11 +337,16 @@ async def update_brand_profile(
     # Sync to competitor mirror (triggers re-enrichment automatically)
     _sync_brand_competitor(db, brand, user)
 
-    competitors_count = db.query(Competitor).filter(
-        Competitor.is_active == True,
-        (Competitor.is_brand == False) | (Competitor.is_brand == None),
-        Competitor.advertiser_id == brand.id,
-    ).count()
+    competitors_count = (
+        db.query(AdvertiserCompetitor)
+        .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+        .filter(
+            AdvertiserCompetitor.advertiser_id == brand.id,
+            AdvertiserCompetitor.is_brand == False,
+            Competitor.is_active == True,
+        )
+        .count()
+    )
 
     return JSONResponse(content=_brand_to_dict(brand, competitors_count))
 
@@ -375,12 +408,14 @@ async def get_competitor_suggestions(
     adv_id = int(x_advertiser_id) if x_advertiser_id else None
     brand = get_current_brand(db, user, advertiser_id=adv_id)
 
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
-    tracked_names = {c.name.lower() for c in comp_query.all()}
+    effective_adv_id = adv_id or brand.id
+    tracked_comps = (
+        db.query(Competitor)
+        .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+        .filter(AdvertiserCompetitor.advertiser_id == effective_adv_id, Competitor.is_active == True)
+        .all()
+    )
+    tracked_names = {c.name.lower() for c in tracked_comps}
 
     suggestions = []
     for comp in get_competitors_for_sector(brand.sector):
@@ -417,34 +452,48 @@ async def add_suggested_competitors(
             not_found.append(name)
             continue
 
-        exist_query = db.query(Competitor).filter(
-            Competitor.name == comp_data["name"],
-            Competitor.is_active == True,
-            Competitor.advertiser_id == brand.id,
+        # Check if already linked
+        existing_link = (
+            db.query(AdvertiserCompetitor)
+            .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+            .filter(
+                AdvertiserCompetitor.advertiser_id == brand.id,
+                Competitor.name == comp_data["name"],
+                Competitor.is_active == True,
+            )
+            .first()
         )
-        if exist_query.first():
+        if existing_link:
             skipped.append(name)
             continue
 
-        new_competitor = Competitor(
-            user_id=(user.id if user else None),
-            advertiser_id=brand.id,
-            name=comp_data["name"],
-            website=comp_data.get("website"),
-            logo_url=get_logo_url(comp_data.get("website")),
-            playstore_app_id=comp_data.get("playstore_app_id"),
-            appstore_app_id=comp_data.get("appstore_app_id"),
-            instagram_username=comp_data.get("instagram_username"),
-            tiktok_username=comp_data.get("tiktok_username"),
-            youtube_channel_id=comp_data.get("youtube_channel_id"),
-        )
-        db.add(new_competitor)
-        db.flush()
+        # Dedup: find or create competitor
+        from sqlalchemy import func as sa_func
+        comp = db.query(Competitor).filter(
+            sa_func.lower(Competitor.name) == comp_data["name"].lower(),
+            Competitor.is_active == True,
+        ).first()
+
+        if not comp:
+            comp = Competitor(
+                name=comp_data["name"],
+                website=comp_data.get("website"),
+                logo_url=get_logo_url(comp_data.get("website")),
+                playstore_app_id=comp_data.get("playstore_app_id"),
+                appstore_app_id=comp_data.get("appstore_app_id"),
+                instagram_username=comp_data.get("instagram_username"),
+                tiktok_username=comp_data.get("tiktok_username"),
+                youtube_channel_id=comp_data.get("youtube_channel_id"),
+            )
+            db.add(comp)
+            db.flush()
+
+        db.add(AdvertiserCompetitor(advertiser_id=brand.id, competitor_id=comp.id))
         added.append(comp_data["name"])
 
         import asyncio
         from routers.competitors import _auto_enrich_competitor
-        asyncio.create_task(_auto_enrich_competitor(new_competitor.id, new_competitor))
+        asyncio.create_task(_auto_enrich_competitor(comp.id, comp))
 
     db.commit()
 
@@ -452,11 +501,16 @@ async def add_suggested_competitors(
         "added": added,
         "skipped": skipped,
         "not_found": not_found,
-        "total_competitors": db.query(Competitor).filter(
-            Competitor.is_active == True,
-            (Competitor.is_brand == False) | (Competitor.is_brand == None),
-            Competitor.advertiser_id == brand.id,
-        ).count()
+        "total_competitors": (
+            db.query(AdvertiserCompetitor)
+            .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+            .filter(
+                AdvertiserCompetitor.advertiser_id == brand.id,
+                AdvertiserCompetitor.is_brand == False,
+                Competitor.is_active == True,
+            )
+            .count()
+        ),
     }
 
 

@@ -8,7 +8,7 @@ from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime
 
-from database import get_db, Advertiser, Competitor, User
+from database import get_db, Advertiser, Competitor, User, AdvertiserCompetitor, UserAdvertiser
 from core.auth import get_current_user
 from core.sectors import (
     SECTORS as SECTORS_DB,
@@ -52,12 +52,14 @@ async def onboard_advertiser(
     Creates advertiser profile and automatically adds suggested competitors.
     """
     # Check if advertiser already exists for this user
-    existing = db.query(Advertiser).filter(
-        Advertiser.company_name == data.company_name,
-        Advertiser.user_id == user.id,
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Advertiser already exists")
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if user_adv_ids:
+        existing = db.query(Advertiser).filter(
+            Advertiser.company_name == data.company_name,
+            Advertiser.id.in_(user_adv_ids),
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Advertiser already exists")
 
     # Create advertiser
     advertiser = Advertiser(
@@ -70,9 +72,12 @@ async def onboard_advertiser(
         tiktok_username=data.tiktok_username,
         youtube_channel_id=data.youtube_channel_id,
         contact_email=data.contact_email,
-        user_id=user.id,
     )
     db.add(advertiser)
+    db.flush()
+
+    # Create user-advertiser link
+    db.add(UserAdvertiser(user_id=user.id, advertiser_id=advertiser.id, role="owner"))
     db.commit()
     db.refresh(advertiser)
 
@@ -104,10 +109,17 @@ async def get_competitor_suggestions(
         )
 
     suggestions = []
-    existing_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        existing_query = existing_query.filter(Competitor.user_id == user.id)
-    existing_names = {c.name.lower() for c in existing_query.all()}
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if user_adv_ids:
+        existing_comps = (
+            db.query(Competitor)
+            .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+            .filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids), Competitor.is_active == True)
+            .all()
+        )
+        existing_names = {c.name.lower() for c in existing_comps}
+    else:
+        existing_names = set()
 
     for comp in sector_competitors:
         already = comp["name"].lower() in existing_names
@@ -138,37 +150,54 @@ async def add_all_suggested_competitors(
     if not sector_competitors:
         raise HTTPException(status_code=400, detail=f"Unknown sector")
 
-    # Get user's advertiser
-    advertiser = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).first()
+    # Get user's first advertiser
+    user_adv = db.query(UserAdvertiser).filter(UserAdvertiser.user_id == user.id).first()
+    advertiser_id = user_adv.advertiser_id if user_adv else None
 
     added = []
     skipped = []
 
     for comp in sector_competitors:
-        existing = db.query(Competitor).filter(
-            Competitor.name == comp["name"],
-            Competitor.user_id == user.id,
-            Competitor.is_active == True
-        ).first()
+        from sqlalchemy import func as sa_func
+        # Check if already linked to any user advertiser
+        existing_link = None
+        if advertiser_id:
+            existing_link = (
+                db.query(AdvertiserCompetitor)
+                .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+                .filter(
+                    AdvertiserCompetitor.advertiser_id == advertiser_id,
+                    sa_func.lower(Competitor.name) == comp["name"].lower(),
+                    Competitor.is_active == True,
+                )
+                .first()
+            )
 
-        if existing:
+        if existing_link:
             skipped.append(comp["name"])
             continue
 
-        new_competitor = Competitor(
-            name=comp["name"],
-            website=comp.get("website"),
-            playstore_app_id=comp.get("playstore_app_id"),
-            appstore_app_id=comp.get("appstore_app_id"),
-            instagram_username=comp.get("instagram_username"),
-            tiktok_username=comp.get("tiktok_username"),
-            youtube_channel_id=comp.get("youtube_channel_id"),
-            user_id=user.id,
-            advertiser_id=advertiser.id if advertiser else None,
-        )
-        db.add(new_competitor)
+        # Dedup: find or create
+        existing_comp = db.query(Competitor).filter(
+            sa_func.lower(Competitor.name) == comp["name"].lower(),
+            Competitor.is_active == True,
+        ).first()
+
+        if not existing_comp:
+            existing_comp = Competitor(
+                name=comp["name"],
+                website=comp.get("website"),
+                playstore_app_id=comp.get("playstore_app_id"),
+                appstore_app_id=comp.get("appstore_app_id"),
+                instagram_username=comp.get("instagram_username"),
+                tiktok_username=comp.get("tiktok_username"),
+                youtube_channel_id=comp.get("youtube_channel_id"),
+            )
+            db.add(existing_comp)
+            db.flush()
+
+        if advertiser_id:
+            db.add(AdvertiserCompetitor(advertiser_id=advertiser_id, competitor_id=existing_comp.id))
         added.append(comp["name"])
 
     db.commit()
@@ -193,10 +222,9 @@ async def add_selected_competitors(
     if not sector_comps:
         raise HTTPException(status_code=400, detail=f"Unknown sector")
 
-    # Get user's advertiser
-    advertiser = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).first()
+    # Get user's first advertiser
+    user_adv = db.query(UserAdvertiser).filter(UserAdvertiser.user_id == user.id).first()
+    advertiser_id = user_adv.advertiser_id if user_adv else None
 
     added = []
     not_found = []
@@ -211,28 +239,44 @@ async def add_selected_competitors(
             not_found.append(name)
             continue
 
-        existing = db.query(Competitor).filter(
-            Competitor.name == comp_data["name"],
-            Competitor.user_id == user.id,
-            Competitor.is_active == True
+        from sqlalchemy import func as sa_func
+        # Check if already linked
+        if advertiser_id:
+            existing_link = (
+                db.query(AdvertiserCompetitor)
+                .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+                .filter(
+                    AdvertiserCompetitor.advertiser_id == advertiser_id,
+                    sa_func.lower(Competitor.name) == comp_data["name"].lower(),
+                    Competitor.is_active == True,
+                )
+                .first()
+            )
+            if existing_link:
+                skipped.append(name)
+                continue
+
+        # Dedup: find or create
+        existing_comp = db.query(Competitor).filter(
+            sa_func.lower(Competitor.name) == comp_data["name"].lower(),
+            Competitor.is_active == True,
         ).first()
 
-        if existing:
-            skipped.append(name)
-            continue
+        if not existing_comp:
+            existing_comp = Competitor(
+                name=comp_data["name"],
+                website=comp_data.get("website"),
+                playstore_app_id=comp_data.get("playstore_app_id"),
+                appstore_app_id=comp_data.get("appstore_app_id"),
+                instagram_username=comp_data.get("instagram_username"),
+                tiktok_username=comp_data.get("tiktok_username"),
+                youtube_channel_id=comp_data.get("youtube_channel_id"),
+            )
+            db.add(existing_comp)
+            db.flush()
 
-        new_competitor = Competitor(
-            name=comp_data["name"],
-            website=comp_data.get("website"),
-            playstore_app_id=comp_data.get("playstore_app_id"),
-            appstore_app_id=comp_data.get("appstore_app_id"),
-            instagram_username=comp_data.get("instagram_username"),
-            tiktok_username=comp_data.get("tiktok_username"),
-            youtube_channel_id=comp_data.get("youtube_channel_id"),
-            user_id=user.id,
-            advertiser_id=advertiser.id if advertiser else None,
-        )
-        db.add(new_competitor)
+        if advertiser_id:
+            db.add(AdvertiserCompetitor(advertiser_id=advertiser_id, competitor_id=existing_comp.id))
         added.append(comp_data["name"])
 
     db.commit()
@@ -248,10 +292,10 @@ async def add_selected_competitors(
 @router.get("/")
 async def list_advertisers(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """List all advertisers."""
-    query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
-    return query.all()
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if not user_adv_ids:
+        return []
+    return db.query(Advertiser).filter(Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True).all()
 
 
 @router.get("/{advertiser_id}")
@@ -261,10 +305,12 @@ async def get_advertiser(
     user: User = Depends(get_current_user),
 ):
     """Get advertiser by ID."""
-    advertiser = db.query(Advertiser).filter(
-        Advertiser.id == advertiser_id,
-        Advertiser.user_id == user.id,
+    link = db.query(UserAdvertiser).filter(
+        UserAdvertiser.user_id == user.id, UserAdvertiser.advertiser_id == advertiser_id
     ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Advertiser not found")
+    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
     return advertiser
@@ -278,10 +324,12 @@ async def update_advertiser(
     user: User = Depends(get_current_user),
 ):
     """Update advertiser profile."""
-    advertiser = db.query(Advertiser).filter(
-        Advertiser.id == advertiser_id,
-        Advertiser.user_id == user.id,
+    link = db.query(UserAdvertiser).filter(
+        UserAdvertiser.user_id == user.id, UserAdvertiser.advertiser_id == advertiser_id
     ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Advertiser not found")
+    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
@@ -301,10 +349,12 @@ async def delete_advertiser(
     user: User = Depends(get_current_user),
 ):
     """Soft delete an advertiser."""
-    advertiser = db.query(Advertiser).filter(
-        Advertiser.id == advertiser_id,
-        Advertiser.user_id == user.id,
+    link = db.query(UserAdvertiser).filter(
+        UserAdvertiser.user_id == user.id, UserAdvertiser.advertiser_id == advertiser_id
     ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Advertiser not found")
+    advertiser = db.query(Advertiser).filter(Advertiser.id == advertiser_id).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Advertiser not found")
 
@@ -325,9 +375,15 @@ async def patch_social_handles(
         for comp in sector_data.get("competitors", []):
             known[comp["name"].lower()] = comp
 
-    competitors = db.query(Competitor).filter(
-        Competitor.user_id == user.id, Competitor.is_active == True
-    ).all()
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if not user_adv_ids:
+        return {"message": "Patched 0 competitors", "patched": [], "total_checked": 0}
+    competitors = (
+        db.query(Competitor)
+        .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+        .filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids), Competitor.is_active == True)
+        .all()
+    )
 
     patched = []
     for comp in competitors:
@@ -362,38 +418,44 @@ async def patch_social_handles(
 # =============================================================================
 
 async def _add_competitor_by_name(db: Session, name: str, sector: str, user_id: int = None, advertiser_id: int = None):
-    """Add a competitor by name from the sector database."""
+    """Add a competitor by name from the sector database (with deduplication)."""
     sector_competitors = get_competitors_for_sector(sector)
     if not sector_competitors:
         return None
 
+    from sqlalchemy import func as sa_func
     for comp in sector_competitors:
         if comp["name"].lower() == name.lower():
-            query = db.query(Competitor).filter(
-                Competitor.name == comp["name"],
+            # Dedup: find existing
+            existing = db.query(Competitor).filter(
+                sa_func.lower(Competitor.name) == comp["name"].lower(),
                 Competitor.is_active == True,
-            )
-            if user_id:
-                query = query.filter(Competitor.user_id == user_id)
-            existing = query.first()
+            ).first()
 
-            if existing:
-                return existing
+            if not existing:
+                existing = Competitor(
+                    name=comp["name"],
+                    website=comp.get("website"),
+                    playstore_app_id=comp.get("playstore_app_id"),
+                    appstore_app_id=comp.get("appstore_app_id"),
+                    instagram_username=comp.get("instagram_username"),
+                    tiktok_username=comp.get("tiktok_username"),
+                    youtube_channel_id=comp.get("youtube_channel_id"),
+                )
+                db.add(existing)
+                db.flush()
 
-            new_competitor = Competitor(
-                name=comp["name"],
-                website=comp.get("website"),
-                playstore_app_id=comp.get("playstore_app_id"),
-                appstore_app_id=comp.get("appstore_app_id"),
-                instagram_username=comp.get("instagram_username"),
-                tiktok_username=comp.get("tiktok_username"),
-                youtube_channel_id=comp.get("youtube_channel_id"),
-                user_id=user_id,
-                advertiser_id=advertiser_id,
-            )
-            db.add(new_competitor)
+            # Create advertiser link if needed
+            if advertiser_id:
+                link = db.query(AdvertiserCompetitor).filter(
+                    AdvertiserCompetitor.advertiser_id == advertiser_id,
+                    AdvertiserCompetitor.competitor_id == existing.id,
+                ).first()
+                if not link:
+                    db.add(AdvertiserCompetitor(advertiser_id=advertiser_id, competitor_id=existing.id))
+
             db.commit()
-            db.refresh(new_competitor)
-            return new_competitor
+            db.refresh(existing)
+            return existing
 
     return None

@@ -174,10 +174,9 @@ async def fetch_all_snapchat_ads(
     x_advertiser_id: str | None = Header(None),
 ):
     """Fetch Snapchat ads for all active competitors."""
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True, Competitor.user_id == user.id)
-    if x_advertiser_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
-    competitors = comp_query.all()
+    from core.permissions import get_user_competitors, parse_advertiser_header
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     results = []
     for comp in competitors:
         try:

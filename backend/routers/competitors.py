@@ -8,49 +8,37 @@ from sqlalchemy import desc, func
 from typing import List, Optional, Dict
 
 import json
-from database import get_db, Ad, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User
+from database import get_db, Ad, Competitor, AppData, InstagramData, TikTokData, YouTubeData, StoreLocation, User, AdvertiserCompetitor, UserAdvertiser
 from models.schemas import CompetitorCreate, CompetitorUpdate, CompetitorCard, CompetitorDetail, ChannelData, MetricValue, Alert
 from core.trends import calculate_trend, TrendDirection
 from core.auth import get_current_user
 from core.utils import get_logo_url
-
-
-def _fix_orphan_competitors(db, user):
-    """Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser."""
-    from database import Advertiser
-    orphans = db.query(Competitor).filter(
-        Competitor.is_active == True,
-        Competitor.user_id == user.id,
-        Competitor.advertiser_id == None,
-    ).count()
-    if orphans > 0:
-        first_adv = db.query(Advertiser).filter(
-            Advertiser.user_id == user.id,
-            Advertiser.is_active == True,
-        ).order_by(Advertiser.id).first()
-        if first_adv:
-            db.query(Competitor).filter(
-                Competitor.is_active == True,
-                Competitor.user_id == user.id,
-                Competitor.advertiser_id == None,
-            ).update({"advertiser_id": first_adv.id})
-            db.commit()
+from core.permissions import get_advertiser_competitors, get_advertiser_competitor_ids, parse_advertiser_header
 
 
 def _scoped_competitor_query(db, user, x_advertiser_id=None, include_brand=False):
-    """Build a competitor query scoped to user + advertiser."""
-    if user:
-        _fix_orphan_competitors(db, user)
-    query = db.query(Competitor).filter(Competitor.is_active == True)
+    """Build a competitor query scoped via advertiser join tables."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    if adv_id:
+        query = (
+            db.query(Competitor)
+            .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+            .filter(AdvertiserCompetitor.advertiser_id == adv_id, Competitor.is_active == True)
+        )
+    elif user:
+        user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+        if user_adv_ids:
+            query = (
+                db.query(Competitor)
+                .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                .filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids), Competitor.is_active == True)
+            )
+        else:
+            query = db.query(Competitor).filter(Competitor.id == -1)  # empty result
+    else:
+        query = db.query(Competitor).filter(Competitor.is_active == True)
     if not include_brand:
         query = query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))
-    if user:
-        query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        try:
-            query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
-        except (ValueError, TypeError):
-            pass
     return query
 
 router = APIRouter()
@@ -199,10 +187,6 @@ async def list_competitors(
 
     Retourne des cartes synthétiques avec score et ranking.
     """
-    if user:
-        from core.auth import claim_orphans
-        claim_orphans(db, user)
-
     # Auto-patch missing handles from built-in competitor database
     from core.sectors import SECTORS as SECTORS_DB
     known = {}
@@ -295,15 +279,9 @@ async def get_competitor(
     x_advertiser_id: str | None = Header(None),
 ):
     """Profil détaillé d'un concurrent."""
-    from core.permissions import parse_advertiser_header
+    from core.permissions import verify_competitor_ownership
     adv_id = parse_advertiser_header(x_advertiser_id)
-    comp = db.query(Competitor).filter(Competitor.id == competitor_id, Competitor.is_active == True).first()
-    if not comp:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if user and comp.user_id and comp.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
-    if adv_id and comp.advertiser_id != adv_id:
-        raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+    comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
     # Récupère toutes les données
     playstore = db.query(AppData).filter(
@@ -386,13 +364,8 @@ async def get_competitor(
             }
         )
 
-    # Calcul du score et du rang (scoped to user's advertiser)
-    all_comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        all_comp_query = all_comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        all_comp_query = all_comp_query.filter(Competitor.advertiser_id == adv_id)
-    all_competitors = all_comp_query.all()
+    # Calcul du score et du rang (scoped to advertiser)
+    all_competitors = _scoped_competitor_query(db, user, x_advertiser_id, include_brand=True).all()
     all_ids = [c.id for c in all_competitors]
     from routers.watch import _batch_load_latest
     all_ps = _batch_load_latest(db, AppData, all_ids, AppData.store == "playstore")
@@ -439,31 +412,73 @@ async def create_competitor(
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Ajoute un nouveau concurrent."""
-    # Vérifie si le concurrent existe déjà
-    exist_query = db.query(Competitor).filter(
-        Competitor.name == data.name,
-        Competitor.is_active == True,
-    )
-    if user:
-        exist_query = exist_query.filter(Competitor.user_id == user.id)
-    if exist_query.first():
-        raise HTTPException(status_code=400, detail=f"Le concurrent '{data.name}' existe déjà")
+    """Ajoute un nouveau concurrent (avec déduplication)."""
+    adv_id = parse_advertiser_header(x_advertiser_id)
 
-    adv_id = int(x_advertiser_id) if x_advertiser_id else None
-    comp = Competitor(
-        user_id=user.id if user else None,
-        advertiser_id=adv_id,
-        name=data.name,
-        website=data.website,
-        facebook_page_id=data.facebook_page_id,
-        playstore_app_id=data.playstore_app_id,
-        appstore_app_id=data.appstore_app_id,
-        instagram_username=data.instagram_username,
-        tiktok_username=data.tiktok_username,
-        youtube_channel_id=data.youtube_channel_id,
-    )
-    db.add(comp)
+    # Check if already linked to this advertiser
+    if adv_id:
+        existing_link = (
+            db.query(AdvertiserCompetitor)
+            .join(Competitor, Competitor.id == AdvertiserCompetitor.competitor_id)
+            .filter(
+                AdvertiserCompetitor.advertiser_id == adv_id,
+                Competitor.is_active == True,
+                func.lower(Competitor.name) == data.name.lower(),
+            )
+            .first()
+        )
+        if existing_link:
+            raise HTTPException(status_code=400, detail=f"Le concurrent '{data.name}' existe déjà")
+
+    # Deduplication: look for existing competitor
+    comp = None
+    if data.facebook_page_id:
+        comp = db.query(Competitor).filter(
+            Competitor.facebook_page_id == data.facebook_page_id,
+            Competitor.is_active == True,
+        ).first()
+    if not comp and data.website:
+        comp = db.query(Competitor).filter(
+            Competitor.website == data.website,
+            Competitor.is_active == True,
+        ).first()
+    if not comp:
+        comp = db.query(Competitor).filter(
+            func.lower(Competitor.name) == data.name.lower(),
+            Competitor.is_active == True,
+        ).first()
+
+    if not comp:
+        # Create new competitor
+        comp = Competitor(
+            name=data.name,
+            website=data.website,
+            facebook_page_id=data.facebook_page_id,
+            playstore_app_id=data.playstore_app_id,
+            appstore_app_id=data.appstore_app_id,
+            instagram_username=data.instagram_username,
+            tiktok_username=data.tiktok_username,
+            youtube_channel_id=data.youtube_channel_id,
+        )
+        db.add(comp)
+        db.flush()
+    else:
+        # Complement missing fields
+        for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
+                   "instagram_username", "tiktok_username", "youtube_channel_id"]:
+            new_val = getattr(data, f, None)
+            if new_val and not getattr(comp, f, None):
+                setattr(comp, f, new_val)
+
+    # Create advertiser link
+    if adv_id:
+        existing = db.query(AdvertiserCompetitor).filter(
+            AdvertiserCompetitor.advertiser_id == adv_id,
+            AdvertiserCompetitor.competitor_id == comp.id,
+        ).first()
+        if not existing:
+            db.add(AdvertiserCompetitor(advertiser_id=adv_id, competitor_id=comp.id))
+
     db.commit()
     db.refresh(comp)
 
@@ -485,10 +500,7 @@ async def create_competitor(
         playstore_app_id=comp.playstore_app_id,
         appstore_app_id=comp.appstore_app_id,
         global_score=0,
-        rank=db.query(Competitor).filter(
-            Competitor.is_active == True,
-            *([Competitor.user_id == user.id] if user else []),
-        ).count(),
+        rank=len(get_advertiser_competitor_ids(db, adv_id)) if adv_id else 0,
         active_channels=get_active_channels(comp),
     )
 
@@ -553,12 +565,31 @@ async def delete_competitor(
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Supprime un concurrent (soft delete)."""
-    from core.permissions import verify_competitor_ownership, parse_advertiser_header
+    """Supprime un concurrent (retire le lien advertiser, soft-delete si plus aucun lien)."""
+    from core.permissions import verify_competitor_ownership
     adv_id = parse_advertiser_header(x_advertiser_id)
     comp = verify_competitor_ownership(db, competitor_id, user, advertiser_id=adv_id)
 
-    comp.is_active = False
+    # Remove the advertiser link
+    if adv_id:
+        db.query(AdvertiserCompetitor).filter(
+            AdvertiserCompetitor.advertiser_id == adv_id,
+            AdvertiserCompetitor.competitor_id == competitor_id,
+        ).delete()
+    else:
+        # Remove all links for this user's advertisers
+        user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+        if user_adv_ids:
+            db.query(AdvertiserCompetitor).filter(
+                AdvertiserCompetitor.advertiser_id.in_(user_adv_ids),
+                AdvertiserCompetitor.competitor_id == competitor_id,
+            ).delete(synchronize_session=False)
+
+    # Soft-delete if no advertisers remain linked
+    remaining = db.query(AdvertiserCompetitor).filter(AdvertiserCompetitor.competitor_id == competitor_id).count()
+    if remaining == 0:
+        comp.is_active = False
+
     db.commit()
 
     return {"message": f"Concurrent '{comp.name}' supprimé"}

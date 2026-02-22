@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 import json
 
-from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, User
+from database import get_db, Advertiser, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, User, AdvertiserCompetitor, UserAdvertiser
 from models.schemas import (
     WatchOverview, MarketPosition, KeyMetric, Trend, TrendDirection,
     Alert, AlertsList, AlertType, AlertSeverity, Channel,
@@ -18,8 +18,9 @@ from models.schemas import (
 )
 from core.trends import calculate_trend
 from core.sectors import get_sector_label
-from core.auth import get_current_user
+from core.auth import get_current_user, get_current_advertiser
 from core.utils import get_logo_url
+from core.permissions import get_advertiser_competitors, parse_advertiser_header
 
 router = APIRouter()
 
@@ -98,19 +99,26 @@ def format_number(value: Optional[float], suffix: str = "") -> str:
 
 
 def get_brand(db: Session, user: User, advertiser_id: int | None = None) -> Advertiser:
-    """Récupère l'enseigne courante, filtrée par user et advertiser_id."""
-    if user:
-        from core.auth import claim_orphans
-        claim_orphans(db, user)
-    query = db.query(Advertiser).filter(Advertiser.is_active == True)
-    if user:
-        query = query.filter(Advertiser.user_id == user.id)
+    """Récupère l'enseigne courante via user_advertisers join table."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    if not user_adv_ids:
+        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+    query = db.query(Advertiser).filter(Advertiser.is_active == True, Advertiser.id.in_(user_adv_ids))
     if advertiser_id:
         query = query.filter(Advertiser.id == advertiser_id)
     brand = query.first()
     if not brand:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
     return brand
+
+
+def _get_advertiser_competitors_query(db: Session, adv_id: int):
+    """Get competitors linked to an advertiser via join table."""
+    return (
+        db.query(Competitor)
+        .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+        .filter(AdvertiserCompetitor.advertiser_id == adv_id, Competitor.is_active == True)
+    )
 
 
 def calculate_global_score(
@@ -159,14 +167,11 @@ async def get_watch_overview(
     - KPIs clés avec comparaison au meilleur concurrent
     - Résumé textuel de la situation
     """
-    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    adv_id = parse_advertiser_header(x_advertiser_id)
     brand = get_brand(db, user, adv_id)
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
-    competitors = comp_query.all()
+    if not adv_id:
+        adv_id = brand.id
+    competitors = _get_advertiser_competitors_query(db, adv_id).all()
     comp_ids = [c.id for c in competitors]
 
     # Batch-load all latest data (6 queries instead of 5*N)
@@ -361,35 +366,11 @@ async def get_dashboard_data(
     Endpoint agrégé pour le dashboard frontend.
     Retourne toutes les données competitors + insights en un seul appel.
     """
-    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    adv_id = parse_advertiser_header(x_advertiser_id)
     brand = get_brand(db, user, adv_id)
-
-    # Auto-assign orphan competitors (advertiser_id=NULL) to user's first advertiser
-    if user:
-        orphan_count = db.query(Competitor).filter(
-            Competitor.is_active == True,
-            Competitor.user_id == user.id,
-            Competitor.advertiser_id == None,
-        ).count()
-        if orphan_count > 0:
-            first_adv = db.query(Advertiser).filter(
-                Advertiser.user_id == user.id,
-                Advertiser.is_active == True,
-            ).order_by(Advertiser.id).first()
-            if first_adv:
-                db.query(Competitor).filter(
-                    Competitor.is_active == True,
-                    Competitor.user_id == user.id,
-                    Competitor.advertiser_id == None,
-                ).update({"advertiser_id": first_adv.id})
-                db.commit()
-
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
-    competitors = comp_query.all()
+    if not adv_id:
+        adv_id = brand.id
+    competitors = _get_advertiser_competitors_query(db, adv_id).all()
     comp_ids = [c.id for c in competitors]
 
     week_ago = datetime.utcnow() - timedelta(days=days)
@@ -735,7 +716,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
     # Global format breakdown
     format_counts = {}
     platform_counts = {}
-    advertisers = {}  # beneficiary -> {ads, competitors, active, formats}
+    advertisers = {}  # page_name -> {ads, competitors, active, formats}
     payers = {}  # byline/disclaimer -> {total, active, pages} (only explicit payer data)
 
     for ad in all_ads:
@@ -752,16 +733,14 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
         for pp in pps:
             platform_counts[pp] = platform_counts.get(pp, 0) + 1
 
-        # Group by beneficiary (the brand), not page_name (can be agency)
-        bname = ad.beneficiary or ad.page_name or "Inconnu"
-        bname = bname.strip()
-        if bname not in advertisers:
-            advertisers[bname] = {"total": 0, "active": 0, "competitor_id": ad.competitor_id, "formats": {}}
-        advertisers[bname]["total"] += 1
+        pname = ad.page_name or "Inconnu"
+        if pname not in advertisers:
+            advertisers[pname] = {"total": 0, "active": 0, "competitor_id": ad.competitor_id, "formats": {}}
+        advertisers[pname]["total"] += 1
         if ad.is_active:
-            advertisers[bname]["active"] += 1
+            advertisers[pname]["active"] += 1
         fmt_key = ad.display_format or "AUTRE"
-        advertisers[bname]["formats"][fmt_key] = advertisers[bname]["formats"].get(fmt_key, 0) + 1
+        advertisers[pname]["formats"][fmt_key] = advertisers[pname]["formats"].get(fmt_key, 0) + 1
 
         # Payer tracking: only use REAL payer data (byline/disclaimer_label)
         # Don't fallback to page_name — that's the advertiser, not the payer
@@ -772,7 +751,7 @@ def _build_ad_intelligence(db: Session, competitor_data: list, brand_name: str) 
             payers[explicit_payer]["total"] += 1
             if ad.is_active:
                 payers[explicit_payer]["active"] += 1
-            payers[explicit_payer]["pages"].add(bname)
+            payers[explicit_payer]["pages"].add(pname)
 
     # Per competitor summary
     competitor_ad_summary = []
@@ -1158,17 +1137,14 @@ async def get_alerts(
     - app_update: Mise à jour d'app
     - new_ad: Nouvelle publicité détectée
     """
-    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    adv_id = parse_advertiser_header(x_advertiser_id)
     brand = get_brand(db, user, adv_id)
+    if not adv_id:
+        adv_id = brand.id
     alerts = []
 
-    # Build competitor name lookup (single query, scoped to user)
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
-    all_comps = comp_query.all()
+    # Build competitor name lookup (scoped via join table)
+    all_comps = _get_advertiser_competitors_query(db, adv_id).all()
     comp_names = {c.id: c.name for c in all_comps}
 
     # Génère des alertes basées sur les données récentes
@@ -1248,14 +1224,11 @@ async def get_rankings(
 
     Retourne le leaderboard pour chaque métrique clé.
     """
-    adv_id = int(x_advertiser_id) if x_advertiser_id else None
+    adv_id = parse_advertiser_header(x_advertiser_id)
     brand = get_brand(db, user, adv_id)
-    comp_query = db.query(Competitor).filter(Competitor.is_active == True)
-    if user:
-        comp_query = comp_query.filter(Competitor.user_id == user.id)
-    if adv_id:
-        comp_query = comp_query.filter(Competitor.advertiser_id == adv_id)
-    competitors = comp_query.all()
+    if not adv_id:
+        adv_id = brand.id
+    competitors = _get_advertiser_competitors_query(db, adv_id).all()
     comp_ids = [c.id for c in competitors]
     rankings = []
 

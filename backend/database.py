@@ -511,6 +511,28 @@ class Signal(Base):
     competitor = relationship("Competitor", backref="signals")
 
 
+class UserAdvertiser(Base):
+    """Many-to-many: users ↔ advertisers."""
+    __tablename__ = "user_advertisers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=False, index=True)
+    role = Column(String(20), default="owner")  # owner, member
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AdvertiserCompetitor(Base):
+    """Many-to-many: advertisers ↔ competitors."""
+    __tablename__ = "advertiser_competitors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=False, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=False, index=True)
+    is_brand = Column(Boolean, default=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+
 class SystemSetting(Base):
     """Key-value store for system settings (API keys, etc.)."""
     __tablename__ = "system_settings"
@@ -687,12 +709,173 @@ def _backfill_is_brand(engine):
         logging.getLogger(__name__).warning(f"is_brand backfill warning: {e}")
 
 
+def _migrate_join_tables(engine):
+    """Populate user_advertisers and advertiser_competitors from legacy FK columns, then deduplicate competitors."""
+    try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+
+        if "user_advertisers" not in existing_tables or "advertiser_competitors" not in existing_tables:
+            return  # Tables not yet created (create_all hasn't run)
+
+        with engine.begin() as conn:
+            # --- 1. Populate user_advertisers from Advertiser.user_id ---
+            conn.execute(text(
+                'INSERT OR IGNORE INTO user_advertisers (user_id, advertiser_id, role) '
+                'SELECT user_id, id, "owner" FROM advertisers '
+                'WHERE user_id IS NOT NULL '
+                'AND NOT EXISTS (SELECT 1 FROM user_advertisers ua '
+                '  WHERE ua.user_id = advertisers.user_id AND ua.advertiser_id = advertisers.id)'
+            ))
+
+            # --- 2. Populate advertiser_competitors from Competitor.advertiser_id + is_brand ---
+            conn.execute(text(
+                'INSERT OR IGNORE INTO advertiser_competitors (advertiser_id, competitor_id, is_brand) '
+                'SELECT advertiser_id, id, COALESCE(is_brand, 0) FROM competitors '
+                'WHERE advertiser_id IS NOT NULL AND is_active = 1 '
+                'AND NOT EXISTS (SELECT 1 FROM advertiser_competitors ac '
+                '  WHERE ac.advertiser_id = competitors.advertiser_id AND ac.competitor_id = competitors.id)'
+            ))
+
+            # --- 3. Deduplicate competitors ---
+            # Group by facebook_page_id (strong match), then by exact lowercase name
+            # Keep canonical = the one with the most ads
+
+            # 3a. Find duplicates by facebook_page_id
+            dupes_by_fbid = conn.execute(text(
+                'SELECT facebook_page_id, GROUP_CONCAT(id) as ids '
+                'FROM competitors '
+                'WHERE facebook_page_id IS NOT NULL AND facebook_page_id != "" AND is_active = 1 '
+                'GROUP BY LOWER(facebook_page_id) HAVING COUNT(*) > 1'
+            )).fetchall()
+
+            merged_ids = set()  # Track already-merged competitor IDs
+
+            for row in dupes_by_fbid:
+                ids = [int(x) for x in row[1].split(",")]
+                _merge_competitor_group(conn, ids, merged_ids)
+
+            # 3b. Find duplicates by exact lowercase name (skip already merged)
+            dupes_by_name = conn.execute(text(
+                'SELECT LOWER(name), GROUP_CONCAT(id) as ids '
+                'FROM competitors '
+                'WHERE is_active = 1 '
+                'GROUP BY LOWER(name) HAVING COUNT(*) > 1'
+            )).fetchall()
+
+            for row in dupes_by_name:
+                ids = [int(x) for x in row[1].split(",")]
+                ids = [i for i in ids if i not in merged_ids]
+                if len(ids) > 1:
+                    _merge_competitor_group(conn, ids, merged_ids)
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Join table migration warning: {e}")
+
+
+def _merge_competitor_group(conn, ids: list[int], merged_ids: set[int]):
+    """Merge a group of duplicate competitors into the canonical one (most ads)."""
+    from sqlalchemy import text
+
+    # Find canonical: the one with the most ads
+    best_id = ids[0]
+    best_count = 0
+    for cid in ids:
+        count = conn.execute(text(
+            'SELECT COUNT(*) FROM ads WHERE competitor_id = :cid'
+        ), {"cid": cid}).scalar() or 0
+        if count > best_count:
+            best_count = count
+            best_id = cid
+
+    others = [i for i in ids if i != best_id]
+    if not others:
+        return
+
+    for other_id in others:
+        # Re-point all FK references to canonical
+        for fk_table in ("ads", "instagram_data", "app_data", "tiktok_data", "youtube_data",
+                         "store_locations", "social_posts", "serp_results", "geo_results",
+                         "ad_snapshots", "signals"):
+            try:
+                conn.execute(text(
+                    f'UPDATE "{fk_table}" SET competitor_id = :canonical WHERE competitor_id = :old'
+                ), {"canonical": best_id, "old": other_id})
+            except Exception:
+                pass  # Table might not exist
+
+        # Move advertiser_competitors links to canonical (avoid duplicates)
+        conn.execute(text(
+            'UPDATE OR IGNORE advertiser_competitors SET competitor_id = :canonical '
+            'WHERE competitor_id = :old'
+        ), {"canonical": best_id, "old": other_id})
+        # Delete remaining links that couldn't be moved (were duplicates)
+        conn.execute(text(
+            'DELETE FROM advertiser_competitors WHERE competitor_id = :old'
+        ), {"old": other_id})
+
+        # Soft-delete the duplicate
+        conn.execute(text(
+            'UPDATE competitors SET is_active = 0 WHERE id = :old'
+        ), {"old": other_id})
+
+        # Complement canonical with missing fields from duplicate
+        canonical = conn.execute(text(
+            'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
+            'appstore_app_id, tiktok_username, youtube_channel_id, logo_url '
+            'FROM competitors WHERE id = :cid'
+        ), {"cid": best_id}).fetchone()
+        donor = conn.execute(text(
+            'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
+            'appstore_app_id, tiktok_username, youtube_channel_id, logo_url '
+            'FROM competitors WHERE id = :cid'
+        ), {"cid": other_id}).fetchone()
+
+        fields = ["website", "facebook_page_id", "instagram_username", "playstore_app_id",
+                   "appstore_app_id", "tiktok_username", "youtube_channel_id", "logo_url"]
+        for i, field in enumerate(fields):
+            if not canonical[i] and donor[i]:
+                conn.execute(text(
+                    f'UPDATE competitors SET "{field}" = :val WHERE id = :cid'
+                ), {"val": donor[i], "cid": best_id})
+
+        merged_ids.add(other_id)
+
+
+def _add_unique_constraints(engine):
+    """Add unique constraints on join tables (idempotent)."""
+    try:
+        from sqlalchemy import text, inspect
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        for table, cols, idx_name in [
+            ("user_advertisers", ["user_id", "advertiser_id"], "uq_user_advertiser"),
+            ("advertiser_competitors", ["advertiser_id", "competitor_id"], "uq_advertiser_competitor"),
+        ]:
+            if table not in existing_tables:
+                continue
+            existing_idx = {idx["name"] for idx in inspector.get_indexes(table)}
+            if idx_name not in existing_idx:
+                col_list = ", ".join(f'"{c}"' for c in cols)
+                with engine.begin() as conn:
+                    conn.execute(text(
+                        f'CREATE UNIQUE INDEX IF NOT EXISTS "{idx_name}" ON "{table}" ({col_list})'
+                    ))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Unique constraint warning: {e}")
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     _run_migrations(engine)
+    _add_unique_constraints(engine)
     _backfill_logos(engine)
     _backfill_competitor_advertiser(engine)
     _backfill_is_brand(engine)
+    _migrate_join_tables(engine)
 
 
 def get_db():

@@ -696,9 +696,12 @@ async def get_aso_analysis(
         if adv:
             brand_name = adv.company_name
     elif user:
-        adv = db.query(Advertiser).filter(Advertiser.user_id == user.id).first()
-        if adv:
-            brand_name = adv.company_name
+        from database import UserAdvertiser
+        user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+        if user_adv_ids:
+            adv = db.query(Advertiser).filter(Advertiser.id.in_(user_adv_ids)).first()
+            if adv:
+                brand_name = adv.company_name
 
     # Gather latest DB data + live enrichment in parallel
     results = []

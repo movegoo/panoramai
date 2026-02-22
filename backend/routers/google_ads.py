@@ -59,9 +59,10 @@ async def get_all_google_ads(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(Ad.platform == "google")
 
-    query = query.filter(Competitor.user_id == user.id)
-    if x_advertiser_id:
-        query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+    from core.permissions import get_user_competitor_ids
+    adv_id = parse_advertiser_header(x_advertiser_id)
+    comp_id_list = get_user_competitor_ids(db, user, advertiser_id=adv_id)
+    query = query.filter(Competitor.id.in_(comp_id_list))
     if active_only:
         query = query.filter(Ad.is_active == True)
 

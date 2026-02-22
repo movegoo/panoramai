@@ -27,9 +27,11 @@ class LoginRequest(BaseModel):
 
 def _build_user_dict(user: User, db: Session) -> dict:
     """Build user response dict."""
+    from database import UserAdvertiser
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     advertisers = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).order_by(Advertiser.id).all()
+        Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True
+    ).order_by(Advertiser.id).all() if user_adv_ids else []
 
     return {
         "id": user.id,
@@ -120,9 +122,11 @@ async def reset_user(email: str, db: Session = Depends(get_db), user: User = Dep
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get current user profile."""
+    from database import UserAdvertiser
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     advertisers = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id, Advertiser.is_active == True
-    ).order_by(Advertiser.id).all()
+        Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True
+    ).order_by(Advertiser.id).all() if user_adv_ids else []
 
     return {
         "id": user.id,

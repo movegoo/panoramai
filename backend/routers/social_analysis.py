@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
-from database import get_db, Competitor, User, SocialPost, Advertiser
+from database import get_db, Competitor, User, SocialPost, Advertiser, AdvertiserCompetitor, UserAdvertiser
 from services.scrapecreators import scrapecreators
 from services.social_content_analyzer import social_content_analyzer
 from core.auth import get_current_user
@@ -28,9 +28,12 @@ async def collect_all_social_posts(
     x_advertiser_id: str | None = Header(None),
 ):
     """Collect recent posts/videos from TikTok, YouTube, Instagram for all active competitors."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()] if user else []
+    comp_ids = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()] if user_adv_ids else []
+
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if user:
-        query = query.filter(Competitor.user_id == user.id)
+        query = query.filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     competitors = query.all()
@@ -188,7 +191,7 @@ async def collect_all_social_posts(
 
     total_posts = db.query(SocialPost).count()
     if user:
-        total_posts_query = db.query(SocialPost).join(Competitor).filter(Competitor.user_id == user.id)
+        total_posts_query = db.query(SocialPost).join(Competitor).filter(Competitor.id.in_(comp_ids))
         if x_advertiser_id:
             total_posts_query = total_posts_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
         total_posts = total_posts_query.count()
@@ -212,13 +215,16 @@ async def analyze_all_content(
     x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze social posts that haven't been analyzed yet."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()] if user else []
+    comp_ids = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()] if user_adv_ids else []
+
     # Auto-reset previous failures (score=0)
     reset_query = db.query(SocialPost).join(Competitor, SocialPost.competitor_id == Competitor.id).filter(
         SocialPost.content_analyzed_at.isnot(None),
         SocialPost.content_engagement_score == 0,
     )
     if user:
-        reset_query = reset_query.filter(Competitor.user_id == user.id)
+        reset_query = reset_query.filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         reset_query = reset_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     for post in reset_query.all():
@@ -232,7 +238,7 @@ async def analyze_all_content(
         SocialPost.content_analyzed_at.is_(None),
     )
     if user:
-        query = query.filter(Competitor.user_id == user.id)
+        query = query.filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
@@ -240,7 +246,7 @@ async def analyze_all_content(
 
     remaining_query = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None))
     if user:
-        remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+        remaining_query = remaining_query.join(Competitor).filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
@@ -316,7 +322,7 @@ async def analyze_all_content(
 
     remaining_query = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None))
     if user:
-        remaining_query = remaining_query.join(Competitor).filter(Competitor.user_id == user.id)
+        remaining_query = remaining_query.join(Competitor).filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         remaining_query = remaining_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
 
@@ -338,6 +344,9 @@ async def get_content_insights(
     x_advertiser_id: str | None = Header(None),
 ):
     """Aggregated content intelligence across all analyzed social posts."""
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()] if user else []
+    comp_ids = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()] if user_adv_ids else []
+
     query = db.query(SocialPost, Competitor.name).join(
         Competitor, SocialPost.competitor_id == Competitor.id
     ).filter(
@@ -345,7 +354,7 @@ async def get_content_insights(
         SocialPost.content_engagement_score > 0,
     )
     if user:
-        query = query.filter(Competitor.user_id == user.id)
+        query = query.filter(Competitor.id.in_(comp_ids))
     if x_advertiser_id:
         query = query.filter(Competitor.advertiser_id == int(x_advertiser_id))
     if platform:
@@ -534,7 +543,7 @@ async def get_content_insights(
     # Get brand name for recommendations
     brand_query = db.query(Advertiser).filter(Advertiser.is_active == True)
     if user:
-        brand_query = brand_query.filter(Advertiser.user_id == user.id)
+        brand_query = brand_query.filter(Advertiser.id.in_(user_adv_ids))
     if x_advertiser_id:
         brand_query = brand_query.filter(Advertiser.id == int(x_advertiser_id))
     brand = brand_query.first()

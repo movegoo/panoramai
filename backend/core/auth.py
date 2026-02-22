@@ -10,7 +10,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from database import get_db, User, Advertiser
+from database import get_db, User, Advertiser, UserAdvertiser
 
 security = HTTPBearer(auto_error=False)
 
@@ -86,45 +86,35 @@ def get_current_advertiser(
     db: Session = Depends(get_db),
     x_advertiser_id: str | None = Header(None),
 ) -> Advertiser:
-    """Resolve the active advertiser from X-Advertiser-Id header or user's first advertiser."""
-    query = db.query(Advertiser).filter(
-        Advertiser.user_id == user.id,
-        Advertiser.is_active == True,
-    )
+    """Resolve the active advertiser via user_advertisers join table."""
+    # Get all advertiser IDs this user has access to
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(
+        UserAdvertiser.user_id == user.id
+    ).all()]
+
+    if not user_adv_ids:
+        raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
+
     if x_advertiser_id:
         try:
             adv_id = int(x_advertiser_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="X-Advertiser-Id invalide")
-        advertiser = query.filter(Advertiser.id == adv_id).first()
-        if not advertiser:
+        if adv_id not in user_adv_ids:
             raise HTTPException(status_code=403, detail="Accès refusé à cet annonceur")
+        advertiser = db.query(Advertiser).filter(
+            Advertiser.id == adv_id,
+            Advertiser.is_active == True,
+        ).first()
+        if not advertiser:
+            raise HTTPException(status_code=404, detail="Enseigne non trouvée")
         return advertiser
+
     # Fallback: first advertiser
-    advertiser = query.order_by(Advertiser.id).first()
+    advertiser = db.query(Advertiser).filter(
+        Advertiser.id.in_(user_adv_ids),
+        Advertiser.is_active == True,
+    ).order_by(Advertiser.id).first()
     if not advertiser:
         raise HTTPException(status_code=404, detail="Aucune enseigne configurée")
     return advertiser
-
-
-def claim_orphans(db: Session, user: User) -> None:
-    """Assign orphan brand & competitors to this user.
-
-    Only claims records with user_id=NULL.
-    Never touches records belonging to other users.
-    """
-    from database import Advertiser, Competitor
-
-    # 1. Claim orphan brands (user_id=NULL)
-    db.query(Advertiser).filter(
-        Advertiser.is_active == True,
-        Advertiser.user_id == None,
-    ).update({"user_id": user.id})
-
-    # 2. Claim orphan competitors (user_id=NULL)
-    db.query(Competitor).filter(
-        Competitor.is_active == True,
-        Competitor.user_id == None,
-    ).update({"user_id": user.id})
-
-    db.commit()
