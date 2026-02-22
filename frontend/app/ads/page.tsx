@@ -1506,7 +1506,7 @@ export default function AdsPage() {
   const [advertiserSearch, setAdvertiserSearch] = useState("");
   const [brandName, setBrandName] = useState<string>("");
   const [analyzingCreatives, setAnalyzingCreatives] = useState(false);
-  const [analyzeResult, setAnalyzeResult] = useState<{ analyzed: number; errors: number; remaining: number } | null>(null);
+  const [analyzeResult, setAnalyzeResult] = useState<{ message?: string; analyzed: number; errors: number; remaining: number } | null>(null);
 
   function handlePeriodChange(days: PeriodDays) {
     setPeriodDays(days);
