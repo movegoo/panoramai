@@ -635,6 +635,11 @@ def _generate_insights(competitors: list) -> list:
         key=lambda x: x["youtube"]["subscribers"],
         reverse=True,
     )
+    snap_sorted = sorted(
+        [c for c in competitors if c.get("snapchat") and c["snapchat"]["ads_count"] > 0],
+        key=lambda x: x["snapchat"]["ads_count"],
+        reverse=True,
+    )
 
     # Leader insights
     if ig_sorted:
@@ -652,6 +657,15 @@ def _generate_insights(competitors: list) -> list:
             "type": "leader",
             "icon": "crown",
             "text": f"{leader['name']} est leader TikTok avec {format_number(leader['tiktok']['followers'])} followers",
+            "severity": "info",
+        })
+
+    if snap_sorted:
+        leader = snap_sorted[0]
+        insights.append({
+            "type": "leader",
+            "icon": "crown",
+            "text": f"{leader['name']} domine Snapchat Ads avec {leader['snapchat']['ads_count']} pubs actives",
             "severity": "info",
         })
 
@@ -702,7 +716,8 @@ def _generate_insights(competitors: list) -> list:
 
     # Weakness detection
     for c in competitors:
-        if c["total_social"] < 1000 and (c["instagram"] or c["tiktok"] or c["youtube"]):
+        has_social = c["instagram"] or c["tiktok"] or c["youtube"] or c.get("snapchat")
+        if c["total_social"] < 1000 and has_social:
             insights.append({
                 "type": "alert",
                 "icon": "alert-triangle",

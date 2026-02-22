@@ -320,7 +320,7 @@ export default function CompetitorsPage() {
             <h1 className="text-xl font-bold tracking-tight text-foreground">Concurrents</h1>
             <p className="text-[13px] text-muted-foreground flex items-center gap-2">
               {competitors.length} concurrent{competitors.length !== 1 ? "s" : ""} suivi{competitors.length !== 1 ? "s" : ""}
-              {freshness && <FreshnessBadge timestamp={freshness.instagram || freshness.tiktok || freshness.playstore} />}
+              {freshness && <FreshnessBadge timestamp={freshness.instagram || freshness.tiktok || freshness.ads_snapchat || freshness.playstore} />}
             </p>
           </div>
         </div>

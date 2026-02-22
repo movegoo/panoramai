@@ -538,7 +538,7 @@ async def pages_audit(
                         canonical["platforms"]["snapchat"]["detected_pages"].append(sp)
                         snap_names.add(sp["page_name"])
                 # Take configured handles if canonical lacks them
-                for plat in ("instagram", "tiktok", "youtube", "playstore", "appstore"):
+                for plat in ("instagram", "tiktok", "youtube", "snapchat", "playstore", "appstore"):
                     if not canonical["platforms"][plat].get("configured") and other["platforms"][plat].get("configured"):
                         canonical["platforms"][plat] = other["platforms"][plat]
             # Recount facebook total
@@ -952,13 +952,22 @@ async def admin_data_health(
     report = []
     never_enriched = []
     stale = []
-    coverage = {"instagram": 0, "tiktok": 0, "youtube": 0, "playstore": 0, "appstore": 0, "ads": 0}
+    # Snapchat ads coverage
+    snap_ad_map = dict(
+        db.query(Ad.competitor_id, func.max(Ad.created_at).label("latest"))
+        .filter(Ad.competitor_id.in_(comp_ids), Ad.platform == "snapchat")
+        .group_by(Ad.competitor_id)
+        .all()
+    )
+
+    coverage = {"instagram": 0, "tiktok": 0, "youtube": 0, "snapchat": 0, "playstore": 0, "appstore": 0, "ads": 0}
 
     for comp in competitors:
         sources = {
             "instagram": ig_map.get(comp.id),
             "tiktok": tt_map.get(comp.id),
             "youtube": yt_map.get(comp.id),
+            "snapchat": snap_ad_map.get(comp.id),
             "playstore": ps_map.get(comp.id),
             "appstore": as_map.get(comp.id),
             "ads": ad_map.get(comp.id),

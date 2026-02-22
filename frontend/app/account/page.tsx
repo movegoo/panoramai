@@ -1484,8 +1484,15 @@ export default function AccountPage() {
                               </a>
                             </div>
                           )}
+                          {comp.snapchat_entity_name && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-yellow-500 shrink-0 text-sm">👻</span>
+                              <span className="font-mono text-muted-foreground">{comp.snapchat_entity_name}</span>
+                            </div>
+                          )}
                           {!comp.website && !comp.instagram_username && !comp.tiktok_username &&
-                           !comp.youtube_channel_id && !comp.playstore_app_id && !comp.appstore_app_id && (
+                           !comp.youtube_channel_id && !comp.playstore_app_id && !comp.appstore_app_id &&
+                           !comp.snapchat_entity_name && (
                             <p className="text-xs text-muted-foreground col-span-2">Aucun identifiant pre-configure</p>
                           )}
                         </div>

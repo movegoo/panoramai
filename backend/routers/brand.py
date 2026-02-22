@@ -633,7 +633,7 @@ async def suggest_socials(data: SocialSuggestRequest):
                 if comp["name"].lower() == name_lower:
                     field_keys = [
                         "instagram_username", "tiktok_username", "youtube_channel_id",
-                        "playstore_app_id", "appstore_app_id",
+                        "playstore_app_id", "appstore_app_id", "snapchat_entity_name",
                     ]
                     for key in field_keys:
                         if comp.get(key):

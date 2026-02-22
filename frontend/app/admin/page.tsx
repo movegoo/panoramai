@@ -231,10 +231,10 @@ function CompetitorPagesRow({
           </div>
 
           {/* Other platforms */}
-          {(["instagram", "tiktok", "youtube", "playstore", "appstore"] as const).map((key) => {
+          {(["instagram", "tiktok", "youtube", "snapchat", "playstore", "appstore"] as const).map((key) => {
             const plat = p[key];
             const cfg = PLATFORM_CONFIG[key];
-            const fieldMap: Record<string, string> = { instagram: "instagram_username", tiktok: "tiktok_username", youtube: "youtube_channel_id", playstore: "playstore_app_id", appstore: "appstore_app_id" };
+            const fieldMap: Record<string, string> = { instagram: "instagram_username", tiktok: "tiktok_username", youtube: "youtube_channel_id", snapchat: "snapchat_entity_name", playstore: "playstore_app_id", appstore: "appstore_app_id" };
             const fieldName = fieldMap[key];
             const Icon = cfg.icon;
             return (
@@ -781,6 +781,7 @@ export default function AdminPage() {
                         <th className="px-2 py-1.5 font-medium text-center">Instagram</th>
                         <th className="px-2 py-1.5 font-medium text-center">TikTok</th>
                         <th className="px-2 py-1.5 font-medium text-center">YouTube</th>
+                        <th className="px-2 py-1.5 font-medium text-center">Snap</th>
                         <th className="px-2 py-1.5 font-medium text-center">Ads</th>
                         <th className="px-2 py-1.5 font-medium text-center">Play Store</th>
                         <th className="px-2 py-1.5 font-medium text-center">App Store</th>
@@ -798,7 +799,7 @@ export default function AdminPage() {
                         return (
                           <tr key={r.id} className="border-b border-border/30 hover:bg-muted/20">
                             <td className="px-2 py-1.5 font-medium text-foreground">{r.name}</td>
-                            {["instagram", "tiktok", "youtube", "ads", "playstore", "appstore"].map((k) => (
+                            {["instagram", "tiktok", "youtube", "snapchat", "ads", "playstore", "appstore"].map((k) => (
                               <td key={k} className="px-2 py-1.5 text-center">
                                 <span className={`inline-block h-2 w-2 rounded-full ${dotColor(r.sources?.[k])}`} />
                               </td>
