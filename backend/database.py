@@ -719,21 +719,27 @@ def _migrate_join_tables(engine):
         if "user_advertisers" not in existing_tables or "advertiser_competitors" not in existing_tables:
             return  # Tables not yet created (create_all hasn't run)
 
+        is_pg = DATABASE_URL.startswith("postgresql")
+        true_val = "true" if is_pg else "1"
+
         with engine.begin() as conn:
             # --- 1. Populate user_advertisers from Advertiser.user_id ---
+            # Use NOT EXISTS for cross-DB compat (works on both SQLite and PostgreSQL)
             conn.execute(text(
-                'INSERT OR IGNORE INTO user_advertisers (user_id, advertiser_id, role) '
-                'SELECT user_id, id, "owner" FROM advertisers '
+                'INSERT INTO user_advertisers (user_id, advertiser_id, role) '
+                "SELECT user_id, id, 'owner' FROM advertisers "
                 'WHERE user_id IS NOT NULL '
                 'AND NOT EXISTS (SELECT 1 FROM user_advertisers ua '
                 '  WHERE ua.user_id = advertisers.user_id AND ua.advertiser_id = advertisers.id)'
             ))
 
             # --- 2. Populate advertiser_competitors from Competitor.advertiser_id + is_brand ---
+            false_val = "false" if is_pg else "0"
+            true_val = "true" if is_pg else "1"
             conn.execute(text(
-                'INSERT OR IGNORE INTO advertiser_competitors (advertiser_id, competitor_id, is_brand) '
-                'SELECT advertiser_id, id, COALESCE(is_brand, 0) FROM competitors '
-                'WHERE advertiser_id IS NOT NULL AND is_active = 1 '
+                'INSERT INTO advertiser_competitors (advertiser_id, competitor_id, is_brand) '
+                f'SELECT advertiser_id, id, COALESCE(is_brand, {false_val}) FROM competitors '
+                f'WHERE advertiser_id IS NOT NULL AND is_active = {true_val} '
                 'AND NOT EXISTS (SELECT 1 FROM advertiser_competitors ac '
                 '  WHERE ac.advertiser_id = competitors.advertiser_id AND ac.competitor_id = competitors.id)'
             ))
@@ -742,11 +748,16 @@ def _migrate_join_tables(engine):
             # Group by facebook_page_id (strong match), then by exact lowercase name
             # Keep canonical = the one with the most ads
 
+            if is_pg:
+                agg_fn = "STRING_AGG(id::text, ',')"
+            else:
+                agg_fn = "GROUP_CONCAT(id)"
+
             # 3a. Find duplicates by facebook_page_id
             dupes_by_fbid = conn.execute(text(
-                'SELECT facebook_page_id, GROUP_CONCAT(id) as ids '
+                f'SELECT facebook_page_id, {agg_fn} as ids '
                 'FROM competitors '
-                'WHERE facebook_page_id IS NOT NULL AND facebook_page_id != "" AND is_active = 1 '
+                f"WHERE facebook_page_id IS NOT NULL AND facebook_page_id != '' AND is_active = {true_val} "
                 'GROUP BY LOWER(facebook_page_id) HAVING COUNT(*) > 1'
             )).fetchall()
 
@@ -758,9 +769,9 @@ def _migrate_join_tables(engine):
 
             # 3b. Find duplicates by exact lowercase name (skip already merged)
             dupes_by_name = conn.execute(text(
-                'SELECT LOWER(name), GROUP_CONCAT(id) as ids '
+                f'SELECT LOWER(name), {agg_fn} as ids '
                 'FROM competitors '
-                'WHERE is_active = 1 '
+                f'WHERE is_active = {true_val} '
                 'GROUP BY LOWER(name) HAVING COUNT(*) > 1'
             )).fetchall()
 
@@ -807,14 +818,16 @@ def _merge_competitor_group(conn, ids: list[int], merged_ids: set[int]):
                 pass  # Table might not exist
 
         # Move advertiser_competitors links to canonical (avoid duplicates)
+        # First delete links that would cause duplicates
         conn.execute(text(
-            'UPDATE OR IGNORE advertiser_competitors SET competitor_id = :canonical '
+            'DELETE FROM advertiser_competitors WHERE competitor_id = :old '
+            'AND advertiser_id IN (SELECT advertiser_id FROM advertiser_competitors WHERE competitor_id = :canonical)'
+        ), {"canonical": best_id, "old": other_id})
+        # Then move remaining links
+        conn.execute(text(
+            'UPDATE advertiser_competitors SET competitor_id = :canonical '
             'WHERE competitor_id = :old'
         ), {"canonical": best_id, "old": other_id})
-        # Delete remaining links that couldn't be moved (were duplicates)
-        conn.execute(text(
-            'DELETE FROM advertiser_competitors WHERE competitor_id = :old'
-        ), {"old": other_id})
 
         # Soft-delete the duplicate
         conn.execute(text(
