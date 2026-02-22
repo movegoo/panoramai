@@ -1563,6 +1563,21 @@ export default function AdsPage() {
     }
   }, [swrFbAds, swrTtAds, swrGAds, swrSnapAds]);
 
+  // Auto-launch creative analysis when page loads and there are unanalyzed ads
+  const autoAnalyzeLaunched = useRef(false);
+  useEffect(() => {
+    if (
+      creativeInsights &&
+      creativeInsights.total_analyzed === 0 &&
+      (creativeInsights.remaining ?? 0) > 0 &&
+      !analyzingCreatives &&
+      !autoAnalyzeLaunched.current
+    ) {
+      autoAnalyzeLaunched.current = true;
+      handleAnalyzeCreatives();
+    }
+  }, [creativeInsights]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function loadAll() {
     setLoading(true);
     try {
@@ -2978,10 +2993,34 @@ export default function AdsPage() {
           </div>
         ) : (
           <div className="px-5 py-8 text-center">
-            <Brain className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">
-              Aucune analyse cr&eacute;ative. L&apos;analyse est automatique et sera ex&eacute;cut&eacute;e prochainement.
-            </p>
+            {analyzingCreatives ? (
+              <>
+                <Loader2 className="h-8 w-8 text-violet-500 mx-auto mb-3 animate-spin" />
+                <p className="text-sm font-medium text-foreground">Analyse en cours...</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {analyzeResult
+                    ? `${analyzeResult.analyzed} visuels analysés — ${analyzeResult.remaining.toLocaleString("fr-FR")} restants`
+                    : "Préparation de l'analyse IA des visuels publicitaires"}
+                </p>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-8 w-8 text-violet-400 mx-auto mb-3" />
+                <p className="text-sm font-medium text-foreground">Analyse créative prête</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Lancez l&apos;analyse IA pour découvrir les concepts, tons et scores de vos publicités
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAnalyzeCreatives}
+                  className="gap-2 text-xs"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Lancer l&apos;analyse
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
