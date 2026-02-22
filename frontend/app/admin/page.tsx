@@ -42,6 +42,8 @@ import {
   Eye,
   Search,
   Layers,
+  Pencil,
+  Key,
 } from "lucide-react";
 
 function StatCard({
@@ -326,6 +328,13 @@ export default function AdminPage() {
   const [pagesLoading, setPagesLoading] = useState(false);
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
 
+  // User editing state
+  const [editingUser, setEditingUser] = useState<number | null>(null);
+  const [editUserData, setEditUserData] = useState<{ name: string; email: string }>({ name: "", email: "" });
+  const [savingUser, setSavingUser] = useState<number | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<number | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/");
@@ -384,6 +393,62 @@ export default function AdminPage() {
   const handleDeletePage = async (competitorId: number, platform: string, pageId?: string) => {
     await adminAPI.deletePage(competitorId, platform, pageId);
     loadPagesAudit(selectedSector || undefined);
+  };
+
+  const reloadUsers = () => {
+    adminAPI.getUsers().then((data) => { setUsers(data); setUsersError(null); }).catch((e) => setUsersError(e.message));
+  };
+
+  const handleToggleUser = async (userId: number, field: "is_active" | "is_admin", value: boolean) => {
+    setSavingUser(userId);
+    try {
+      await adminAPI.updateUser(userId, { [field]: value });
+      reloadUsers();
+    } catch (e: any) {
+      alert(e.message || "Erreur");
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleSaveUser = async (userId: number) => {
+    setSavingUser(userId);
+    try {
+      await adminAPI.updateUser(userId, editUserData);
+      setEditingUser(null);
+      reloadUsers();
+    } catch (e: any) {
+      alert(e.message || "Erreur");
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleResetPassword = async (userId: number) => {
+    if (newPassword.length < 6) { alert("Le mot de passe doit faire au moins 6 caracteres"); return; }
+    setSavingUser(userId);
+    try {
+      await adminAPI.updateUser(userId, { password: newPassword });
+      setResetPasswordUser(null);
+      setNewPassword("");
+    } catch (e: any) {
+      alert(e.message || "Erreur");
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number, email: string) => {
+    if (!confirm(`Supprimer l'utilisateur ${email} ? Cette action est irreversible.`)) return;
+    setSavingUser(userId);
+    try {
+      await adminAPI.deleteUser(userId);
+      reloadUsers();
+    } catch (e: any) {
+      alert(e.message || "Erreur");
+    } finally {
+      setSavingUser(null);
+    }
   };
 
   if (loading) {
@@ -844,7 +909,8 @@ export default function AdminPage() {
           {/* Users table */}
           <div className="rounded-xl border border-border bg-card">
             <div className="px-5 py-4 border-b border-border">
-              <h2 className="text-sm font-semibold text-foreground">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Users className="h-4 w-4 text-violet-500" />
                 Utilisateurs ({users.length})
               </h2>
             </div>
@@ -856,44 +922,169 @@ export default function AdminPage() {
                     <th className="px-4 py-2.5 font-medium">Nom</th>
                     <th className="px-4 py-2.5 font-medium">Enseigne</th>
                     <th className="px-4 py-2.5 font-medium text-center">Concurrents</th>
-                    <th className="px-4 py-2.5 font-medium text-center">Statut</th>
+                    <th className="px-4 py-2.5 font-medium text-center">Actif</th>
+                    <th className="px-4 py-2.5 font-medium text-center">Admin</th>
                     <th className="px-4 py-2.5 font-medium">Inscription</th>
+                    <th className="px-4 py-2.5 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-b border-border/50 last:border-0">
-                      <td className="px-4 py-2.5 font-medium text-foreground">{u.email}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{u.name || "-"}</td>
-                      <td className="px-4 py-2.5">
-                        {u.brand_name ? (
-                          <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
-                            {u.brand_name}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/50">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-muted-foreground">
-                        {u.competitors_count}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span
-                          className={`inline-flex h-2 w-2 rounded-full ${
-                            u.is_active ? "bg-green-500" : "bg-red-400"
-                          }`}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                        {u.created_at
-                          ? new Date(u.created_at).toLocaleDateString("fr-FR")
-                          : "-"}
-                      </td>
-                    </tr>
-                  ))}
+                  {users.map((u) => {
+                    const isEditing = editingUser === u.id;
+                    const isResettingPw = resetPasswordUser === u.id;
+                    const isSelf = user?.id === u.id;
+                    return (
+                      <tr key={u.id} className="border-b border-border/50 last:border-0">
+                        <td className="px-4 py-2.5">
+                          {isEditing ? (
+                            <input
+                              className="w-full text-xs rounded border border-border bg-background px-2 py-1"
+                              value={editUserData.email}
+                              onChange={(e) => setEditUserData({ ...editUserData, email: e.target.value })}
+                            />
+                          ) : (
+                            <span className="font-medium text-foreground text-xs">{u.email}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {isEditing ? (
+                            <input
+                              className="w-full text-xs rounded border border-border bg-background px-2 py-1"
+                              value={editUserData.name}
+                              onChange={(e) => setEditUserData({ ...editUserData, name: e.target.value })}
+                            />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">{u.name || "-"}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {u.brand_name ? (
+                            <span className="inline-flex items-center rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                              {u.brand_name}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-center text-xs text-muted-foreground">
+                          {u.competitors_count}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <button
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                              u.is_active
+                                ? "bg-green-50 text-green-700 hover:bg-green-100"
+                                : "bg-red-50 text-red-600 hover:bg-red-100"
+                            } ${isSelf ? "cursor-not-allowed opacity-60" : ""}`}
+                            disabled={isSelf || savingUser === u.id}
+                            onClick={() => handleToggleUser(u.id, "is_active", !u.is_active)}
+                            title={isSelf ? "Impossible de modifier votre propre statut" : u.is_active ? "Desactiver" : "Activer"}
+                          >
+                            {u.is_active ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                            {u.is_active ? "Actif" : "Inactif"}
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <button
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                              u.is_admin
+                                ? "bg-violet-50 text-violet-700 hover:bg-violet-100"
+                                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                            } ${isSelf ? "cursor-not-allowed opacity-60" : ""}`}
+                            disabled={isSelf || savingUser === u.id}
+                            onClick={() => handleToggleUser(u.id, "is_admin", !u.is_admin)}
+                            title={isSelf ? "Impossible de modifier votre propre role" : u.is_admin ? "Retirer admin" : "Rendre admin"}
+                          >
+                            <Shield className="h-3 w-3" />
+                            {u.is_admin ? "Admin" : "User"}
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5 text-[11px] text-muted-foreground">
+                          {u.created_at
+                            ? new Date(u.created_at).toLocaleDateString("fr-FR")
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1 justify-end">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  className="p-1 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                                  disabled={savingUser === u.id}
+                                  onClick={() => handleSaveUser(u.id)}
+                                  title="Sauvegarder"
+                                >
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  className="p-1 rounded border border-border text-muted-foreground hover:bg-muted"
+                                  onClick={() => setEditingUser(null)}
+                                  title="Annuler"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            ) : isResettingPw ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="password"
+                                  className="w-28 text-[11px] rounded border border-border bg-background px-2 py-1"
+                                  placeholder="Nouveau mdp"
+                                  value={newPassword}
+                                  onChange={(e) => setNewPassword(e.target.value)}
+                                />
+                                <button
+                                  className="p-1 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                                  disabled={savingUser === u.id}
+                                  onClick={() => handleResetPassword(u.id)}
+                                  title="Valider"
+                                >
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  className="p-1 rounded border border-border text-muted-foreground hover:bg-muted"
+                                  onClick={() => { setResetPasswordUser(null); setNewPassword(""); }}
+                                  title="Annuler"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  onClick={() => { setEditingUser(u.id); setEditUserData({ name: u.name || "", email: u.email }); }}
+                                  title="Modifier nom/email"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  onClick={() => { setResetPasswordUser(u.id); setNewPassword(""); }}
+                                  title="Reset mot de passe"
+                                >
+                                  <Key className="h-3.5 w-3.5" />
+                                </button>
+                                {!isSelf && (
+                                  <button
+                                    className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                                    disabled={savingUser === u.id}
+                                    onClick={() => handleDeleteUser(u.id, u.email)}
+                                    title="Supprimer l'utilisateur"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                         {usersError
                           ? <span className="text-red-500">Erreur : {usersError}</span>
                           : "Aucun utilisateur"}

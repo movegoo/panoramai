@@ -1008,6 +1008,13 @@ export const adminAPI = {
     fetchAPI<{ module: string; icon: string; fields: { key: string; label: string; description: string }[] }[]>(
       "/admin/methodologies"
     ),
+  updateUser: (userId: number, data: { name?: string; email?: string; is_active?: boolean; is_admin?: boolean; password?: string }) =>
+    fetchAPI<{ message: string; updated_fields: string[]; user: AdminUser }>(`/admin/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteUser: (userId: number) =>
+    fetchAPI<{ message: string }>(`/admin/users/${userId}`, { method: "DELETE" }),
   getSectors: () => fetchAPI<SectorItem[]>("/admin/sectors"),
   getPagesAudit: (sector?: string) =>
     fetchAPI<PagesAuditSector[]>(`/admin/pages-audit${sector ? `?sector=${sector}` : ""}`),

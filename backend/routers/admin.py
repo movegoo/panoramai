@@ -607,6 +607,38 @@ async def delete_detected_page(
     return result
 
 
+# ── User Management ──────────────────────────────────────────────────────────
+
+def _serialize_user(u: User, db: Session) -> dict:
+    """Serialize a User to dict with brand/competitor info."""
+    from database import UserAdvertiser
+    # Get brands via join table
+    adv_links = db.query(Advertiser).join(
+        UserAdvertiser, UserAdvertiser.advertiser_id == Advertiser.id
+    ).filter(UserAdvertiser.user_id == u.id, Advertiser.is_active == True).all()
+
+    brand = adv_links[0] if adv_links else None
+    # Count competitors via join tables
+    comp_count = 0
+    if adv_links:
+        adv_ids = [a.id for a in adv_links]
+        comp_count = db.query(func.count(AdvertiserCompetitor.competitor_id)).filter(
+            AdvertiserCompetitor.advertiser_id.in_(adv_ids)
+        ).scalar() or 0
+
+    return {
+        "id": u.id,
+        "email": u.email,
+        "name": u.name,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+        "is_active": u.is_active,
+        "is_admin": u.is_admin,
+        "has_brand": brand is not None,
+        "brand_name": brand.company_name if brand else None,
+        "competitors_count": comp_count,
+    }
+
+
 @router.get("/users")
 async def list_users(
     user: User = Depends(get_current_user),
@@ -616,23 +648,96 @@ async def list_users(
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin uniquement")
     users = db.query(User).order_by(User.created_at.desc()).all()
-    result = []
-    for u in users:
-        brand = db.query(Advertiser).filter(
-            Advertiser.user_id == u.id, Advertiser.is_active == True
-        ).first()
-        competitors_count = db.query(func.count(Competitor.id)).filter(
-            Competitor.user_id == u.id, Competitor.is_active == True
-        ).scalar()
-        result.append({
-            "id": u.id,
-            "email": u.email,
-            "name": u.name,
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-            "is_active": u.is_active,
-            "is_admin": u.is_admin,
-            "has_brand": brand is not None,
-            "brand_name": brand.company_name if brand else None,
-            "competitors_count": competitors_count,
-        })
-    return result
+    return [_serialize_user(u, db) for u in users]
+
+
+class UserUpdateRequest(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    is_active: bool | None = None
+    is_admin: bool | None = None
+    password: str | None = None
+
+
+@router.put("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    body: UserUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a user's profile/status. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    updated = []
+
+    if body.name is not None:
+        target.name = body.name
+        updated.append("name")
+
+    if body.email is not None:
+        # Check uniqueness
+        existing = db.query(User).filter(User.email == body.email, User.id != user_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"L'email '{body.email}' est déjà utilisé")
+        target.email = body.email
+        updated.append("email")
+
+    if body.is_active is not None:
+        # Prevent admin from deactivating themselves
+        if target.id == user.id and not body.is_active:
+            raise HTTPException(status_code=400, detail="Impossible de désactiver votre propre compte")
+        target.is_active = body.is_active
+        updated.append("is_active")
+
+    if body.is_admin is not None:
+        # Prevent admin from removing their own admin role
+        if target.id == user.id and not body.is_admin:
+            raise HTTPException(status_code=400, detail="Impossible de retirer votre propre rôle admin")
+        target.is_admin = body.is_admin
+        updated.append("is_admin")
+
+    if body.password is not None:
+        from core.auth import hash_password
+        if len(body.password) < 6:
+            raise HTTPException(status_code=400, detail="Le mot de passe doit faire au moins 6 caractères")
+        target.password_hash = hash_password(body.password)
+        updated.append("password")
+
+    db.commit()
+    db.refresh(target)
+
+    return {
+        "message": f"Utilisateur '{target.email}' mis à jour",
+        "updated_fields": updated,
+        "user": _serialize_user(target, db),
+    }
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a user. Admin only. Cannot delete yourself."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    email = target.email
+    db.delete(target)
+    db.commit()
+
+    return {"message": f"Utilisateur '{email}' supprimé"}
