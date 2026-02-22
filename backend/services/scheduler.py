@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData
+from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad
 from core.config import settings
 from core.trends import parse_download_count
 
@@ -39,6 +39,15 @@ class DataCollectionScheduler:
             CronTrigger(hour=settings.SCHEDULER_HOUR, minute=settings.SCHEDULER_MINUTE + 30),
             id="daily_signals",
             name="Daily Snapshots & Signal Detection",
+            replace_existing=True
+        )
+
+        # Daily creative analysis (1h after collection, after signals)
+        self.scheduler.add_job(
+            self.daily_creative_analysis,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 1, minute=settings.SCHEDULER_MINUTE),
+            id="daily_creative_analysis",
+            name="Daily Creative Analysis",
             replace_existing=True
         )
 
@@ -416,6 +425,137 @@ class DataCollectionScheduler:
             logger.info(f"Signal detection complete: {len(signals)} new signals")
         except Exception as e:
             logger.error(f"Snapshots & signals failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_creative_analysis(self):
+        """Analyze all unanalyzed ad creatives automatically."""
+        import asyncio
+        import json
+
+        logger.info(f"Starting daily creative analysis at {datetime.utcnow()}")
+        db = SessionLocal()
+        try:
+            from services.creative_analyzer import creative_analyzer
+
+            SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
+            BATCH_SIZE = 50
+            MAX_BATCHES = 50  # Up to 2500 ads per run
+            MAX_TIME = 3600  # 1 hour max
+
+            # Auto-reset previous failures (score=0) for retry
+            failed = db.query(Ad).filter(
+                Ad.creative_analyzed_at.isnot(None),
+                Ad.creative_score == 0,
+            ).all()
+            for ad in failed:
+                ad.creative_analyzed_at = None
+                ad.creative_score = None
+                ad.creative_analysis = None
+            if failed:
+                db.commit()
+                logger.info(f"Creative analysis: reset {len(failed)} failed analyses for retry")
+
+            total_analyzed = 0
+            total_errors = 0
+            start_time = asyncio.get_event_loop().time()
+
+            for batch_num in range(MAX_BATCHES):
+                elapsed = asyncio.get_event_loop().time() - start_time
+                if elapsed >= MAX_TIME:
+                    logger.info(f"Creative analysis: time limit reached after {total_analyzed} ads")
+                    break
+
+                # Fetch next batch of unanalyzed ads
+                candidates = db.query(Ad).filter(
+                    Ad.creative_analyzed_at.is_(None),
+                    Ad.creative_url.isnot(None),
+                    Ad.creative_url != "",
+                ).limit(BATCH_SIZE * 3).all()
+
+                if not candidates:
+                    break
+
+                ads_to_analyze = []
+                for ad in candidates:
+                    fmt = (ad.display_format or "").upper()
+                    url = ad.creative_url or ""
+                    if fmt == "VIDEO":
+                        continue
+                    if any(p in url for p in SKIP_URL_PATTERNS):
+                        ad.creative_analyzed_at = datetime.utcnow()
+                        ad.creative_score = 0
+                        ad.creative_summary = "URL non analysable (réseau publicitaire)"
+                        continue
+                    if len(ads_to_analyze) < BATCH_SIZE:
+                        ads_to_analyze.append(ad)
+                db.commit()
+
+                if not ads_to_analyze:
+                    break
+
+                for ad in ads_to_analyze:
+                    elapsed = asyncio.get_event_loop().time() - start_time
+                    if elapsed >= MAX_TIME:
+                        break
+
+                    try:
+                        platform = "tiktok" if ad.platform == "tiktok" else "google" if ad.platform == "google" else "meta"
+                        result = await asyncio.wait_for(
+                            creative_analyzer.analyze_creative(
+                                creative_url=ad.creative_url,
+                                ad_text=ad.ad_text or "",
+                                platform=platform,
+                                ad_id=ad.ad_id or "",
+                            ),
+                            timeout=60,
+                        )
+
+                        if result:
+                            ad.creative_analysis = json.dumps(result, ensure_ascii=False)
+                            ad.creative_concept = result.get("concept", "")[:100]
+                            ad.creative_hook = result.get("hook", "")[:500]
+                            ad.creative_tone = result.get("tone", "")[:100]
+                            ad.creative_text_overlay = result.get("text_overlay", "")
+                            ad.creative_dominant_colors = json.dumps(result.get("dominant_colors", []))
+                            ad.creative_has_product = result.get("has_product", False)
+                            ad.creative_has_face = result.get("has_face", False)
+                            ad.creative_has_logo = result.get("has_logo", False)
+                            ad.creative_layout = result.get("layout", "")[:50]
+                            ad.creative_cta_style = result.get("cta_style", "")[:50]
+                            ad.creative_score = result.get("score", 0)
+                            ad.creative_tags = json.dumps(result.get("tags", []), ensure_ascii=False)
+                            ad.creative_summary = result.get("summary", "")
+                            ad.product_category = result.get("product_category", "")[:100]
+                            ad.product_subcategory = result.get("product_subcategory", "")[:100]
+                            ad.ad_objective = result.get("ad_objective", "")[:50]
+                            ad.creative_analyzed_at = datetime.utcnow()
+                            total_analyzed += 1
+                        else:
+                            ad.creative_analyzed_at = datetime.utcnow()
+                            ad.creative_score = 0
+                            total_errors += 1
+
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Timeout analyzing ad {ad.ad_id}")
+                        total_errors += 1
+                    except Exception as e:
+                        logger.error(f"Error analyzing ad {ad.ad_id}: {e}")
+                        ad.creative_analyzed_at = datetime.utcnow()
+                        ad.creative_score = 0
+                        total_errors += 1
+
+                    await asyncio.sleep(1.0)
+
+                db.commit()
+                logger.info(f"Creative analysis batch {batch_num + 1}: {total_analyzed} analyzed, {total_errors} errors")
+
+            # Count remaining
+            remaining = db.query(Ad).filter(Ad.creative_analyzed_at.is_(None)).count()
+            logger.info(f"Daily creative analysis complete: {total_analyzed} analyzed, {total_errors} errors, {remaining} remaining")
+
+        except Exception as e:
+            logger.error(f"Daily creative analysis failed: {e}")
         finally:
             db.close()
 

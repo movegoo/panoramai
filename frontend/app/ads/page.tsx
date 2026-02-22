@@ -2644,7 +2644,7 @@ export default function AdsPage() {
                   <> &middot; <span className="text-green-600 font-medium">{creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</span></>
                 )}
                 {(analyzeResult?.remaining ?? creativeInsights?.remaining ?? 0) > 0 && (
-                  <> &middot; {((analyzeResult?.remaining ?? creativeInsights?.remaining) || 0).toLocaleString("fr-FR")} restantes</>
+                  <> &middot; {((analyzeResult?.remaining ?? creativeInsights?.remaining) || 0).toLocaleString("fr-FR")} en attente (analyse auto.)</>
                 )}
               </p>
             </div>
@@ -2659,7 +2659,7 @@ export default function AdsPage() {
             {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             {analyzingCreatives
               ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
-              : "Analyser les visuels"}
+              : "Relancer l'analyse"}
           </Button>
         </div>
 
@@ -2980,7 +2980,7 @@ export default function AdsPage() {
           <div className="px-5 py-8 text-center">
             <Brain className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
-              Aucune analyse cr&eacute;ative. Cliquez sur &laquo;&nbsp;Analyser les visuels&nbsp;&raquo; pour d&eacute;marrer.
+              Aucune analyse cr&eacute;ative. L&apos;analyse est automatique et sera ex&eacute;cut&eacute;e prochainement.
             </p>
           </div>
         )}
