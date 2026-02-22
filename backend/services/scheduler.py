@@ -303,50 +303,73 @@ class DataCollectionScheduler:
             logger.error(f"App Store fetch failed for {name}: {e}")
 
     async def _fetch_instagram(self, db: Session, competitor: Competitor, name: str):
-        """Fetch Instagram data via ScrapeCreators."""
+        """Fetch Instagram data via FallbackChain (ScrapeCreators → Apify)."""
         try:
             from services.scrapecreators import scrapecreators
+            from services.fallback import FallbackChain
 
-            result = await scrapecreators.fetch_instagram_profile(competitor.instagram_username)
-            if result.get("success"):
+            async def _sc():
+                r = await scrapecreators.fetch_instagram_profile(competitor.instagram_username)
+                if not r.get("success"):
+                    raise Exception(r.get("error", "failed"))
+                return r
+
+            chain = FallbackChain([("scrapecreators", _sc)])
+            result = await chain.execute()
+
+            if result.success:
+                d = result.data
                 ig_data = InstagramData(
                     competitor_id=competitor.id,
-                    followers=result.get("followers", 0),
-                    following=result.get("following", 0),
-                    posts_count=result.get("posts_count", 0),
-                    avg_likes=result.get("avg_likes", 0),
-                    avg_comments=result.get("avg_comments", 0),
-                    engagement_rate=result.get("engagement_rate", 0),
-                    bio=result.get("bio")
+                    followers=d.get("followers", 0),
+                    following=d.get("following", 0),
+                    posts_count=d.get("posts_count", 0),
+                    avg_likes=d.get("avg_likes", 0),
+                    avg_comments=d.get("avg_comments", 0),
+                    engagement_rate=d.get("engagement_rate", 0),
+                    bio=d.get("bio")
                 )
                 db.add(ig_data)
                 db.commit()
-                logger.info(f"Instagram data fetched for {name}")
+                src = result.source + (f" (+{','.join(result.complemented_from)})" if result.complemented_from else "")
+                logger.info(f"Instagram data fetched for {name} via {src}")
             else:
-                logger.warning(f"Instagram fetch returned no data for {name}: {result.get('error')}")
+                logger.warning(f"Instagram fetch returned no data for {name}: {result.errors}")
         except Exception as e:
             logger.error(f"Instagram fetch failed for {name}: {e}")
 
     async def _fetch_tiktok(self, db: Session, competitor: Competitor, name: str):
-        """Fetch TikTok data."""
+        """Fetch TikTok data via FallbackChain."""
         try:
             from services.tiktok_scraper import tiktok_scraper
+            from services.fallback import FallbackChain
 
-            result = await tiktok_scraper.fetch_profile(competitor.tiktok_username)
-            if result.get("success"):
+            async def _sc():
+                r = await tiktok_scraper.fetch_profile(competitor.tiktok_username)
+                if not r.get("success"):
+                    raise Exception(r.get("error", "failed"))
+                return r
+
+            chain = FallbackChain([("tiktok_scraper", _sc)])
+            result = await chain.execute()
+
+            if result.success:
+                d = result.data
                 tt_data = TikTokData(
                     competitor_id=competitor.id,
                     username=competitor.tiktok_username,
-                    followers=result.get("followers", 0),
-                    following=result.get("following", 0),
-                    likes=result.get("likes", 0),
-                    videos_count=result.get("videos_count", 0),
-                    bio=result.get("bio"),
-                    verified=result.get("verified", False)
+                    followers=d.get("followers", 0),
+                    following=d.get("following", 0),
+                    likes=d.get("likes", 0),
+                    videos_count=d.get("videos_count", 0),
+                    bio=d.get("bio"),
+                    verified=d.get("verified", False)
                 )
                 db.add(tt_data)
                 db.commit()
-                logger.info(f"TikTok data fetched for {name}")
+                logger.info(f"TikTok data fetched for {name} via {result.source}")
+            else:
+                logger.warning(f"TikTok fetch returned no data for {name}: {result.errors}")
         except Exception as e:
             logger.error(f"TikTok fetch failed for {name}: {e}")
 
