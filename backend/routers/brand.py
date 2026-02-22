@@ -66,6 +66,7 @@ def _brand_to_dict(brand: Advertiser, competitors_count: int) -> dict:
         "instagram_username": brand.instagram_username,
         "tiktok_username": brand.tiktok_username,
         "youtube_channel_id": brand.youtube_channel_id,
+        "snapchat_entity_name": brand.snapchat_entity_name,
         "channels_configured": count_configured_channels(brand),
         "competitors_tracked": competitors_count,
         "created_at": brand.created_at.isoformat() if brand.created_at else None,
@@ -123,6 +124,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
             instagram_username=brand.instagram_username,
             tiktok_username=brand.tiktok_username,
             youtube_channel_id=brand.youtube_channel_id,
+            snapchat_entity_name=brand.snapchat_entity_name,
             is_brand=True,
         )
         db.add(comp)
@@ -147,6 +149,7 @@ def _sync_brand_competitor(db: Session, brand: Advertiser, user: User | None = N
         comp.instagram_username = brand.instagram_username
         comp.tiktok_username = brand.tiktok_username
         comp.youtube_channel_id = brand.youtube_channel_id
+        comp.snapchat_entity_name = brand.snapchat_entity_name
 
         # Ensure link exists
         existing_link = db.query(AdvertiserCompetitor).filter(
@@ -223,6 +226,7 @@ async def setup_brand(
         instagram_username=data.instagram_username,
         tiktok_username=data.tiktok_username,
         youtube_channel_id=data.youtube_channel_id,
+        snapchat_entity_name=data.snapchat_entity_name,
     )
     db.add(brand)
     db.flush()
@@ -330,6 +334,7 @@ async def update_brand_profile(
     brand.instagram_username = data.instagram_username
     brand.tiktok_username = data.tiktok_username
     brand.youtube_channel_id = data.youtube_channel_id
+    brand.snapchat_entity_name = data.snapchat_entity_name
 
     db.commit()
     db.refresh(brand)

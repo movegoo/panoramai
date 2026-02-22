@@ -74,6 +74,7 @@ class BrandSetup(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
 
 
 class BrandProfile(BaseModel):
@@ -90,6 +91,7 @@ class BrandProfile(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
 
     # Stats actuelles
     channels_configured: int = Field(description="Nombre de canaux configurés")
@@ -213,6 +215,7 @@ class AdvertiserCreate(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     contact_email: Optional[str] = None
 
 
@@ -226,6 +229,7 @@ class AdvertiserUpdate(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     contact_email: Optional[str] = None
 
 
@@ -240,6 +244,7 @@ class AdvertiserResponse(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     contact_email: Optional[str] = None
     is_active: bool = True
     created_at: Optional[datetime] = None
@@ -258,6 +263,7 @@ class AdvertiserOnboarding(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     contact_email: Optional[str] = None
     selected_competitors: Optional[List[str]] = None
 
@@ -276,6 +282,7 @@ class CompetitorCreate(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
 
 
 class CompetitorUpdate(BaseModel):
@@ -288,6 +295,7 @@ class CompetitorUpdate(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     child_page_ids: Optional[str] = None  # JSON array of child Facebook page IDs
 
 
@@ -305,6 +313,7 @@ class CompetitorCard(BaseModel):
     youtube_channel_id: Optional[str] = None
     playstore_app_id: Optional[str] = None
     appstore_app_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
 
     # Score et position
     global_score: float = Field(description="Score composite 0-100")
@@ -350,6 +359,7 @@ class CompetitorDetail(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
 
     # Score
     global_score: float
@@ -377,6 +387,7 @@ class CompetitorSuggestion(BaseModel):
     instagram_username: Optional[str] = None
     tiktok_username: Optional[str] = None
     youtube_channel_id: Optional[str] = None
+    snapchat_entity_name: Optional[str] = None
     already_tracked: bool = False
 
 

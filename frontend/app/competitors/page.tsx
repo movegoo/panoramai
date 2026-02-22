@@ -96,6 +96,7 @@ const CHANNELS = [
   { key: "instagram_username", label: "Instagram", icon: Instagram, color: "text-pink-500", bg: "bg-pink-50", border: "border-pink-200", placeholder: "@username" },
   { key: "tiktok_username", label: "TikTok", icon: TikTokIcon, color: "text-slate-800", bg: "bg-slate-50", border: "border-slate-200", placeholder: "@username" },
   { key: "youtube_channel_id", label: "YouTube", icon: Youtube, color: "text-red-500", bg: "bg-red-50", border: "border-red-200", placeholder: "UCxxxxxx" },
+  { key: "snapchat_entity_name", label: "Snapchat", icon: Hash, color: "text-yellow-500", bg: "bg-yellow-50", border: "border-yellow-200", placeholder: "Nom sur Snapchat Ads" },
   { key: "playstore_app_id", label: "Google Play", icon: Play, color: "text-green-600", bg: "bg-green-50", border: "border-green-200", placeholder: "com.example.app" },
   { key: "appstore_app_id", label: "App Store", icon: Smartphone, color: "text-sky-500", bg: "bg-sky-50", border: "border-sky-200", placeholder: "123456789" },
 ] as const;
@@ -116,6 +117,7 @@ export default function CompetitorsPage() {
     instagram_username: "",
     tiktok_username: "",
     youtube_channel_id: "",
+    snapchat_entity_name: "",
     playstore_app_id: "",
     appstore_app_id: "",
   });
@@ -156,6 +158,7 @@ export default function CompetitorsPage() {
       instagram_username: s.instagram_username || "",
       tiktok_username: s.tiktok_username || "",
       youtube_channel_id: s.youtube_channel_id || "",
+      snapchat_entity_name: s.snapchat_entity_name || "",
       playstore_app_id: s.playstore_app_id || "",
       appstore_app_id: s.appstore_app_id || "",
     });
@@ -202,6 +205,7 @@ export default function CompetitorsPage() {
       instagram_username: "",
       tiktok_username: "",
       youtube_channel_id: "",
+      snapchat_entity_name: "",
       playstore_app_id: "",
       appstore_app_id: "",
     });
@@ -219,6 +223,7 @@ export default function CompetitorsPage() {
       instagram_username: competitor.instagram_username || "",
       tiktok_username: competitor.tiktok_username || "",
       youtube_channel_id: competitor.youtube_channel_id || "",
+      snapchat_entity_name: competitor.snapchat_entity_name || "",
       playstore_app_id: competitor.playstore_app_id || "",
       appstore_app_id: competitor.appstore_app_id || "",
     });

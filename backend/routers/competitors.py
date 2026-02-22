@@ -57,6 +57,8 @@ def get_active_channels(comp: Competitor) -> List[str]:
         channels.append("tiktok")
     if comp.youtube_channel_id:
         channels.append("youtube")
+    if comp.snapchat_entity_name:
+        channels.append("snapchat")
     return channels
 
 
@@ -251,6 +253,7 @@ async def list_competitors(
             "youtube_channel_id": comp.youtube_channel_id,
             "playstore_app_id": comp.playstore_app_id,
             "appstore_app_id": comp.appstore_app_id,
+            "snapchat_entity_name": comp.snapchat_entity_name,
             "global_score": score,
             "rank": 0,  # Sera calculé après tri
             "app_rating": playstore.rating if playstore else None,
@@ -397,6 +400,7 @@ async def get_competitor(
         instagram_username=comp.instagram_username,
         tiktok_username=comp.tiktok_username,
         youtube_channel_id=comp.youtube_channel_id,
+        snapchat_entity_name=comp.snapchat_entity_name,
         global_score=my_score,
         rank=rank,
         channels=channels,
@@ -459,13 +463,14 @@ async def create_competitor(
             instagram_username=data.instagram_username,
             tiktok_username=data.tiktok_username,
             youtube_channel_id=data.youtube_channel_id,
+            snapchat_entity_name=data.snapchat_entity_name,
         )
         db.add(comp)
         db.flush()
     else:
         # Complement missing fields
         for f in ["website", "facebook_page_id", "playstore_app_id", "appstore_app_id",
-                   "instagram_username", "tiktok_username", "youtube_channel_id"]:
+                   "instagram_username", "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
             new_val = getattr(data, f, None)
             if new_val and not getattr(comp, f, None):
                 setattr(comp, f, new_val)
@@ -499,6 +504,7 @@ async def create_competitor(
         youtube_channel_id=comp.youtube_channel_id,
         playstore_app_id=comp.playstore_app_id,
         appstore_app_id=comp.appstore_app_id,
+        snapchat_entity_name=comp.snapchat_entity_name,
         global_score=0,
         rank=len(get_advertiser_competitor_ids(db, adv_id)) if adv_id else 0,
         active_channels=get_active_channels(comp),

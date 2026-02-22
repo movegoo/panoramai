@@ -189,6 +189,19 @@ const CHANNELS = [
     profileUrl: (v: string) => v.startsWith("UC") ? `https://youtube.com/channel/${v}` : `https://youtube.com/${v}`,
   },
   {
+    key: "snapchat_entity_name",
+    label: "Snapchat",
+    icon: Hash,
+    color: "text-yellow-500",
+    bg: "bg-yellow-50",
+    border: "border-yellow-200",
+    placeholder: "Nom de l'entite sur Snapchat Ads",
+    hint: "Nom d'annonceur Snapchat",
+    parse: (v: string) => v.trim(),
+    formatDisplay: (v: string) => v,
+    profileUrl: (v: string) => `https://adsgallery.snap.com/`,
+  },
+  {
     key: "playstore_app_id",
     label: "Google Play",
     icon: Play,
@@ -638,6 +651,7 @@ export default function AccountPage() {
     instagram_username: "",
     tiktok_username: "",
     youtube_channel_id: "",
+    snapchat_entity_name: "",
     playstore_app_id: "",
     appstore_app_id: "",
   });
@@ -677,7 +691,7 @@ export default function AccountPage() {
         setForm({
           company_name: "", sector: "", website: "",
           instagram_username: "", tiktok_username: "", youtube_channel_id: "",
-          playstore_app_id: "", appstore_app_id: "",
+          snapchat_entity_name: "", playstore_app_id: "", appstore_app_id: "",
         });
       } else {
         try {
@@ -690,6 +704,7 @@ export default function AccountPage() {
             instagram_username: profileData.instagram_username || "",
             tiktok_username: profileData.tiktok_username || "",
             youtube_channel_id: profileData.youtube_channel_id || "",
+            snapchat_entity_name: profileData.snapchat_entity_name || "",
             playstore_app_id: profileData.playstore_app_id || "",
             appstore_app_id: profileData.appstore_app_id || "",
           });
@@ -763,6 +778,7 @@ export default function AccountPage() {
         instagram_username: profile.instagram_username || "",
         tiktok_username: profile.tiktok_username || "",
         youtube_channel_id: profile.youtube_channel_id || "",
+        snapchat_entity_name: profile.snapchat_entity_name || "",
         playstore_app_id: profile.playstore_app_id || "",
         appstore_app_id: profile.appstore_app_id || "",
       });

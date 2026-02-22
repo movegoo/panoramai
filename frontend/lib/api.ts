@@ -11,6 +11,7 @@ export interface Competitor {
   youtube_channel_id?: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
+  snapchat_entity_name?: string;
   created_at: string;
   updated_at: string;
   is_active: boolean;
@@ -36,6 +37,7 @@ export interface CompetitorListItem {
   youtube_channel_id?: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
+  snapchat_entity_name?: string;
   created_at?: string;
 }
 
@@ -48,6 +50,7 @@ export interface CompetitorCreate {
   youtube_channel_id?: string;
   playstore_app_id?: string;
   appstore_app_id?: string;
+  snapchat_entity_name?: string;
 }
 
 export interface DashboardStats {
@@ -772,6 +775,7 @@ export interface BrandProfileData {
   instagram_username?: string;
   tiktok_username?: string;
   youtube_channel_id?: string;
+  snapchat_entity_name?: string;
   channels_configured: number;
   competitors_tracked: number;
   created_at: string;
@@ -793,6 +797,7 @@ export interface CompetitorSuggestionData {
   instagram_username?: string;
   tiktok_username?: string;
   youtube_channel_id?: string;
+  snapchat_entity_name?: string;
   already_tracked: boolean;
 }
 
@@ -805,6 +810,7 @@ export interface BrandSetupData {
   instagram_username?: string;
   tiktok_username?: string;
   youtube_channel_id?: string;
+  snapchat_entity_name?: string;
 }
 
 export interface SetupResponseData {

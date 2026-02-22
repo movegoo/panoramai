@@ -47,6 +47,7 @@ class Competitor(Base):
     appstore_app_id = Column(String(100))
     tiktok_username = Column(String(100))
     youtube_channel_id = Column(String(100))
+    snapchat_entity_name = Column(String(255))
     logo_url = Column(String(500))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -283,6 +284,7 @@ class Advertiser(Base):
     instagram_username = Column(String(100))
     tiktok_username = Column(String(100))
     youtube_channel_id = Column(String(100))
+    snapchat_entity_name = Column(String(255))
     logo_url = Column(String(500))
     contact_email = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -600,6 +602,8 @@ def _run_migrations(engine):
             ("ads", "product_category", "VARCHAR(100)"),
             ("ads", "product_subcategory", "VARCHAR(100)"),
             ("ads", "ad_objective", "VARCHAR(50)"),
+            ("competitors", "snapchat_entity_name", "VARCHAR(255)"),
+            ("advertisers", "snapchat_entity_name", "VARCHAR(255)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
@@ -835,17 +839,17 @@ def _merge_competitor_group(conn, ids: list[int], merged_ids: set[int]):
         # Complement canonical with missing fields from duplicate
         canonical = conn.execute(text(
             'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
-            'appstore_app_id, tiktok_username, youtube_channel_id, logo_url '
+            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, logo_url '
             'FROM competitors WHERE id = :cid'
         ), {"cid": best_id}).fetchone()
         donor = conn.execute(text(
             'SELECT website, facebook_page_id, instagram_username, playstore_app_id, '
-            'appstore_app_id, tiktok_username, youtube_channel_id, logo_url '
+            'appstore_app_id, tiktok_username, youtube_channel_id, snapchat_entity_name, logo_url '
             'FROM competitors WHERE id = :cid'
         ), {"cid": other_id}).fetchone()
 
         fields = ["website", "facebook_page_id", "instagram_username", "playstore_app_id",
-                   "appstore_app_id", "tiktok_username", "youtube_channel_id", "logo_url"]
+                   "appstore_app_id", "tiktok_username", "youtube_channel_id", "snapchat_entity_name", "logo_url"]
         for i, field in enumerate(fields):
             if not canonical[i] and donor[i]:
                 conn.execute(text(

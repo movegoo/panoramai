@@ -113,7 +113,7 @@ async def fetch_snapchat_ads(
     """Fetch Snapchat ads for a competitor via Apify."""
     competitor = verify_competitor_ownership(db, competitor_id, user, advertiser_id=parse_advertiser_header(x_advertiser_id))
 
-    result = await apify_snapchat.search_snapchat_ads(query=competitor.name)
+    result = await apify_snapchat.search_snapchat_ads(query=competitor.snapchat_entity_name or competitor.name)
 
     if not result.get("success"):
         raise HTTPException(
@@ -180,7 +180,7 @@ async def fetch_all_snapchat_ads(
     results = []
     for comp in competitors:
         try:
-            result = await apify_snapchat.search_snapchat_ads(query=comp.name)
+            result = await apify_snapchat.search_snapchat_ads(query=comp.snapchat_entity_name or comp.name)
             if not result.get("success"):
                 results.append({"competitor": comp.name, "error": result.get("error")})
                 continue
