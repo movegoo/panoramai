@@ -941,6 +941,53 @@ export interface GpsConflictsResponse {
   conflicts: GpsConflict[];
 }
 
+export interface DetectedPage {
+  page_id: string;
+  page_name: string;
+  ads_count: number;
+}
+
+export interface SnapDetectedPage {
+  page_name: string;
+  ads_count: number;
+}
+
+export interface CompetitorPlatforms {
+  facebook: {
+    main_page_id: string | null;
+    child_page_ids: string[];
+    detected_pages: DetectedPage[];
+    total_pages: number;
+  };
+  instagram: { handle: string | null; configured: boolean };
+  tiktok: { handle: string | null; configured: boolean };
+  youtube: { handle: string | null; configured: boolean };
+  snapchat: { handle: string | null; configured: boolean; detected_pages: SnapDetectedPage[] };
+  playstore: { handle: string | null; configured: boolean };
+  appstore: { handle: string | null; configured: boolean };
+  google: { ads_count: number; configured: boolean };
+}
+
+export interface PagesAuditCompetitor {
+  id: number;
+  name: string;
+  is_brand: boolean;
+  website: string | null;
+  platforms: CompetitorPlatforms;
+}
+
+export interface PagesAuditSector {
+  code: string;
+  name: string;
+  competitors: PagesAuditCompetitor[];
+}
+
+export interface SectorItem {
+  code: string;
+  name: string;
+  competitors_count: number;
+}
+
 export const adminAPI = {
   getStats: () => fetchAPI<AdminStats>("/admin/stats"),
   getUsers: () => fetchAPI<AdminUser[]>("/admin/users"),
@@ -961,6 +1008,14 @@ export const adminAPI = {
     fetchAPI<{ module: string; icon: string; fields: { key: string; label: string; description: string }[] }[]>(
       "/admin/methodologies"
     ),
+  getSectors: () => fetchAPI<SectorItem[]>("/admin/sectors"),
+  getPagesAudit: (sector?: string) =>
+    fetchAPI<PagesAuditSector[]>(`/admin/pages-audit${sector ? `?sector=${sector}` : ""}`),
+  deletePage: (competitorId: number, platform: string, pageId?: string) =>
+    fetchAPI<{ competitor: string; platform: string; action: string }>("/admin/pages-audit/delete", {
+      method: "POST",
+      body: JSON.stringify({ competitor_id: competitorId, platform, page_id: pageId }),
+    }),
 };
 
 // Creative Analysis API

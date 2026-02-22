@@ -3,20 +3,23 @@ Admin backoffice router.
 Platform stats accessible to all authenticated users (scoped to their data).
 User management restricted to admins.
 """
+import json
 import math
 from datetime import datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 
 from database import (
     get_db, User, Advertiser, Competitor,
     Ad, InstagramData, TikTokData, YouTubeData, AppData, StoreLocation,
-    PromptTemplate, Store,
+    PromptTemplate, Store, AdvertiserCompetitor,
 )
 from core.auth import get_current_user
+from core.sectors import SECTORS, list_sectors
 from services.scheduler import scheduler
 
 router = APIRouter()
@@ -331,6 +334,277 @@ async def audit_data(
             for c in competitors
         ],
     }
+
+
+# ── Pages Audit (Vertical → Brands → Platforms → Detected pages) ─────────
+
+@router.get("/sectors")
+async def get_sectors(user: User = Depends(get_current_user)):
+    """List available sectors/verticals."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+    return list_sectors()
+
+
+@router.get("/pages-audit")
+async def pages_audit(
+    sector: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Audit detected pages per competitor per platform. Admin only.
+
+    Groups all active competitors by sector. For each competitor, returns
+    the count of detected pages/handles per platform:
+    - Facebook: distinct page_ids found in ads + main page + child pages
+    - Instagram, TikTok, YouTube, Snapchat: configured handle (0 or 1)
+    - Play Store, App Store: configured app ID (0 or 1)
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    # Build sector lookup from sectors.py
+    name_to_sector: dict[str, str] = {}
+    for code, data in SECTORS.items():
+        for comp in data.get("competitors", []):
+            name_to_sector[comp["name"].lower()] = code
+
+    # Also use Advertiser.sector for competitors linked via join table
+    adv_sectors = {}
+    for adv_id, sec in db.query(Advertiser.id, Advertiser.sector).filter(Advertiser.sector.isnot(None)).all():
+        adv_sectors[adv_id] = sec
+
+    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    comp_ids = [c.id for c in competitors]
+
+    # Batch: count distinct page_ids per competitor from ads
+    fb_pages_raw = (
+        db.query(Ad.competitor_id, Ad.page_id, Ad.page_name, func.count(Ad.id))
+        .filter(
+            Ad.competitor_id.in_(comp_ids),
+            Ad.platform.in_(["facebook", "instagram"]),
+            Ad.page_id.isnot(None),
+        )
+        .group_by(Ad.competitor_id, Ad.page_id, Ad.page_name)
+        .all()
+    ) if comp_ids else []
+
+    # Organize: competitor_id -> [{page_id, page_name, ads_count}]
+    fb_pages_map: dict[int, list] = {}
+    for cid, pid, pname, cnt in fb_pages_raw:
+        fb_pages_map.setdefault(cid, []).append({
+            "page_id": pid,
+            "page_name": pname or "Inconnu",
+            "ads_count": cnt,
+        })
+
+    # Count snapchat ads per competitor
+    snap_pages_raw = (
+        db.query(Ad.competitor_id, Ad.page_name, func.count(Ad.id))
+        .filter(
+            Ad.competitor_id.in_(comp_ids),
+            Ad.platform == "snapchat",
+            Ad.page_name.isnot(None),
+        )
+        .group_by(Ad.competitor_id, Ad.page_name)
+        .all()
+    ) if comp_ids else []
+
+    snap_pages_map: dict[int, list] = {}
+    for cid, pname, cnt in snap_pages_raw:
+        snap_pages_map.setdefault(cid, []).append({
+            "page_name": pname or "Inconnu",
+            "ads_count": cnt,
+        })
+
+    # Count google ads per competitor
+    google_pages_raw = (
+        db.query(Ad.competitor_id, func.count(Ad.id))
+        .filter(
+            Ad.competitor_id.in_(comp_ids),
+            Ad.platform == "google",
+        )
+        .group_by(Ad.competitor_id)
+        .all()
+    ) if comp_ids else []
+    google_counts = dict(google_pages_raw)
+
+    # Resolve sector for each competitor
+    adv_link_map: dict[int, int] = {}
+    if comp_ids:
+        for cid, aid in db.query(AdvertiserCompetitor.competitor_id, AdvertiserCompetitor.advertiser_id).filter(
+            AdvertiserCompetitor.competitor_id.in_(comp_ids)
+        ).all():
+            adv_link_map[cid] = aid
+
+    # Build result grouped by sector
+    sector_groups: dict[str, list] = {}
+    for comp in competitors:
+        # Determine sector
+        comp_sector = name_to_sector.get(comp.name.lower())
+        if not comp_sector:
+            adv_id = adv_link_map.get(comp.id)
+            comp_sector = adv_sectors.get(adv_id) if adv_id else None
+        if not comp_sector:
+            comp_sector = "autre"
+
+        if sector and comp_sector != sector:
+            continue
+
+        fb_pages = fb_pages_map.get(comp.id, [])
+        child_ids = []
+        if comp.child_page_ids:
+            try:
+                child_ids = json.loads(comp.child_page_ids)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        platforms = {
+            "facebook": {
+                "main_page_id": comp.facebook_page_id,
+                "child_page_ids": child_ids,
+                "detected_pages": sorted(fb_pages, key=lambda p: p["ads_count"], reverse=True),
+                "total_pages": len(set(p["page_id"] for p in fb_pages)),
+            },
+            "instagram": {
+                "handle": comp.instagram_username,
+                "configured": bool(comp.instagram_username),
+            },
+            "tiktok": {
+                "handle": comp.tiktok_username,
+                "configured": bool(comp.tiktok_username),
+            },
+            "youtube": {
+                "handle": comp.youtube_channel_id,
+                "configured": bool(comp.youtube_channel_id),
+            },
+            "snapchat": {
+                "handle": comp.snapchat_entity_name,
+                "configured": bool(comp.snapchat_entity_name),
+                "detected_pages": snap_pages_map.get(comp.id, []),
+            },
+            "playstore": {
+                "handle": comp.playstore_app_id,
+                "configured": bool(comp.playstore_app_id),
+            },
+            "appstore": {
+                "handle": comp.appstore_app_id,
+                "configured": bool(comp.appstore_app_id),
+            },
+            "google": {
+                "ads_count": google_counts.get(comp.id, 0),
+                "configured": google_counts.get(comp.id, 0) > 0,
+            },
+        }
+
+        sector_groups.setdefault(comp_sector, []).append({
+            "id": comp.id,
+            "name": comp.name,
+            "is_brand": comp.is_brand or False,
+            "website": comp.website,
+            "platforms": platforms,
+        })
+
+    # Build final response
+    result = []
+    for code, comps in sorted(sector_groups.items()):
+        sector_data = SECTORS.get(code, {})
+        result.append({
+            "code": code,
+            "name": sector_data.get("name", code.capitalize()),
+            "competitors": sorted(comps, key=lambda c: c["name"]),
+        })
+
+    return result
+
+
+class PageDeleteRequest(BaseModel):
+    competitor_id: int
+    platform: str  # facebook, instagram, tiktok, youtube, snapchat, playstore, appstore
+    page_id: str | None = None  # For facebook: specific page_id to remove
+
+
+@router.post("/pages-audit/delete")
+async def delete_detected_page(
+    body: PageDeleteRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a detected page/handle from a competitor. Admin only.
+
+    For Facebook: if page_id is provided, deletes all ads with that page_id
+    and removes it from child_page_ids. If no page_id, clears facebook_page_id.
+    For other platforms: clears the configured handle.
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    comp = db.query(Competitor).filter(Competitor.id == body.competitor_id).first()
+    if not comp:
+        raise HTTPException(status_code=404, detail="Concurrent introuvable")
+
+    result = {"competitor": comp.name, "platform": body.platform, "action": ""}
+
+    if body.platform == "facebook":
+        if body.page_id:
+            # Delete ads with this page_id for this competitor
+            deleted = db.query(Ad).filter(
+                Ad.competitor_id == comp.id,
+                Ad.page_id == body.page_id,
+            ).delete(synchronize_session=False)
+
+            # Remove from child_page_ids if present
+            if comp.child_page_ids:
+                try:
+                    children = json.loads(comp.child_page_ids)
+                    if body.page_id in children:
+                        children.remove(body.page_id)
+                        comp.child_page_ids = json.dumps(children) if children else None
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # If it's the main page_id, clear it
+            if comp.facebook_page_id == body.page_id:
+                comp.facebook_page_id = None
+
+            result["action"] = f"{deleted} ads supprimées, page {body.page_id} retirée"
+        else:
+            comp.facebook_page_id = None
+            result["action"] = "facebook_page_id vidé"
+    elif body.platform == "snapchat":
+        if body.page_id:
+            # Delete snapchat ads with this page_name
+            deleted = db.query(Ad).filter(
+                Ad.competitor_id == comp.id,
+                Ad.platform == "snapchat",
+                Ad.page_name == body.page_id,
+            ).delete(synchronize_session=False)
+            result["action"] = f"{deleted} ads Snapchat supprimées pour '{body.page_id}'"
+        else:
+            comp.snapchat_entity_name = None
+            result["action"] = "snapchat_entity_name vidé"
+    elif body.platform == "google":
+        deleted = db.query(Ad).filter(
+            Ad.competitor_id == comp.id,
+            Ad.platform == "google",
+        ).delete(synchronize_session=False)
+        result["action"] = f"{deleted} ads Google supprimées"
+    else:
+        field_map = {
+            "instagram": "instagram_username",
+            "tiktok": "tiktok_username",
+            "youtube": "youtube_channel_id",
+            "playstore": "playstore_app_id",
+            "appstore": "appstore_app_id",
+        }
+        field = field_map.get(body.platform)
+        if not field:
+            raise HTTPException(status_code=400, detail=f"Plateforme inconnue: {body.platform}")
+        setattr(comp, field, None)
+        result["action"] = f"{field} vidé"
+
+    db.commit()
+    return result
 
 
 @router.get("/users")

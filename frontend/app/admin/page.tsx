@@ -3,7 +3,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { adminAPI, AdminStats, AdminUser, PromptTemplateData, GpsConflict, GpsConflictsResponse } from "@/lib/api";
+import {
+  adminAPI,
+  AdminStats,
+  AdminUser,
+  PromptTemplateData,
+  GpsConflictsResponse,
+  PagesAuditSector,
+  PagesAuditCompetitor,
+  SectorItem,
+} from "@/lib/api";
 import {
   Users,
   Store,
@@ -25,7 +34,14 @@ import {
   AlertTriangle,
   BookOpen,
   ChevronDown,
+  ChevronRight,
   Globe,
+  Facebook,
+  Ghost,
+  Trash2,
+  Eye,
+  Search,
+  Layers,
 } from "lucide-react";
 
 function StatCard({
@@ -55,6 +71,230 @@ function StatCard({
   );
 }
 
+const PLATFORM_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
+  facebook: { label: "Facebook", icon: Facebook, color: "text-blue-600" },
+  instagram: { label: "Instagram", icon: Instagram, color: "text-pink-500" },
+  tiktok: { label: "TikTok", icon: Music, color: "text-foreground" },
+  youtube: { label: "YouTube", icon: Youtube, color: "text-red-500" },
+  snapchat: { label: "Snapchat", icon: Ghost, color: "text-yellow-500" },
+  playstore: { label: "Play Store", icon: Smartphone, color: "text-green-600" },
+  appstore: { label: "App Store", icon: Smartphone, color: "text-blue-500" },
+  google: { label: "Google Ads", icon: Search, color: "text-amber-600" },
+};
+
+function PlatformBadge({ platform, count, configured }: { platform: string; count?: number; configured: boolean }) {
+  const cfg = PLATFORM_CONFIG[platform];
+  if (!cfg) return null;
+  const Icon = cfg.icon;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+        configured
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-muted text-muted-foreground/50"
+      }`}
+    >
+      <Icon className="h-3 w-3" />
+      {count !== undefined && count > 0 ? count : configured ? "1" : "0"}
+    </span>
+  );
+}
+
+function CompetitorPagesRow({
+  comp,
+  onDelete,
+}: {
+  comp: PagesAuditCompetitor;
+  onDelete: (competitorId: number, platform: string, pageId?: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const p = comp.platforms;
+
+  const handleDelete = async (platform: string, pageId?: string) => {
+    const label = pageId || platform;
+    if (!confirm(`Supprimer ${label} pour ${comp.name} ?`)) return;
+    setDeleting(`${platform}:${pageId || ""}`);
+    try {
+      await onDelete(comp.id, platform, pageId);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  return (
+    <div className="border-b border-border/50 last:border-0">
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <ChevronRight
+          className={`h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
+        <span className="text-sm font-medium text-foreground min-w-[140px]">
+          {comp.name}
+          {comp.is_brand && (
+            <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full font-medium">
+              MARQUE
+            </span>
+          )}
+        </span>
+        <div className="flex items-center gap-1.5 flex-wrap flex-1">
+          <PlatformBadge platform="facebook" count={p.facebook.total_pages} configured={p.facebook.total_pages > 0 || !!p.facebook.main_page_id} />
+          <PlatformBadge platform="instagram" configured={p.instagram.configured} />
+          <PlatformBadge platform="tiktok" configured={p.tiktok.configured} />
+          <PlatformBadge platform="youtube" configured={p.youtube.configured} />
+          <PlatformBadge platform="snapchat" count={p.snapchat.detected_pages?.length || 0} configured={p.snapchat.configured} />
+          <PlatformBadge platform="playstore" configured={p.playstore.configured} />
+          <PlatformBadge platform="appstore" configured={p.appstore.configured} />
+          <PlatformBadge platform="google" count={p.google.ads_count} configured={p.google.configured} />
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 pl-11 space-y-2">
+          {/* Facebook pages */}
+          <div className="rounded-lg bg-muted/30 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Facebook className="h-3.5 w-3.5 text-blue-600" />
+              <span className="text-xs font-semibold text-foreground">Facebook</span>
+              {p.facebook.main_page_id && (
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  page_id: {p.facebook.main_page_id}
+                </span>
+              )}
+            </div>
+            {p.facebook.detected_pages.length > 0 ? (
+              <div className="space-y-1">
+                {p.facebook.detected_pages.map((page) => (
+                  <div key={page.page_id} className="flex items-center justify-between rounded bg-background px-3 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-foreground">{page.page_name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{page.page_id}</span>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
+                        {page.ads_count} ads
+                      </span>
+                      {page.page_id === p.facebook.main_page_id && (
+                        <span className="text-[9px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">principal</span>
+                      )}
+                      {p.facebook.child_page_ids.includes(page.page_id) && (
+                        <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">enfant</span>
+                      )}
+                    </div>
+                    <button
+                      className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                      disabled={deleting === `facebook:${page.page_id}`}
+                      onClick={() => handleDelete("facebook", page.page_id)}
+                      title="Supprimer cette page et ses ads"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">Aucune page detectee</p>
+            )}
+          </div>
+
+          {/* Other platforms */}
+          {(["instagram", "tiktok", "youtube", "playstore", "appstore"] as const).map((key) => {
+            const plat = p[key];
+            const cfg = PLATFORM_CONFIG[key];
+            if (!plat.handle) return null;
+            const Icon = cfg.icon;
+            return (
+              <div key={key} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
+                  <span className="text-xs font-medium text-foreground">{cfg.label}</span>
+                  <span className="text-[11px] text-muted-foreground font-mono">{plat.handle}</span>
+                </div>
+                <button
+                  className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                  disabled={deleting === `${key}:`}
+                  onClick={() => handleDelete(key)}
+                  title={`Supprimer ${cfg.label}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
+
+          {/* Snapchat */}
+          {(p.snapchat.configured || p.snapchat.detected_pages?.length > 0) && (
+            <div className="rounded-lg bg-muted/30 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Ghost className="h-3.5 w-3.5 text-yellow-500" />
+                  <span className="text-xs font-semibold text-foreground">Snapchat</span>
+                  {p.snapchat.handle && (
+                    <span className="text-[11px] text-muted-foreground font-mono">{p.snapchat.handle}</span>
+                  )}
+                </div>
+                {p.snapchat.handle && (
+                  <button
+                    className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                    disabled={deleting === "snapchat:"}
+                    onClick={() => handleDelete("snapchat")}
+                    title="Supprimer snapchat_entity_name"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {p.snapchat.detected_pages?.length > 0 && (
+                <div className="space-y-1">
+                  {p.snapchat.detected_pages.map((sp) => (
+                    <div key={sp.page_name} className="flex items-center justify-between rounded bg-background px-3 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-foreground">{sp.page_name}</span>
+                        <span className="text-[10px] bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded-full">
+                          {sp.ads_count} ads
+                        </span>
+                      </div>
+                      <button
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                        disabled={deleting === `snapchat:${sp.page_name}`}
+                        onClick={() => handleDelete("snapchat", sp.page_name)}
+                        title="Supprimer ces ads Snapchat"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Google Ads */}
+          {p.google.ads_count > 0 && (
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Search className="h-3.5 w-3.5 text-amber-600" />
+                <span className="text-xs font-medium text-foreground">Google Ads</span>
+                <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">
+                  {p.google.ads_count} ads
+                </span>
+              </div>
+              <button
+                className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 disabled:opacity-30"
+                disabled={deleting === "google:"}
+                onClick={() => handleDelete("google")}
+                title="Supprimer toutes les Google Ads"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -79,8 +319,22 @@ export default function AdminPage() {
   const [methodologies, setMethodologies] = useState<{ module: string; icon: string; fields: { key: string; label: string; description: string }[] }[]>([]);
   const [openModule, setOpenModule] = useState<string | null>(null);
 
+  // Pages audit state
+  const [sectors, setSectors] = useState<SectorItem[]>([]);
+  const [selectedSector, setSelectedSector] = useState<string>("");
+  const [pagesAudit, setPagesAudit] = useState<PagesAuditSector[]>([]);
+  const [pagesLoading, setPagesLoading] = useState(false);
+  const [expandedSector, setExpandedSector] = useState<string | null>(null);
+
   useEffect(() => {
     if (!loading && !user) {
+      router.replace("/");
+    }
+  }, [user, loading, router]);
+
+  // Redirect non-admin users
+  useEffect(() => {
+    if (!loading && user && !user.is_admin) {
       router.replace("/");
     }
   }, [user, loading, router]);
@@ -97,8 +351,20 @@ export default function AdminPage() {
     adminAPI.getMethodologies().then(setMethodologies).catch(() => {});
   }, []);
 
+  const loadPagesAudit = useCallback((sector?: string) => {
+    setPagesLoading(true);
+    adminAPI
+      .getPagesAudit(sector || undefined)
+      .then((data) => {
+        setPagesAudit(data);
+        if (data.length === 1) setExpandedSector(data[0].code);
+      })
+      .catch(() => {})
+      .finally(() => setPagesLoading(false));
+  }, []);
+
   useEffect(() => {
-    if (user) {
+    if (user && user.is_admin) {
       adminAPI
         .getStats()
         .then(setStats)
@@ -110,8 +376,15 @@ export default function AdminPage() {
       loadPrompts();
       loadGps();
       loadMethodologies();
+      adminAPI.getSectors().then(setSectors).catch(() => {});
+      loadPagesAudit();
     }
-  }, [user, loadPrompts, loadGps, loadMethodologies]);
+  }, [user, loadPrompts, loadGps, loadMethodologies, loadPagesAudit]);
+
+  const handleDeletePage = async (competitorId: number, platform: string, pageId?: string) => {
+    await adminAPI.deletePage(competitorId, platform, pageId);
+    loadPagesAudit(selectedSector || undefined);
+  };
 
   if (loading) {
     return (
@@ -121,7 +394,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!user) return null;
+  if (!user || !user.is_admin) return null;
 
   if (error) {
     return (
@@ -143,7 +416,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
           <p className="text-sm text-muted-foreground">
-            Statistiques de votre veille concurrentielle
+            Administration de la plateforme
           </p>
         </div>
       </div>
@@ -172,6 +445,89 @@ export default function AdminPage() {
               label="Magasins"
               value={stats.data_volume.store_locations}
             />
+          </div>
+
+          {/* ============= PAGES AUDIT SECTION ============= */}
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Layers className="h-4 w-4 text-indigo-500" />
+                Audit des pages par verticale
+              </h2>
+              <div className="flex items-center gap-2">
+                <select
+                  className="text-xs rounded-lg border border-border bg-background px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  value={selectedSector}
+                  onChange={(e) => {
+                    setSelectedSector(e.target.value);
+                    loadPagesAudit(e.target.value || undefined);
+                    setExpandedSector(null);
+                  }}
+                >
+                  <option value="">Toutes les verticales</option>
+                  {sectors.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name} ({s.competitors_count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {pagesLoading ? (
+              <div className="flex items-center justify-center h-20">
+                <div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full" />
+              </div>
+            ) : pagesAudit.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Aucun concurrent trouve</p>
+            ) : (
+              <div className="space-y-2">
+                {pagesAudit.map((sector) => {
+                  const isOpen = expandedSector === sector.code;
+                  const totalPages = sector.competitors.reduce((sum, c) => {
+                    return sum + c.platforms.facebook.total_pages
+                      + (c.platforms.instagram.configured ? 1 : 0)
+                      + (c.platforms.tiktok.configured ? 1 : 0)
+                      + (c.platforms.youtube.configured ? 1 : 0)
+                      + (c.platforms.snapchat.configured ? 1 : 0)
+                      + (c.platforms.playstore.configured ? 1 : 0)
+                      + (c.platforms.appstore.configured ? 1 : 0)
+                      + (c.platforms.google.configured ? 1 : 0);
+                  }, 0);
+
+                  return (
+                    <div key={sector.code} className="rounded-lg border border-border overflow-hidden">
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+                        onClick={() => setExpandedSector(isOpen ? null : sector.code)}
+                      >
+                        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                          <Store className="h-4 w-4 text-indigo-500" />
+                          {sector.name}
+                          <span className="text-[10px] text-muted-foreground font-normal">
+                            {sector.competitors.length} marques / {totalPages} pages
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                        />
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-border">
+                          {sector.competitors.map((comp) => (
+                            <CompetitorPagesRow
+                              key={comp.id}
+                              comp={comp}
+                              onDelete={handleDeletePage}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Scheduler */}
