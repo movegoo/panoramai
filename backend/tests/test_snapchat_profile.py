@@ -163,13 +163,15 @@ class TestScrapeCreatorsSnapchatProfile:
 
         mock_response = {
             "success": True,
-            "subscriberCount": 50000,
-            "title": "Test Brand",
-            "profilePictureUrl": "https://example.com/pic.jpg",
-            "curatedHighlights": [{"id": "1"}, {"id": "2"}],
+            "userProfile": {
+                "subscriberCount": "50000",
+                "title": "Test Brand",
+                "profilePictureUrl": "https://example.com/pic.jpg",
+            },
+            "curatedHighlights": [{"storyType": 3}, {"storyType": 3}],
             "spotlightHighlights": [
-                {"viewCount": 10000, "shareCount": 50, "commentCount": 10},
-                {"viewCount": 20000, "shareCount": 100, "commentCount": 20},
+                {"viewCount": 10000, "shareCount": 50, "commentCount": 10, "snapList": []},
+                {"viewCount": 20000, "shareCount": 100, "commentCount": 20, "snapList": []},
             ],
         }
 
@@ -194,7 +196,7 @@ class TestScrapeCreatorsSnapchatProfile:
         svc.api_key = "test"
         svc.base_url = "https://api.test.com"
 
-        mock_response = {"success": True, "subscriberCount": 0}
+        mock_response = {"success": True, "userProfile": {"subscriberCount": "0"}}
 
         with patch.object(svc, "_get", new_callable=AsyncMock, return_value=mock_response):
             result = await svc.fetch_snapchat_profile("unknown")
@@ -203,6 +205,23 @@ class TestScrapeCreatorsSnapchatProfile:
         assert result["subscribers"] == 0
         assert result["story_count"] == 0
         assert result["engagement_rate"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_parse_no_userprofile(self):
+        """Handle response without userProfile (some accounts)."""
+        from services.scrapecreators import ScrapeCreatorsAPI
+
+        svc = ScrapeCreatorsAPI.__new__(ScrapeCreatorsAPI)
+        svc.api_key = "test"
+        svc.base_url = "https://api.test.com"
+
+        mock_response = {"success": True, "curatedHighlights": [], "spotlightHighlights": []}
+
+        with patch.object(svc, "_get", new_callable=AsyncMock, return_value=mock_response):
+            result = await svc.fetch_snapchat_profile("unknown")
+
+        assert result["success"] is True
+        assert result["subscribers"] == 0
 
     @pytest.mark.asyncio
     async def test_strips_at_sign(self):

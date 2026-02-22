@@ -326,24 +326,33 @@ class ScrapeCreatorsAPI:
             return data
 
         try:
-            subscribers = data.get("subscriberCount", 0) or 0
-            title = data.get("title", "") or ""
-            profile_pic = data.get("profilePictureUrl", "") or data.get("bitmoji", {}).get("avatarUrl", "") or ""
+            # Profile data is nested in userProfile
+            profile = data.get("userProfile", {}) or {}
+            sub_raw = profile.get("subscriberCount", 0)
+            subscribers = int(sub_raw) if sub_raw else 0
+            title = profile.get("title", "") or ""
+            profile_pic = profile.get("profilePictureUrl", "") or ""
 
-            # Parse curated highlights (stories)
+            # Parse curated highlights (stories) — at root level
             curated = data.get("curatedHighlights", []) or []
             story_count = len(curated)
 
-            # Parse spotlight highlights
+            # Parse spotlight highlights — at root level
+            # Each spotlight has a snapList with individual snaps
             spotlights = data.get("spotlightHighlights", []) or []
             spotlight_count = len(spotlights)
             total_views = 0
             total_shares = 0
             total_comments = 0
             for sp in spotlights:
-                total_views += sp.get("viewCount", 0) or 0
-                total_shares += sp.get("shareCount", 0) or 0
-                total_comments += sp.get("commentCount", 0) or 0
+                # Try direct fields first, then count snaps
+                total_views += int(sp.get("viewCount", 0) or 0)
+                total_shares += int(sp.get("shareCount", 0) or 0)
+                total_comments += int(sp.get("commentCount", 0) or 0)
+                # Count snaps in each spotlight as a proxy for content volume
+                snap_list = sp.get("snapList", []) or []
+                if not total_views and snap_list:
+                    total_views += len(snap_list)
 
             # Engagement rate: (views + shares + comments) / subscribers
             engagement_rate = 0.0
