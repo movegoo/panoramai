@@ -57,6 +57,7 @@ import {
   X,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
+import { FreshnessBadge } from "@/components/freshness-badge";
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -768,9 +769,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex flex-col items-end gap-2">
               <PeriodFilter selectedDays={periodDays} onDaysChange={setPeriodDays} variant="dark" />
-              <div className="text-[10px] text-slate-500 tabular-nums">
-                Maj {(() => { try { return new Date(data.last_updated).toLocaleString("fr-FR"); } catch { return data.last_updated; } })()}
-              </div>
+              <FreshnessBadge timestamp={data.last_updated} label="Dernière maj" />
             </div>
           </div>
 

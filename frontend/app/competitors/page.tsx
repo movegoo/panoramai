@@ -14,7 +14,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { competitorsAPI, enrichAPI, Competitor, CompetitorCreate, API_BASE } from "@/lib/api";
+import { competitorsAPI, enrichAPI, Competitor, CompetitorCreate, API_BASE, FreshnessData } from "@/lib/api";
+import { FreshnessBadge } from "@/components/freshness-badge";
 import { formatDate } from "@/lib/utils";
 import {
   Plus,
@@ -103,6 +104,7 @@ const CHANNELS = [
 
 export default function CompetitorsPage() {
   const [competitors, setCompetitors] = useState<any[]>([]);
+  const [freshness, setFreshness] = useState<FreshnessData | null>(null);
   const [storeCounts, setStoreCounts] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
@@ -174,6 +176,13 @@ export default function CompetitorsPage() {
     try {
       const data = await competitorsAPI.list();
       setCompetitors(data);
+
+      // Fetch freshness
+      try {
+        const { freshnessAPI } = await import("@/lib/api");
+        const f = await freshnessAPI.get();
+        setFreshness(f);
+      } catch {}
 
       // Fetch store counts
       try {
@@ -309,8 +318,9 @@ export default function CompetitorsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">Concurrents</h1>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground flex items-center gap-2">
               {competitors.length} concurrent{competitors.length !== 1 ? "s" : ""} suivi{competitors.length !== 1 ? "s" : ""}
+              {freshness && <FreshnessBadge timestamp={freshness.instagram || freshness.tiktok || freshness.playstore} />}
             </p>
           </div>
         </div>

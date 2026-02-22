@@ -14,6 +14,7 @@ import {
   creativeAPI,
   Ad,
   CreativeInsights,
+  FreshnessData,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -60,6 +61,7 @@ import {
   Info,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
+import { FreshnessBadge } from "@/components/freshness-badge";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -1532,6 +1534,7 @@ export default function AdsPage() {
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
   const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights");
+  const { data: freshness } = useAPI<FreshnessData>("/freshness");
 
   // Merge SWR data into state when available
   useEffect(() => {
@@ -2024,8 +2027,9 @@ export default function AdsPage() {
           </div>
           <div className="min-w-0">
             <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
-            <p className="text-[12px] sm:text-[13px] text-muted-foreground truncate">
+            <p className="text-[12px] sm:text-[13px] text-muted-foreground truncate flex items-center gap-2">
               Meta, TikTok &amp; Google Ads
+              <FreshnessBadge timestamp={freshness?.ads_meta} label="Meta" />
             </p>
           </div>
         </div>

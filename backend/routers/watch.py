@@ -551,10 +551,29 @@ async def get_dashboard_data(
     # Multi-dimensional rankings
     rankings = _build_rankings(competitor_data, brand.company_name)
 
+    # Compute real freshness from loaded data
+    all_timestamps = []
+    freshness = {}
+    for label, data_map in [
+        ("instagram", ig_latest_map), ("tiktok", tt_latest_map),
+        ("youtube", yt_latest_map), ("playstore", ps_latest_map),
+        ("appstore", as_latest_map),
+    ]:
+        ts_list = [row.recorded_at for row in data_map.values() if row and row.recorded_at]
+        if ts_list:
+            max_ts = max(ts_list)
+            freshness[label] = max_ts.isoformat()
+            all_timestamps.append(max_ts)
+        else:
+            freshness[label] = None
+
+    last_updated = max(all_timestamps).isoformat() if all_timestamps else datetime.utcnow().isoformat()
+
     return {
         "brand_name": brand.company_name,
         "sector": get_sector_label(brand.sector),
-        "last_updated": datetime.utcnow().isoformat(),
+        "last_updated": last_updated,
+        "freshness": freshness,
         "brand": brand_data,
         "competitors": competitors_only,
         "insights": insights,

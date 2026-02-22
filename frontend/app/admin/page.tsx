@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import {
   adminAPI,
+  freshnessAPI,
   AdminStats,
   AdminUser,
   PromptTemplateData,
@@ -12,6 +13,7 @@ import {
   PagesAuditSector,
   PagesAuditCompetitor,
   SectorItem,
+  FreshnessData,
 } from "@/lib/api";
 import {
   Users,
@@ -45,6 +47,7 @@ import {
   Pencil,
   Key,
 } from "lucide-react";
+import { FreshnessBadge } from "@/components/freshness-badge";
 
 function StatCard({
   label,
@@ -331,6 +334,9 @@ export default function AdminPage() {
   // Dedup state
   const [deduplicating, setDeduplicating] = useState(false);
 
+  // Freshness state
+  const [freshness, setFreshness] = useState<FreshnessData | null>(null);
+
   // User editing state
   const [editingUser, setEditingUser] = useState<number | null>(null);
   const [editUserData, setEditUserData] = useState<{ name: string; email: string }>({ name: "", email: "" });
@@ -390,6 +396,7 @@ export default function AdminPage() {
       loadMethodologies();
       adminAPI.getSectors().then(setSectors).catch(() => {});
       loadPagesAudit();
+      freshnessAPI.get().then(setFreshness).catch(() => {});
     }
   }, [user, loadPrompts, loadGps, loadMethodologies, loadPagesAudit]);
 
@@ -483,8 +490,9 @@ export default function AdminPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-foreground">Backoffice</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
             Administration de la plateforme
+            {freshness && <FreshnessBadge timestamp={Object.values(freshness).filter(Boolean).sort().reverse()[0] || null} label="Dernière maj" />}
           </p>
         </div>
       </div>

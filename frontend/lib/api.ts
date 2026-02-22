@@ -333,6 +333,7 @@ export interface DashboardData {
   brand_name: string;
   sector: string;
   last_updated: string;
+  freshness?: Record<string, string | null>;
   brand: DashboardCompetitor | null;
   competitors: DashboardCompetitor[];
   insights: DashboardInsight[];
@@ -1025,6 +1026,22 @@ export const adminAPI = {
     }),
   deduplicate: () =>
     fetchAPI<{ merged: number; message: string }>("/admin/deduplicate", { method: "POST" }),
+};
+
+// Freshness API
+export interface FreshnessData {
+  instagram: string | null;
+  tiktok: string | null;
+  youtube: string | null;
+  playstore: string | null;
+  appstore: string | null;
+  ads_meta: string | null;
+  ads_google: string | null;
+  ads_snapchat: string | null;
+}
+
+export const freshnessAPI = {
+  get: () => fetchAPI<FreshnessData>("/freshness"),
 };
 
 // Creative Analysis API
