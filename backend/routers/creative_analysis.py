@@ -160,6 +160,11 @@ async def analyze_all_creatives(
                 ad.product_category = result.get("product_category", "")[:100]
                 ad.product_subcategory = result.get("product_subcategory", "")[:100]
                 ad.ad_objective = result.get("ad_objective", "")[:50]
+                ad.promo_type = result.get("promo_type", "")[:50]
+                ad.creative_format = result.get("creative_format", "")[:50]
+                ad.price_visible = result.get("price_visible", False)
+                ad.price_value = result.get("price_value", "")[:20]
+                ad.seasonal_event = result.get("seasonal_event", "")[:50]
                 ad.creative_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:
@@ -249,12 +254,17 @@ async def get_creative_insights(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
+    competitor_id: int | None = Query(None),
+    location: str | None = Query(None),
+    category: str | None = Query(None),
 ):
-    """Aggregated creative intelligence across all analyzed ads."""
+    """Aggregated creative intelligence across all analyzed ads.
+    Optional filters: competitor_id, location (geo name), category (product_category).
+    """
     adv_id = parse_advertiser_header(x_advertiser_id)
     comp_ids = get_user_competitor_ids(db, user, adv_id) if user else []
     try:
-        return _compute_insights(db, user, comp_ids)
+        return _compute_insights(db, user, comp_ids, competitor_id=competitor_id, location=location, category=category)
     except Exception as e:
         logger.error(f"Error computing creative insights: {e}", exc_info=True)
         return {
@@ -276,7 +286,14 @@ async def get_creative_insights(
         }
 
 
-def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
+def _compute_insights(
+    db: Session,
+    user: User | None,
+    comp_ids: list[int],
+    competitor_id: int | None = None,
+    location: str | None = None,
+    category: str | None = None,
+):
     query = db.query(Ad, Competitor.name).join(
         Competitor, Ad.competitor_id == Competitor.id
     ).filter(
@@ -287,7 +304,30 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
     if user:
         query = query.filter(Competitor.id.in_(comp_ids))
 
+    # Optional filters
+    if competitor_id is not None:
+        query = query.filter(Competitor.id == competitor_id)
+    if category:
+        query = query.filter(Ad.product_category == category)
+
     rows = query.all()
+
+    # Post-filter by location (needs JSON parsing)
+    if location:
+        filtered_rows = []
+        for ad, comp_name in rows:
+            if ad.location_audience:
+                try:
+                    locs = json.loads(ad.location_audience) if isinstance(ad.location_audience, str) else ad.location_audience
+                    if isinstance(locs, list):
+                        for loc in locs:
+                            name = loc.get("name", "") if isinstance(loc, dict) else str(loc)
+                            if location.lower() in name.lower():
+                                filtered_rows.append((ad, comp_name))
+                                break
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        rows = filtered_rows
 
     # Count remaining (not yet analyzed)
     remaining_q = db.query(func.count(Ad.id)).join(
@@ -323,6 +363,9 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
     category_counter = Counter()
     subcategory_counter = Counter()
     objective_counter = Counter()
+    promo_type_counter = Counter()
+    creative_format_counter = Counter()
+    seasonal_event_counter = Counter()
     hooks = []
     by_competitor: dict[str, list] = {}
     all_ads_data = []
@@ -345,6 +388,12 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
             subcategory_counter[ad.product_subcategory] += 1
         if ad.ad_objective:
             objective_counter[ad.ad_objective] += 1
+        if ad.promo_type and ad.promo_type != "aucune":
+            promo_type_counter[ad.promo_type] += 1
+        if ad.creative_format:
+            creative_format_counter[ad.creative_format] += 1
+        if ad.seasonal_event and ad.seasonal_event != "aucun":
+            seasonal_event_counter[ad.seasonal_event] += 1
 
         # Parse colors
         try:
@@ -462,6 +511,24 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
         for o, n in objective_counter.most_common(10)
     ]
 
+    # Promo types
+    promo_types = [
+        {"promo_type": p, "count": n, "pct": round(n / total * 100, 1)}
+        for p, n in promo_type_counter.most_common(10)
+    ]
+
+    # Creative formats
+    creative_formats = [
+        {"creative_format": f, "count": n, "pct": round(n / total * 100, 1)}
+        for f, n in creative_format_counter.most_common(10)
+    ]
+
+    # Seasonal events
+    seasonal_events = [
+        {"seasonal_event": s, "count": n, "pct": round(n / total * 100, 1)}
+        for s, n in seasonal_event_counter.most_common(10)
+    ]
+
     # Generate JARVIS signals
     signals = _generate_signals(
         all_ads_data=all_ads_data,
@@ -488,6 +555,9 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
         "categories": categories,
         "subcategories": subcategories,
         "objectives": objectives,
+        "promo_types": promo_types,
+        "creative_formats": creative_formats,
+        "seasonal_events": seasonal_events,
         "recommendations": recommendations,
         "signals": signals,
         "geo_analysis": geo_analysis,

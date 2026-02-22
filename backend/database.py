@@ -138,6 +138,13 @@ class Ad(Base):
     # Ad type segmentation
     ad_type = Column(String(20))  # branding, performance, dts
 
+    # Enriched creative fields (AI-powered)
+    promo_type = Column(String(50))        # prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, aucune
+    creative_format = Column(String(50))   # catalogue, produit-unique, multi-produits, ambiance, événement, recrutement
+    price_visible = Column(Boolean)
+    price_value = Column(String(20))
+    seasonal_event = Column(String(50))    # noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun
+
     competitor = relationship("Competitor", back_populates="ads")
 
 
@@ -628,6 +635,12 @@ def _run_migrations(engine):
             ("advertisers", "snapchat_entity_name", "VARCHAR(255)"),
             ("competitors", "snapchat_username", "VARCHAR(100)"),
             ("advertisers", "snapchat_username", "VARCHAR(100)"),
+            # Enriched creative fields
+            ("ads", "promo_type", "VARCHAR(50)"),
+            ("ads", "creative_format", "VARCHAR(50)"),
+            ("ads", "price_visible", "BOOLEAN"),
+            ("ads", "price_value", "VARCHAR(20)"),
+            ("ads", "seasonal_event", "VARCHAR(50)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

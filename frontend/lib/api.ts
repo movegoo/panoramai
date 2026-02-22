@@ -141,6 +141,12 @@ export interface Ad {
   ad_objective?: string;
   // Ad type segmentation
   ad_type?: string;  // "branding" | "performance" | "dts"
+  // Enriched creative fields
+  promo_type?: string;
+  creative_format?: string;
+  price_visible?: boolean;
+  price_value?: string;
+  seasonal_event?: string;
 }
 
 export interface InstagramData {
@@ -1124,6 +1130,9 @@ export interface CreativeInsights {
   categories: { category: string; count: number; pct: number }[];
   subcategories: { subcategory: string; count: number; pct: number }[];
   objectives: { objective: string; count: number; pct: number }[];
+  promo_types?: { promo_type: string; count: number; pct: number }[];
+  creative_formats?: { creative_format: string; count: number; pct: number }[];
+  seasonal_events?: { seasonal_event: string; count: number; pct: number }[];
   recommendations: string[];
   signals: {
     type: string;
@@ -1149,7 +1158,14 @@ export const creativeAPI = {
       { method: "POST" }
     ),
 
-  getInsights: () => fetchAPI<CreativeInsights>("/creative/insights"),
+  getInsights: (opts?: { competitor_id?: number; location?: string; category?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.competitor_id) params.set("competitor_id", String(opts.competitor_id));
+    if (opts?.location) params.set("location", opts.location);
+    if (opts?.category) params.set("category", opts.category);
+    const qs = params.toString();
+    return fetchAPI<CreativeInsights>(`/creative/insights${qs ? `?${qs}` : ""}`);
+  },
 };
 
 // Social Content Analysis API

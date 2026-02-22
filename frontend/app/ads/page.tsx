@@ -145,6 +145,52 @@ function MetaIcon({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+/* ─────────────── Product Super-Categories ─────────────── */
+
+const PRODUCT_SUPERCATS: Record<string, string[]> = {
+  "Alimentaire": ["Épicerie", "Boissons", "Frais", "Surgelés", "Fruits & Légumes", "Boucherie & Volaille", "Poissonnerie", "Boulangerie", "Bio & Écologie"],
+  "Non-alimentaire": ["DPH", "Beauté & Parfumerie", "Hygiène", "Entretien", "Textile & Mode", "Électroménager", "Multimédia & High-Tech", "Jouets & Loisirs", "Sport", "Bricolage & Jardin", "Ameublement & Déco", "Auto & Mobilité", "Animalerie"],
+  "Services": ["Services", "Fidélité & Programme"],
+  "Corporate": ["Marque Employeur", "Corporate & RSE"],
+};
+
+// Reverse mapping: category -> super-category
+const CATEGORY_TO_SUPERCAT: Record<string, string> = {};
+for (const [supercat, cats] of Object.entries(PRODUCT_SUPERCATS)) {
+  for (const cat of cats) {
+    CATEGORY_TO_SUPERCAT[cat] = supercat;
+  }
+}
+
+/* ─────────────── Geo Hierarchy Helpers ─────────────── */
+
+function parseGeoHierarchy(ads: { location_audience?: { name: string; type?: string }[] }[]): {
+  countries: Map<string, number>;
+  regions: Map<string, number>;
+  departments: Map<string, number>;
+} {
+  const countries = new Map<string, number>();
+  const regions = new Map<string, number>();
+  const departments = new Map<string, number>();
+
+  ads.forEach(ad => {
+    (ad.location_audience || []).forEach(loc => {
+      const name = loc.name.split(":")[0].trim();
+      const locType = (loc as any).type || "";
+
+      if (locType === "country" || (!locType && !name.includes(",") && name.length <= 30 && !/\d/.test(name) && !name.includes("-"))) {
+        countries.set(name, (countries.get(name) || 0) + 1);
+      } else if (locType === "region" || locType === "geo_market") {
+        regions.set(name, (regions.get(name) || 0) + 1);
+      } else {
+        departments.set(name, (departments.get(name) || 0) + 1);
+      }
+    });
+  });
+
+  return { countries, regions, departments };
+}
+
 /* ─────────────── CPM Benchmarks & Budget Estimation ─────────────── */
 
 // CPM benchmarks by country (EUR) - Source: industry averages 2025-2026
@@ -1499,6 +1545,11 @@ export default function AdsPage() {
   const [filterLocations, setFilterLocations] = useState<Set<string>>(new Set());
   const [filterCategories, setFilterCategories] = useState<Set<string>>(new Set());
   const [filterObjectives, setFilterObjectives] = useState<Set<string>>(new Set());
+  const [filterSuperCat, setFilterSuperCat] = useState<Set<string>>(new Set());
+  const [filterGeoLevel, setFilterGeoLevel] = useState<"pays" | "region" | "departement">("pays");
+  const [filterPromoType, setFilterPromoType] = useState<Set<string>>(new Set());
+  const [filterCreativeFormat, setFilterCreativeFormat] = useState<Set<string>>(new Set());
+  const [filterSeasonal, setFilterSeasonal] = useState<Set<string>>(new Set());
   const [expandedFilterSections, setExpandedFilterSections] = useState<Set<string>>(new Set());
   const [categorySearch, setCategorySearch] = useState("");
   const [showAllPayers, setShowAllPayers] = useState(false);
@@ -1707,6 +1758,10 @@ export default function AdsPage() {
     setFilterLocations(new Set());
     setFilterCategories(new Set());
     setFilterObjectives(new Set());
+    setFilterSuperCat(new Set());
+    setFilterPromoType(new Set());
+    setFilterCreativeFormat(new Set());
+    setFilterSeasonal(new Set());
   }
 
   // Build advertiser logos map: always use competitor logo_url
@@ -1779,13 +1834,45 @@ export default function AdsPage() {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
 
-  const availableCategories = useMemo(() => {
+  const geoHierarchy = useMemo(() => parseGeoHierarchy(allAds), [allAds]);
+
+  const availablePromoTypes = useMemo(() => {
     const map = new Map<string, number>();
     allAds.forEach(a => {
-      if (a.product_category) map.set(a.product_category, (map.get(a.product_category) || 0) + 1);
+      if (a.promo_type && a.promo_type !== "aucune") map.set(a.promo_type, (map.get(a.promo_type) || 0) + 1);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [allAds]);
+
+  const availableCreativeFormats = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      if (a.creative_format) map.set(a.creative_format, (map.get(a.creative_format) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableSeasonals = useMemo(() => {
+    const map = new Map<string, number>();
+    allAds.forEach(a => {
+      if (a.seasonal_event && a.seasonal_event !== "aucun") map.set(a.seasonal_event, (map.get(a.seasonal_event) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds]);
+
+  const availableCategories = useMemo(() => {
+    const map = new Map<string, number>();
+    const allowedCats = filterSuperCat.size > 0
+      ? new Set(Array.from(filterSuperCat).flatMap(sc => PRODUCT_SUPERCATS[sc] || []))
+      : null;
+    allAds.forEach(a => {
+      if (a.product_category) {
+        if (allowedCats && !allowedCats.has(a.product_category)) return;
+        map.set(a.product_category, (map.get(a.product_category) || 0) + 1);
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [allAds, filterSuperCat]);
 
   const availableObjectives = useMemo(() => {
     const map = new Map<string, number>();
@@ -1866,7 +1953,14 @@ export default function AdsPage() {
         if (!adLocs.some(l => filterLocations.has(l))) return false;
       }
       if (filterCategories.size > 0 && (!ad.product_category || !filterCategories.has(ad.product_category))) return false;
+      if (filterSuperCat.size > 0) {
+        const cats = Array.from(filterSuperCat).flatMap(sc => PRODUCT_SUPERCATS[sc] || []);
+        if (!ad.product_category || !cats.includes(ad.product_category)) return false;
+      }
       if (filterObjectives.size > 0 && (!ad.ad_objective || !filterObjectives.has(ad.ad_objective))) return false;
+      if (filterPromoType.size > 0 && (!ad.promo_type || !filterPromoType.has(ad.promo_type))) return false;
+      if (filterCreativeFormat.size > 0 && (!ad.creative_format || !filterCreativeFormat.has(ad.creative_format))) return false;
+      if (filterSeasonal.size > 0 && (!ad.seasonal_event || !filterSeasonal.has(ad.seasonal_event))) return false;
       if (filterAdType !== "all" && ad.ad_type !== filterAdType) return false;
       if (filterCountry.size > 0) {
         const adCountries = ad.targeted_countries || [];
@@ -1912,10 +2006,10 @@ export default function AdsPage() {
       return bDate - aDate;
     });
     return result;
-  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, searchQuery]);
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
@@ -1925,7 +2019,8 @@ export default function AdsPage() {
     + (filterStatus !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size
     + (filterAdType !== "all" ? 1 : 0) + filterCountry.size
-    + filterCategories.size + filterObjectives.size;
+    + filterCategories.size + filterObjectives.size + filterSuperCat.size
+    + filterPromoType.size + filterCreativeFormat.size + filterSeasonal.size;
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -2108,6 +2203,31 @@ export default function AdsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Focus Bar (when filters are active) ─────────── */}
+      {activeFilters > 0 && (
+        <div className="rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/50 px-4 py-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <Target className="h-4 w-4 text-violet-600 shrink-0" />
+            <span className="font-semibold text-violet-900">Focus :</span>
+            <span className="text-violet-700 truncate">
+              {[
+                ...(filterCompetitors.size > 0 ? [Array.from(filterCompetitors).join(", ")] : []),
+                ...(filterLocations.size > 0 ? [Array.from(filterLocations).slice(0, 2).join(", ")] : []),
+                ...(filterSuperCat.size > 0 ? [Array.from(filterSuperCat).join(", ")] : []),
+                ...(filterCategories.size > 0 ? [Array.from(filterCategories).slice(0, 2).join(", ")] : []),
+                ...(filterPromoType.size > 0 ? [Array.from(filterPromoType).join(", ")] : []),
+                ...(filterCreativeFormat.size > 0 ? [Array.from(filterCreativeFormat).join(", ")] : []),
+                ...(filterSeasonal.size > 0 ? [Array.from(filterSeasonal).join(", ")] : []),
+              ].join(" \u00D7 ") || "Filtres actifs"}
+            </span>
+            <span className="text-violet-500 tabular-nums shrink-0">&mdash; {filteredAds.length} publicit&eacute;{filteredAds.length > 1 ? "s" : ""}</span>
+          </div>
+          <button onClick={clearAllFilters} className="text-violet-500 hover:text-violet-700 transition-colors shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* ── Channel pills ─────────────────────── */}
       {availableSources.entries.length > 1 && (
@@ -2521,8 +2641,26 @@ export default function AdsPage() {
               )}
             </div>
 
-            {/* Row 4: Catégorie produit + Objectif pub — only shown if any ads have these fields */}
+            {/* Row 4: Super-catégorie + Catégorie produit + Objectif pub */}
             {(availableCategories.length > 0 || availableObjectives.length > 0) && (
+              <>
+              {/* Super-catégories chips */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <PieChart className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Super-cat&eacute;gorie</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {Object.entries(PRODUCT_SUPERCATS).map(([supercat, cats]) => {
+                    const count = allAds.filter(a => a.product_category && cats.includes(a.product_category)).length;
+                    if (count === 0) return null;
+                    return (
+                      <FilterChip key={supercat} label={supercat} count={count} active={filterSuperCat.has(supercat)} onClick={() => toggleFilter(filterSuperCat, supercat, setFilterSuperCat)} />
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Catégorie produit - collapsible with search */}
                 {availableCategories.length > 0 && (
@@ -2614,6 +2752,69 @@ export default function AdsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Row 5: Intelligence Créative — promo, format créatif, saison */}
+              {(availablePromoTypes.length > 0 || availableCreativeFormats.length > 0 || availableSeasonals.length > 0) && (
+                <div className="rounded-xl border bg-muted/20 overflow-hidden">
+                  <button
+                    onClick={() => setExpandedFilterSections(prev => { const n = new Set(prev); if (n.has("creative_intel")) n.delete("creative_intel"); else n.add("creative_intel"); return n; })}
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Brain className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Intelligence Cr&eacute;ative</span>
+                      {(filterPromoType.size + filterCreativeFormat.size + filterSeasonal.size) > 0 && (
+                        <span className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full bg-violet-600 text-white text-[9px] font-bold px-1">{filterPromoType.size + filterCreativeFormat.size + filterSeasonal.size}</span>
+                      )}
+                    </div>
+                    {expandedFilterSections.has("creative_intel") ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                  {expandedFilterSections.has("creative_intel") && (
+                    <div className="px-3.5 pb-3 space-y-3">
+                      {availablePromoTypes.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5 pt-1">
+                            <Tag className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] font-medium text-muted-foreground">Type de promo</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {availablePromoTypes.map(([name, count]) => (
+                              <FilterChip key={name} label={name} count={count} active={filterPromoType.has(name)} onClick={() => toggleFilter(filterPromoType, name, setFilterPromoType)} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {availableCreativeFormats.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Layers className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] font-medium text-muted-foreground">Format cr&eacute;atif</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {availableCreativeFormats.map(([name, count]) => (
+                              <FilterChip key={name} label={name} count={count} active={filterCreativeFormat.has(name)} onClick={() => toggleFilter(filterCreativeFormat, name, setFilterCreativeFormat)} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {availableSeasonals.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] font-medium text-muted-foreground">&Eacute;v&eacute;nement saisonnier</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {availableSeasonals.map(([name, count]) => (
+                              <FilterChip key={name} label={name} count={count} active={filterSeasonal.has(name)} onClick={() => toggleFilter(filterSeasonal, name, setFilterSeasonal)} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              </>
             )}
 
             {/* Clear all */}

@@ -40,7 +40,12 @@ JSON attendu :
   "summary": "<1-2 phrases en français décrivant l'approche créative et son efficacité probable>",
   "product_category": "<UNE valeur parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, Boucherie & Volaille, Poissonnerie, Boulangerie, DPH, Beauté & Parfumerie, Hygiène, Entretien, Textile & Mode, Électroménager, Multimédia & High-Tech, Jouets & Loisirs, Sport, Bricolage & Jardin, Ameublement & Déco, Auto & Mobilité, Animalerie, Bio & Écologie, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Autre>",
   "product_subcategory": "<sous-catégorie plus précise, en français, ex: Yaourts, Café, Bières, Lessive, Smartphones, Literie, Drive, Carte fidélité...>",
-  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>"
+  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>",
+  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, aucune>",
+  "creative_format": "<UNE valeur parmi : catalogue, produit-unique, multi-produits, ambiance, événement, recrutement>",
+  "price_visible": true ou false,
+  "price_value": "<le prix si visible, ex: 2,99€, sinon vide>",
+  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun>"
 }}
 
 Critères de score :
@@ -350,12 +355,13 @@ class CreativeAnalyzer:
 
         # Ensure strings
         for key in ("concept", "hook", "tone", "text_overlay", "layout", "cta_style", "summary",
-                     "product_category", "product_subcategory", "ad_objective"):
+                     "product_category", "product_subcategory", "ad_objective",
+                     "promo_type", "creative_format", "price_value", "seasonal_event"):
             if key not in data or not isinstance(data[key], str):
                 data[key] = ""
 
         # Ensure booleans
-        for key in ("has_product", "has_face", "has_logo", "has_price"):
+        for key in ("has_product", "has_face", "has_logo", "has_price", "price_visible"):
             data[key] = bool(data.get(key, False))
 
         return data
