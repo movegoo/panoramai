@@ -607,9 +607,9 @@ def _generate_signals(
             pass
 
         # Recent surge
-        if ad.ad_delivery_start_time:
+        if ad.start_date:
             try:
-                start = datetime.fromisoformat(str(ad.ad_delivery_start_time).replace("Z", "+00:00")).replace(tzinfo=None)
+                start = ad.start_date if isinstance(ad.start_date, datetime) else datetime.fromisoformat(str(ad.start_date).replace("Z", "+00:00")).replace(tzinfo=None)
                 if start >= seven_days_ago:
                     comp_recent[comp_name] += 1
             except (ValueError, TypeError):
