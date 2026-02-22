@@ -722,9 +722,8 @@ def _migrate_join_tables(engine):
         is_pg = DATABASE_URL.startswith("postgresql")
         true_val = "true" if is_pg else "1"
 
+        # --- 1 & 2: Populate join tables (separate transaction so dedup failure can't roll this back) ---
         with engine.begin() as conn:
-            # --- 1. Populate user_advertisers from Advertiser.user_id ---
-            # Use NOT EXISTS for cross-DB compat (works on both SQLite and PostgreSQL)
             conn.execute(text(
                 'INSERT INTO user_advertisers (user_id, advertiser_id, role) '
                 "SELECT user_id, id, 'owner' FROM advertisers "
@@ -733,7 +732,6 @@ def _migrate_join_tables(engine):
                 '  WHERE ua.user_id = advertisers.user_id AND ua.advertiser_id = advertisers.id)'
             ))
 
-            # --- 2. Populate advertiser_competitors from Competitor.advertiser_id + is_brand ---
             false_val = "false" if is_pg else "0"
             true_val = "true" if is_pg else "1"
             conn.execute(text(
@@ -744,24 +742,24 @@ def _migrate_join_tables(engine):
                 '  WHERE ac.advertiser_id = competitors.advertiser_id AND ac.competitor_id = competitors.id)'
             ))
 
-            # --- 3. Deduplicate competitors ---
-            # Group by facebook_page_id (strong match), then by exact lowercase name
-            # Keep canonical = the one with the most ads
-
+        # --- 3: Deduplicate competitors (separate transaction) ---
+        with engine.begin() as conn:
             if is_pg:
                 agg_fn = "STRING_AGG(id::text, ',')"
             else:
                 agg_fn = "GROUP_CONCAT(id)"
 
+            true_val = "true" if is_pg else "1"
+
             # 3a. Find duplicates by facebook_page_id
             dupes_by_fbid = conn.execute(text(
-                f'SELECT facebook_page_id, {agg_fn} as ids '
+                f'SELECT LOWER(facebook_page_id), {agg_fn} as ids '
                 'FROM competitors '
                 f"WHERE facebook_page_id IS NOT NULL AND facebook_page_id != '' AND is_active = {true_val} "
                 'GROUP BY LOWER(facebook_page_id) HAVING COUNT(*) > 1'
             )).fetchall()
 
-            merged_ids = set()  # Track already-merged competitor IDs
+            merged_ids = set()
 
             for row in dupes_by_fbid:
                 ids = [int(x) for x in row[1].split(",")]

@@ -29,7 +29,9 @@ export function useAPI<T>(
       const res = await fetch(`${API_BASE}${endpoint}`, { headers });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `API Error: ${res.status}`);
+        const error = new Error(err.detail || `API Error: ${res.status}`);
+        (error as any).status = res.status;
+        throw error;
       }
       return res.json();
     },
