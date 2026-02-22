@@ -1,25 +1,10 @@
 """Tests for competitors API endpoints."""
-from database import Competitor, Advertiser
+from database import Competitor, Advertiser, UserAdvertiser, AdvertiserCompetitor
 
 
 class TestListCompetitors:
-    def test_authenticated(self, client, auth_headers, test_user, db):
-        user, _ = test_user
-        # Create an advertiser for the user
-        adv = Advertiser(user_id=user.id, company_name="Test Brand", sector="supermarche", is_active=True)
-        db.add(adv)
-        db.commit()
-        db.refresh(adv)
-
-        # Create a competitor
-        comp = Competitor(
-            user_id=user.id, advertiser_id=adv.id,
-            name="Carrefour", website="https://carrefour.fr", is_active=True,
-        )
-        db.add(comp)
-        db.commit()
-
-        response = client.get("/api/competitors/", headers=auth_headers)
+    def test_authenticated(self, client, adv_headers, test_competitor):
+        response = client.get("/api/competitors/", headers=adv_headers)
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -32,17 +17,11 @@ class TestListCompetitors:
 
 
 class TestCreateCompetitor:
-    def test_success(self, client, auth_headers, test_user, db):
-        user, _ = test_user
-        adv = Advertiser(user_id=user.id, company_name="Test Brand", sector="supermarche", is_active=True)
-        db.add(adv)
-        db.commit()
-        db.refresh(adv)
-
+    def test_success(self, client, adv_headers):
         response = client.post(
             "/api/competitors/",
             json={"name": "Lidl", "website": "https://lidl.fr"},
-            headers={**auth_headers, "X-Advertiser-Id": str(adv.id)},
+            headers=adv_headers,
         )
         assert response.status_code == 200
         data = response.json()
@@ -50,24 +29,12 @@ class TestCreateCompetitor:
 
 
 class TestGetCompetitor:
-    def test_found(self, client, auth_headers, test_user, db):
-        user, _ = test_user
-        adv = Advertiser(user_id=user.id, company_name="Test Brand", sector="supermarche", is_active=True)
-        db.add(adv)
-        db.commit()
-        db.refresh(adv)
-
-        comp = Competitor(
-            user_id=user.id, advertiser_id=adv.id,
-            name="Leclerc", website="https://leclerc.fr", is_active=True,
+    def test_found(self, client, adv_headers, test_competitor):
+        response = client.get(
+            f"/api/competitors/{test_competitor.id}", headers=adv_headers
         )
-        db.add(comp)
-        db.commit()
-        db.refresh(comp)
-
-        response = client.get(f"/api/competitors/{comp.id}", headers=auth_headers)
         assert response.status_code == 200
-        assert response.json()["name"] == "Leclerc"
+        assert response.json()["name"] == "Carrefour"
 
     def test_not_found(self, client, auth_headers):
         response = client.get("/api/competitors/9999", headers=auth_headers)

@@ -1,4 +1,5 @@
 """Tests for auth API endpoints."""
+from database import Advertiser, UserAdvertiser
 
 
 class TestRegister:
@@ -58,12 +59,23 @@ class TestLogin:
 
 
 class TestMe:
-    def test_with_token(self, client, auth_headers):
+    def test_with_token(self, client, auth_headers, test_user, db):
+        user, _ = test_user
+        adv = Advertiser(company_name="My Brand", sector="supermarche", is_active=True)
+        db.add(adv)
+        db.commit()
+        db.refresh(adv)
+        link = UserAdvertiser(user_id=user.id, advertiser_id=adv.id, role="owner")
+        db.add(link)
+        db.commit()
+
         response = client.get("/api/auth/me", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["email"] == "test@example.com"
         assert "advertisers" in data
+        assert len(data["advertisers"]) >= 1
+        assert data["advertisers"][0]["company_name"] == "My Brand"
 
     def test_without_token(self, client):
         response = client.get("/api/auth/me")
