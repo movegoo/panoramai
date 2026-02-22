@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from database import get_db, Ad, Competitor, User, SystemSetting, AdvertiserCompetitor, UserAdvertiser
 from services.creative_analyzer import creative_analyzer
@@ -288,10 +289,19 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
 
     rows = query.all()
 
+    # Count remaining (not yet analyzed)
+    remaining_q = db.query(func.count(Ad.id)).join(
+        Competitor, Ad.competitor_id == Competitor.id
+    ).filter(Ad.creative_analyzed_at.is_(None))
+    if user:
+        remaining_q = remaining_q.filter(Competitor.id.in_(comp_ids))
+    remaining_count = remaining_q.scalar() or 0
+
     if not rows:
         return {
             "total_analyzed": 0,
             "avg_score": 0,
+            "remaining": remaining_count,
             "concepts": [],
             "tones": [],
             "top_hooks": [],
@@ -468,6 +478,7 @@ def _compute_insights(db: Session, user: User | None, comp_ids: list[int]):
     return {
         "total_analyzed": total,
         "avg_score": avg_score,
+        "remaining": remaining_count,
         "concepts": concepts,
         "tones": tones,
         "top_hooks": top_hooks,

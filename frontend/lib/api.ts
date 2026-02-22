@@ -1022,6 +1022,7 @@ export const adminAPI = {
 export interface CreativeInsights {
   total_analyzed: number;
   avg_score: number;
+  remaining?: number;
   concepts: { concept: string; count: number; pct: number }[];
   tones: { tone: string; count: number; pct: number }[];
   top_hooks: { hook: string; score: number; concept: string; competitor: string }[];

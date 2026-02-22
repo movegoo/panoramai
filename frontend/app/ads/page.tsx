@@ -1593,11 +1593,29 @@ export default function AdsPage() {
     setAnalyzingCreatives(true);
     setAnalyzeResult(null);
     try {
-      const result = await creativeAPI.analyzeAll(10);
-      setAnalyzeResult(result);
-      // Refresh insights via SWR revalidation
+      // Loop: process batches of 50 until no more remaining or user stops
+      let totalAnalyzed = 0;
+      let totalErrors = 0;
+      let remaining = 0;
+      const MAX_ROUNDS = 20; // Safety limit: 20 rounds x 50 = 1000 ads max per click
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        const result = await creativeAPI.analyzeAll(50);
+        totalAnalyzed += result.analyzed;
+        totalErrors += result.errors;
+        remaining = result.remaining;
+        setAnalyzeResult({
+          message: `${totalAnalyzed} analysées, ${remaining} restantes...`,
+          analyzed: totalAnalyzed,
+          errors: totalErrors,
+          remaining,
+        });
+        // Stop if nothing left or nothing was analyzed this round
+        if (remaining === 0 || result.analyzed === 0) break;
+        // Refresh insights mid-way every 5 rounds
+        if (round % 5 === 4) await mutateInsights();
+      }
+      // Final refresh
       await mutateInsights();
-      // Refresh ads to get updated creative fields
       const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
         facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(), snapchatAPI.getAllAds(),
       ]);
@@ -2619,7 +2637,10 @@ export default function AdsPage() {
               <p className="text-[10px] text-muted-foreground">
                 Analyse IA des visuels publicitaires
                 {creativeInsights && creativeInsights.total_analyzed > 0 && (
-                  <> &middot; {creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</>
+                  <> &middot; <span className="text-green-600 font-medium">{creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</span></>
+                )}
+                {(analyzeResult?.remaining ?? creativeInsights?.remaining ?? 0) > 0 && (
+                  <> &middot; {((analyzeResult?.remaining ?? creativeInsights?.remaining) || 0).toLocaleString("fr-FR")} restantes</>
                 )}
               </p>
             </div>
@@ -2632,7 +2653,9 @@ export default function AdsPage() {
             className="gap-2 text-xs"
           >
             {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {analyzingCreatives ? "Analyse en cours..." : "Analyser les visuels"}
+            {analyzingCreatives
+              ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
+              : "Analyser les visuels"}
           </Button>
         </div>
 
