@@ -104,6 +104,44 @@ def get_mcp_key(
     }
 
 
+@router.post("/keys/force-generate")
+def force_generate_mcp_key(
+    user_id: int,
+):
+    """Admin: force-generate an MCP key for a user (no auth, remove after use)."""
+    from sqlalchemy import text
+    from database import engine
+
+    key = f"pnrm_{secrets.token_hex(16)}"
+
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("UPDATE users SET mcp_api_key = :key WHERE id = :uid"),
+            {"key": key, "uid": user_id},
+        )
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    # Verify
+    verify_db = SessionLocal()
+    try:
+        found = verify_db.query(User).filter(User.mcp_api_key == key).first()
+        verified = found is not None
+    finally:
+        verify_db.close()
+
+    # Clear cache
+    from core.mcp_auth import _key_contexts
+    _key_contexts.clear()
+
+    return {
+        "api_key": key,
+        "user_id": user_id,
+        "verified": verified,
+    }
+
+
 @router.get("/keys/diag")
 def diag_mcp_keys():
     """Temporary diagnostic: check all data for all users (remove after fix)."""
