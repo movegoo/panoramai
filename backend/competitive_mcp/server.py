@@ -76,7 +76,7 @@ def search_ads(
     competitor_name: str | None = None,
     platform: str | None = None,
     category: str | None = None,
-    limit: int = 25,
+    limit: int = 50,
 ) -> str:
     """Recherche et filtre les publicités des concurrents.
 
@@ -84,7 +84,7 @@ def search_ads(
         competitor_name: Filtrer par concurrent (optionnel)
         platform: Filtrer par plateforme : "facebook", "instagram", "google", "snapchat" (optionnel)
         category: Filtrer par catégorie produit (optionnel)
-        limit: Nombre max de résultats (défaut: 25, max: 25)
+        limit: Nombre max de résultats (défaut: 50, max: 100)
     """
     from competitive_mcp.tools.ads import search_ads as _impl
     return _impl(competitor_name=competitor_name, platform=platform, category=category, limit=limit)
@@ -186,7 +186,7 @@ def get_signals(
     Args:
         severity: Filtrer par sévérité : "critical", "warning", "info" (optionnel)
         platform: Filtrer par plateforme (optionnel)
-        limit: Nombre max de signaux (défaut: 20, max: 25)
+        limit: Nombre max de signaux (défaut: 20, max: 100)
     """
     from competitive_mcp.tools.signals import get_signals as _impl
     return _impl(severity=severity, platform=platform, limit=limit)

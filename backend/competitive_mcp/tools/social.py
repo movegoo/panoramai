@@ -141,7 +141,7 @@ def get_top_social_posts(
             "engagement": SocialPost.content_engagement_score,
         }.get(sort_by, SocialPost.views)
 
-        posts = query.order_by(desc(sort_col)).limit(min(limit, 25)).all()
+        posts = query.order_by(desc(sort_col)).limit(min(limit, 100)).all()
 
         if not posts:
             return "Aucun post social trouvé avec ces critères."

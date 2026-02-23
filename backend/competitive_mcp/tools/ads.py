@@ -14,7 +14,7 @@ def search_ads(
     competitor_name: str | None = None,
     platform: str | None = None,
     category: str | None = None,
-    limit: int = 25,
+    limit: int = 50,
 ) -> str:
     """Recherche et filtre les publicités."""
     db = get_session()
@@ -35,7 +35,7 @@ def search_ads(
         if category:
             query = query.filter(Ad.product_category.ilike(f"%{category}%"))
 
-        ads = query.order_by(desc(Ad.start_date)).limit(min(limit, 25)).all()
+        ads = query.order_by(desc(Ad.start_date)).limit(min(limit, 100)).all()
 
         if not ads:
             return "Aucune publicité trouvée avec ces critères."

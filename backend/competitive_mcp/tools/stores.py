@@ -70,7 +70,7 @@ def get_store_locations(
         # Show individual stores (limited)
         stores = query.order_by(
             StoreLocation.google_rating.desc().nullslast()
-        ).limit(25).all()
+        ).limit(100).all()
 
         if stores:
             lines.append(f"## Détail (top {len(stores)})")

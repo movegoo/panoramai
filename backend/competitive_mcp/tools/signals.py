@@ -31,7 +31,7 @@ def get_signals(
         if platform:
             query = query.filter(Signal.platform.ilike(f"%{platform}%"))
 
-        signals = query.order_by(desc(Signal.detected_at)).limit(min(limit, 25)).all()
+        signals = query.order_by(desc(Signal.detected_at)).limit(min(limit, 100)).all()
 
         if not signals:
             return "Aucun signal détecté." + (" Filtres appliqués : " + ", ".join(
