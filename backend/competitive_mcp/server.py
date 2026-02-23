@@ -1,6 +1,29 @@
 """Entry point MCP — Registration des 12 tools."""
+import os
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+
+
+def _build_allowed_hosts() -> list[str]:
+    """Build MCP allowed hosts from env var or defaults."""
+    extra = os.getenv("MCP_ALLOWED_HOSTS", "")
+    hosts = ["localhost:*", "127.0.0.1:*"]
+    if extra:
+        for h in extra.split(","):
+            h = h.strip()
+            if h:
+                hosts.append(h)
+                # Also allow with wildcard port if not already specified
+                if ":*" not in h and ":" not in h:
+                    hosts.append(f"{h}:*")
+    else:
+        # Default: Render
+        hosts.extend([
+            "panoramai-api.onrender.com:*",
+            "panoramai-api.onrender.com",
+        ])
+    return hosts
+
 
 mcp = FastMCP(
     "Veille Concurrentielle",
@@ -11,12 +34,7 @@ mcp = FastMCP(
     ),
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[
-            "localhost:*",
-            "127.0.0.1:*",
-            "panoramai-api.onrender.com:*",
-            "panoramai-api.onrender.com",
-        ],
+        allowed_hosts=_build_allowed_hosts(),
     ),
 )
 

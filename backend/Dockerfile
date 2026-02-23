@@ -2,10 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including AWS CLI for S3 sync)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    curl \
+    unzip \
+    && curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip -q awscliv2.zip \
+    && ./aws/install \
+    && rm -rf awscliv2.zip aws \
+    && apt-get purge -y unzip \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -18,8 +26,11 @@ COPY . .
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv
 
-# Expose port (Railway sets PORT dynamically)
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
+
+# Expose port
 EXPOSE ${PORT:-8000}
 
-# Run the application (PORT env var set by Railway/Render)
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use entrypoint script (S3 sync + uvicorn)
+ENTRYPOINT ["/app/entrypoint.sh"]
