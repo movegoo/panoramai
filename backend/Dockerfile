@@ -9,18 +9,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install hatchling (build backend for competitive-mcp)
-RUN pip install --no-cache-dir hatchling
-
-# Copy and install competitive-mcp package
-COPY competitive-mcp /tmp/competitive-mcp
-RUN pip install --no-cache-dir /tmp/competitive-mcp && rm -rf /tmp/competitive-mcp
-
-# Copy application code
-COPY backend/ .
+# Copy application code (includes competitive_mcp/ package)
+COPY . .
 
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv
