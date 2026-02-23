@@ -579,3 +579,125 @@ def migrate_advertiser_links(
             "details": ac_created + ac_skipped,
         },
     }
+
+
+@router.post("/seed")
+async def seed_advertiser(
+    user_id: int,
+    company_name: str,
+    sector: str,
+    db: Session = Depends(get_db),
+):
+    """Admin seed: create an advertiser + all sector competitors for a user.
+
+    No auth required (temporary admin endpoint — remove after use).
+    Example: POST /api/advertiser/seed?user_id=15&company_name=Auchan&sector=supermarche
+    """
+    # Validate sector
+    sector_comps = get_competitors_for_sector(sector)
+    if not sector_comps:
+        available = [s["code"] for s in list_sectors()]
+        raise HTTPException(status_code=400, detail=f"Unknown sector. Available: {available}")
+
+    # Validate user
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    # Check if advertiser already exists for this user
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(
+        UserAdvertiser.user_id == user_id,
+    ).all()]
+    existing_adv = None
+    if user_adv_ids:
+        from sqlalchemy import func as sa_func
+        existing_adv = db.query(Advertiser).filter(
+            sa_func.lower(Advertiser.company_name) == company_name.lower(),
+            Advertiser.id.in_(user_adv_ids),
+        ).first()
+
+    if existing_adv:
+        advertiser = existing_adv
+    else:
+        # Find sector data for the brand itself
+        brand_data = next((c for c in sector_comps if c["name"].lower() == company_name.lower()), {})
+        advertiser = Advertiser(
+            user_id=user_id,
+            company_name=company_name,
+            sector=sector,
+            website=brand_data.get("website"),
+            playstore_app_id=brand_data.get("playstore_app_id"),
+            appstore_app_id=brand_data.get("appstore_app_id"),
+            instagram_username=brand_data.get("instagram_username"),
+            tiktok_username=brand_data.get("tiktok_username"),
+            youtube_channel_id=brand_data.get("youtube_channel_id"),
+        )
+        db.add(advertiser)
+        db.flush()
+
+        # Create user-advertiser link
+        db.add(UserAdvertiser(user_id=user_id, advertiser_id=advertiser.id, role="owner"))
+        db.commit()
+        db.refresh(advertiser)
+
+    # Add all competitors from sector
+    added = []
+    skipped = []
+    for comp in sector_comps:
+        if comp["name"].lower() == company_name.lower():
+            continue  # Skip the brand itself as competitor
+        result = await _add_competitor_by_name(
+            db, comp["name"], sector,
+            user_id=user_id,
+            advertiser_id=advertiser.id,
+        )
+        if result:
+            added.append(comp["name"])
+        else:
+            skipped.append(comp["name"])
+
+    # Also add the brand as a competitor with is_brand=True
+    from sqlalchemy import func as sa_func
+    brand_comp = db.query(Competitor).filter(
+        sa_func.lower(Competitor.name) == company_name.lower(),
+        Competitor.is_active == True,
+    ).first()
+    if not brand_comp:
+        brand_data = next((c for c in sector_comps if c["name"].lower() == company_name.lower()), {})
+        brand_comp = Competitor(
+            name=company_name,
+            advertiser_id=advertiser.id,
+            user_id=user_id,
+            website=brand_data.get("website"),
+            playstore_app_id=brand_data.get("playstore_app_id"),
+            appstore_app_id=brand_data.get("appstore_app_id"),
+            instagram_username=brand_data.get("instagram_username"),
+            tiktok_username=brand_data.get("tiktok_username"),
+            youtube_channel_id=brand_data.get("youtube_channel_id"),
+            is_brand=True,
+        )
+        db.add(brand_comp)
+        db.flush()
+
+    # Link brand competitor
+    brand_link = db.query(AdvertiserCompetitor).filter(
+        AdvertiserCompetitor.advertiser_id == advertiser.id,
+        AdvertiserCompetitor.competitor_id == brand_comp.id,
+    ).first()
+    if not brand_link:
+        db.add(AdvertiserCompetitor(
+            advertiser_id=advertiser.id,
+            competitor_id=brand_comp.id,
+            is_brand=True,
+        ))
+    brand_comp.is_brand = True
+    db.commit()
+
+    return {
+        "advertiser_id": advertiser.id,
+        "company_name": advertiser.company_name,
+        "sector": sector,
+        "competitors_added": added,
+        "competitors_skipped": skipped,
+        "total": len(added),
+    }
