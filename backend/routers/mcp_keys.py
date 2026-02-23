@@ -98,151 +98,37 @@ def diag_mcp_keys():
 
         all_users = db.query(User.id, User.email, User.is_active).all()
 
+        # Also get advertiser + competitor context for users with keys
+        from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
+        from core.permissions import get_advertiser_competitor_ids
+
+        users_detail = []
+        for u in users_with_keys:
+            ua = db.query(UserAdvertiser).filter(
+                UserAdvertiser.user_id == u.id,
+            ).order_by(UserAdvertiser.id).first()
+            adv = db.query(Advertiser).filter(Advertiser.id == ua.advertiser_id).first() if ua else None
+            comp_ids = get_advertiser_competitor_ids(db, ua.advertiser_id) if ua else []
+            comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all() if comp_ids else []
+
+            users_detail.append({
+                "user_id": u.id,
+                "email": u.email,
+                "key_prefix": u.mcp_api_key[:12] + "..." if u.mcp_api_key else None,
+                "is_active": u.is_active,
+                "advertiser_id": ua.advertiser_id if ua else None,
+                "advertiser_name": adv.company_name if adv else None,
+                "competitor_ids": comp_ids,
+                "competitors": [{"id": c.id, "name": c.name} for c in comps],
+            })
+
         return {
             "total_users": len(all_users),
-            "users_with_keys": [
-                {
-                    "user_id": u.id,
-                    "email": u.email,
-                    "key_prefix": u.mcp_api_key[:12] + "..." if u.mcp_api_key else None,
-                    "key_length": len(u.mcp_api_key) if u.mcp_api_key else 0,
-                    "is_active": u.is_active,
-                }
-                for u in users_with_keys
-            ],
+            "users_with_keys": users_detail,
             "all_user_ids": [u.id for u in all_users],
         }
     finally:
         db.close()
-
-
-@router.get("/keys/diag/check/{api_key}")
-def diag_check_key(api_key: str):
-    """Temporary diagnostic: check specific key lookup (same as middleware)."""
-    db = SessionLocal()
-    try:
-        # Exact same query as MCPAuthMiddleware
-        user = db.query(User).filter(
-            User.mcp_api_key == api_key,
-            User.is_active == True,
-        ).first()
-
-        # Also try without is_active filter
-        user_any = db.query(User).filter(
-            User.mcp_api_key == api_key,
-        ).first()
-
-        # Check column exists
-        from sqlalchemy import text, inspect
-        inspector = inspect(db.bind)
-        columns = [c["name"] for c in inspector.get_columns("users")]
-
-        return {
-            "key_found_active": user is not None,
-            "key_found_any": user_any is not None,
-            "user_id": user.id if user else (user_any.id if user_any else None),
-            "is_active": user_any.is_active if user_any else None,
-            "mcp_api_key_column_exists": "mcp_api_key" in columns,
-            "users_table_columns": columns,
-        }
-    finally:
-        db.close()
-
-
-@router.get("/keys/diag/context/{api_key}")
-def diag_context(api_key: str):
-    """Temporary diagnostic: show what context the middleware resolves for this key."""
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(
-            User.mcp_api_key == api_key,
-            User.is_active == True,
-        ).first()
-        if not user:
-            return {"error": "key not found", "key_prefix": api_key[:12]}
-
-        from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
-        from core.permissions import get_advertiser_competitor_ids
-
-        # Get advertiser (same logic as middleware)
-        ua = db.query(UserAdvertiser).filter(
-            UserAdvertiser.user_id == user.id,
-        ).order_by(UserAdvertiser.id).first()
-
-        if not ua:
-            return {"user_id": user.id, "error": "no advertiser linked"}
-
-        adv = db.query(Advertiser).filter(Advertiser.id == ua.advertiser_id).first()
-        comp_ids = get_advertiser_competitor_ids(db, ua.advertiser_id)
-        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all() if comp_ids else []
-
-        return {
-            "user_id": user.id,
-            "email": user.email,
-            "advertiser_id": ua.advertiser_id,
-            "advertiser_name": adv.company_name if adv else None,
-            "competitor_ids": comp_ids,
-            "competitors": [{"id": c.id, "name": c.name} for c in comps],
-        }
-    finally:
-        db.close()
-
-
-@router.post("/keys/diag/raw-test")
-def diag_raw_test():
-    """Temporary: test raw SQL write+read to confirm PostgreSQL persistence."""
-    from sqlalchemy import text
-    from database import engine
-    steps = []
-
-    # Step 1: Read current state of all users' mcp_api_key
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT id, email, mcp_api_key FROM users")).fetchall()
-        steps.append({
-            "step": "initial_read",
-            "users": [{"id": r[0], "email": r[1], "has_key": r[2] is not None, "key_prefix": r[2][:12] + "..." if r[2] else None} for r in rows],
-        })
-
-    # Step 2: Write a test key to user id=15 using raw SQL with autocommit
-    test_key = f"pnrm_{secrets.token_hex(16)}"
-    with engine.begin() as conn:  # engine.begin() auto-commits
-        result = conn.execute(
-            text("UPDATE users SET mcp_api_key = :key WHERE id = 15"),
-            {"key": test_key},
-        )
-        steps.append({
-            "step": "raw_update",
-            "rowcount": result.rowcount,
-            "test_key_prefix": test_key[:12] + "...",
-        })
-
-    # Step 3: Read back with fresh connection
-    with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT id, mcp_api_key FROM users WHERE id = 15"),
-        ).fetchone()
-        saved_key = row[1] if row else None
-        steps.append({
-            "step": "read_back",
-            "found": saved_key is not None,
-            "match": saved_key == test_key,
-            "saved_prefix": saved_key[:12] + "..." if saved_key else None,
-        })
-
-    # Step 4: Also verify via ORM SessionLocal
-    verify_db = SessionLocal()
-    try:
-        user = verify_db.query(User).filter(User.id == 15).first()
-        orm_key = user.mcp_api_key if user else None
-        steps.append({
-            "step": "orm_verify",
-            "found": orm_key is not None,
-            "match": orm_key == test_key,
-        })
-    finally:
-        verify_db.close()
-
-    return {"test_key": test_key, "steps": steps}
 
 
 @router.delete("/keys")
