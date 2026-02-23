@@ -25,7 +25,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def create_access_token(user_id: int) -> str:
     payload = {
-        "sub": user_id,
+        "sub": str(user_id),
         "exp": datetime.utcnow() + timedelta(days=settings.JWT_EXPIRATION_DAYS),
         "iat": datetime.utcnow(),
     }
@@ -34,7 +34,10 @@ def create_access_token(user_id: int) -> str:
 
 def decode_token(token: str) -> dict:
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        return jwt.decode(
+            token, settings.JWT_SECRET, algorithms=["HS256"],
+            options={"verify_sub": False},
+        )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expiré")
     except jwt.InvalidTokenError:
@@ -51,6 +54,8 @@ def get_current_user(
 
     payload = decode_token(credentials.credentials)
     user_id = payload.get("sub")
+    if user_id is not None:
+        user_id = int(user_id)
     if not user_id:
         raise HTTPException(status_code=401, detail="Token invalide")
 

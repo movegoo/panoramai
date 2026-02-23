@@ -27,7 +27,18 @@ class TestJWTTokens:
     def test_create_and_decode(self):
         token = create_access_token(42)
         payload = decode_token(token)
-        assert payload["sub"] == 42
+        assert int(payload["sub"]) == 42
+
+    def test_legacy_int_sub_still_works(self):
+        """Tokens created before PyJWT 2.10 used int sub — must still decode."""
+        payload = {
+            "sub": 99,
+            "exp": int(time.time()) + 3600,
+            "iat": int(time.time()),
+        }
+        token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+        decoded = decode_token(token)
+        assert int(decoded["sub"]) == 99
 
     def test_expired_token(self):
         payload = {
