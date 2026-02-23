@@ -435,6 +435,12 @@ async function fetchAPI<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      localStorage.removeItem("current_advertiser_id");
+      window.location.href = "/login";
+      throw new Error("Session expirée");
+    }
     const error = await response.json().catch(() => ({}));
     const err = new Error(error.detail || `API Error: ${response.status}`);
     (err as any).status = response.status;

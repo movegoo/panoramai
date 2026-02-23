@@ -668,7 +668,9 @@ export default function DashboardPage() {
   const error = swrError
     ? (swrError as any).status === 404
       ? null
-      : "Le serveur est en cours de démarrage, veuillez patienter..."
+      : (swrError as any).status === 401
+        ? null  // 401 handled by useAPI redirect
+        : "Le serveur est en cours de démarrage, veuillez patienter..."
     : null;
 
   function loadDashboard() {
