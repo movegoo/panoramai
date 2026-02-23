@@ -258,7 +258,7 @@ def _seed_prompt_templates():
     """Seed default AI prompt templates if not already in DB (by key)."""
     from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
     from services.social_content_analyzer import ANALYSIS_PROMPT as SOCIAL_PROMPT
-    from services.moby_ai import SYSTEM_PROMPT as MOBY_PROMPT
+    from services.moby_ai import ANSWER_SYSTEM_PROMPT as MOBY_PROMPT
 
     defaults = [
         {

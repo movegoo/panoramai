@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Send, ChevronDown, Code } from "lucide-react";
+import { X, Send } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { mobyAPI } from "@/lib/api";
@@ -9,7 +9,6 @@ import { mobyAPI } from "@/lib/api";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  sql?: string | null;
 }
 
 interface MobyConfig {
@@ -32,9 +31,9 @@ const PANEL_POSITION_CLASSES: Record<string, string> = {
 };
 
 const SUGGESTIONS = [
-  "Combien de pubs actives a chaque concurrent ?",
-  "Compare les followers Instagram de tous les concurrents",
-  "Quelles pubs ont un score créatif > 80 ?",
+  "Qui domine sur Instagram en ce moment ?",
+  "Quels concurrents investissent le plus en pub ?",
+  "Analyse les forces et faiblesses de nos concurrents",
 ];
 
 export function MobyChatbot() {
@@ -44,7 +43,6 @@ export function MobyChatbot() {
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<MobyConfig>({ enabled: true, position: "bottom-right" });
   const [showPulse, setShowPulse] = useState(true);
-  const [expandedSql, setExpandedSql] = useState<Set<number>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -79,7 +77,6 @@ export function MobyChatbot() {
       const assistantMsg: Message = {
         role: "assistant",
         content: result.answer,
-        sql: result.sql,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch {
@@ -91,15 +88,6 @@ export function MobyChatbot() {
       setLoading(false);
     }
   }, [loading, messages]);
-
-  const toggleSql = (index: number) => {
-    setExpandedSql((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -221,25 +209,6 @@ export function MobyChatbot() {
                       >
                         {msg.content}
                       </ReactMarkdown>
-                    </div>
-                  )}
-                  {msg.sql && msg.role === "assistant" && (
-                    <div className="mt-2">
-                      <button
-                        onClick={() => toggleSql(i)}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Code className="h-3 w-3" />
-                        {expandedSql.has(i) ? "Masquer" : "Voir"} le SQL
-                        <ChevronDown
-                          className={`h-3 w-3 transition-transform ${expandedSql.has(i) ? "rotate-180" : ""}`}
-                        />
-                      </button>
-                      {expandedSql.has(i) && (
-                        <pre className="mt-1.5 p-2 bg-background/80 rounded-lg text-[10px] text-muted-foreground overflow-x-auto font-mono leading-relaxed">
-                          {msg.sql}
-                        </pre>
-                      )}
                     </div>
                   )}
                 </div>
