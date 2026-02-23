@@ -106,21 +106,16 @@ def get_mcp_key(
 
 @router.get("/keys/diag")
 def diag_mcp_keys():
-    """Temporary diagnostic: check all MCP keys in DB (no auth, remove after fix)."""
+    """Temporary diagnostic: check all data for all users (remove after fix)."""
+    from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
+    from core.permissions import get_advertiser_competitor_ids
+
     db = SessionLocal()
     try:
-        users_with_keys = db.query(
-            User.id, User.email, User.mcp_api_key, User.is_active,
-        ).filter(User.mcp_api_key.isnot(None)).all()
-
-        all_users = db.query(User.id, User.email, User.is_active).all()
-
-        # Also get advertiser + competitor context for users with keys
-        from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
-        from core.permissions import get_advertiser_competitor_ids
+        all_users = db.query(User).all()
 
         users_detail = []
-        for u in users_with_keys:
+        for u in all_users:
             user_advs = db.query(UserAdvertiser).filter(
                 UserAdvertiser.user_id == u.id,
             ).order_by(UserAdvertiser.id).all()
@@ -134,7 +129,9 @@ def diag_mcp_keys():
                 advs_info.append({
                     "id": ua.advertiser_id,
                     "name": adv.company_name if adv else None,
+                    "is_active": adv.is_active if adv else None,
                     "competitor_count": len(cids),
+                    "competitor_ids": cids,
                 })
 
             all_comp_ids = list(all_comp_ids)
@@ -143,8 +140,10 @@ def diag_mcp_keys():
             users_detail.append({
                 "user_id": u.id,
                 "email": u.email,
+                "has_mcp_key": u.mcp_api_key is not None,
                 "key_prefix": u.mcp_api_key[:12] + "..." if u.mcp_api_key else None,
                 "is_active": u.is_active,
+                "advertiser_count": len(user_advs),
                 "advertisers": advs_info,
                 "total_competitor_ids": all_comp_ids,
                 "competitors": [{"id": c.id, "name": c.name} for c in comps],
@@ -152,8 +151,7 @@ def diag_mcp_keys():
 
         return {
             "total_users": len(all_users),
-            "users_with_keys": users_detail,
-            "all_user_ids": [u.id for u in all_users],
+            "users": users_detail,
         }
     finally:
         db.close()
