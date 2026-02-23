@@ -34,18 +34,25 @@ def test_generate_key():
     """Test MCP key generation returns a pnrm_ prefixed key and is verified."""
     app = make_app()
     user = make_user()
-    db = MagicMock()
+
+    # Mock engine.begin() context manager
+    mock_conn = MagicMock()
+    mock_result = MagicMock()
+    mock_result.rowcount = 1
+    mock_conn.execute.return_value = mock_result
+    mock_engine = MagicMock()
+    mock_engine.begin.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.begin.return_value.__exit__ = MagicMock(return_value=False)
 
     # Mock SessionLocal for verification query
     mock_verify_db = MagicMock()
     mock_verify_db.query.return_value.filter.return_value.first.return_value = user
 
     from core.auth import get_current_user
-    from database import get_db
     app.dependency_overrides[get_current_user] = lambda: user
-    app.dependency_overrides[get_db] = lambda: db
 
-    with patch("routers.mcp_keys.SessionLocal", return_value=mock_verify_db):
+    with patch("database.engine", mock_engine), \
+         patch("routers.mcp_keys.SessionLocal", return_value=mock_verify_db):
         client = FastAPITestClient(app)
         resp = client.post("/api/mcp/keys/generate")
 
@@ -55,28 +62,34 @@ def test_generate_key():
     assert data["api_key"].startswith("pnrm_")
     assert len(data["api_key"]) == 37  # pnrm_ + 32 hex chars
     assert data["verified"] is True
-    # ORM assignment should have been made
-    assert user.mcp_api_key == data["api_key"]
-    db.commit.assert_called()
-    db.refresh.assert_called_with(user)
+    # engine.begin() should have been used
+    mock_engine.begin.assert_called_once()
+    mock_conn.execute.assert_called_once()
 
 
 def test_generate_key_fails_verification():
     """Test that generate returns 500 if key not found after commit."""
     app = make_app()
     user = make_user()
-    db = MagicMock()
+
+    # Mock engine.begin() context manager
+    mock_conn = MagicMock()
+    mock_result = MagicMock()
+    mock_result.rowcount = 1
+    mock_conn.execute.return_value = mock_result
+    mock_engine = MagicMock()
+    mock_engine.begin.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.begin.return_value.__exit__ = MagicMock(return_value=False)
 
     # Mock SessionLocal verification to return None (key not found)
     mock_verify_db = MagicMock()
     mock_verify_db.query.return_value.filter.return_value.first.return_value = None
 
     from core.auth import get_current_user
-    from database import get_db
     app.dependency_overrides[get_current_user] = lambda: user
-    app.dependency_overrides[get_db] = lambda: db
 
-    with patch("routers.mcp_keys.SessionLocal", return_value=mock_verify_db):
+    with patch("database.engine", mock_engine), \
+         patch("routers.mcp_keys.SessionLocal", return_value=mock_verify_db):
         client = FastAPITestClient(app)
         resp = client.post("/api/mcp/keys/generate")
 

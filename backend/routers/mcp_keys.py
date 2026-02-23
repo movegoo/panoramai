@@ -22,17 +22,25 @@ MCP_BASE_URL = os.getenv(
 @router.post("/keys/generate")
 def generate_mcp_key(
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Generate (or regenerate) an MCP API key for the current user."""
+    from sqlalchemy import text
+    from database import engine
+
     key = f"pnrm_{secrets.token_hex(16)}"
 
-    # Use ORM assignment (same pattern as revoke_mcp_key)
-    user.mcp_api_key = key
-    db.commit()
-    db.refresh(user)
+    # Use engine.begin() for guaranteed auto-commit (ORM db.commit() doesn't
+    # persist reliably on Render PostgreSQL for unknown reasons)
+    with engine.begin() as conn:
+        result = conn.execute(
+            text("UPDATE users SET mcp_api_key = :key WHERE id = :uid"),
+            {"key": key, "uid": user.id},
+        )
 
-    # Verify with a completely independent session
+    if result.rowcount == 0:
+        raise HTTPException(status_code=500, detail="Erreur: utilisateur non trouve")
+
+    # Verify with fresh session
     verify_db = SessionLocal()
     try:
         found = verify_db.query(User).filter(
@@ -44,13 +52,17 @@ def generate_mcp_key(
         verify_db.close()
 
     if not verified:
-        logger.error(f"MCP key NOT persisted for user {user.id} after commit+refresh")
+        logger.error(f"MCP key NOT persisted for user {user.id} after engine.begin()")
         raise HTTPException(
             status_code=500,
             detail="Erreur: la cle n'a pas ete persistee en base",
         )
 
     logger.info(f"MCP key generated and verified for user {user.id}: {key[:12]}...")
+
+    # Clear middleware cache so new key is picked up
+    from core.mcp_auth import _key_contexts
+    _key_contexts.clear()
 
     return {
         "api_key": key,
