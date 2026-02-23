@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Send, ChevronDown, Code } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { mobyAPI } from "@/lib/api";
 
 interface Message {
@@ -170,9 +172,57 @@ export function MobyChatbot() {
                       : "bg-muted text-foreground rounded-bl-md"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
-                    {msg.content}
-                  </div>
+                  {msg.role === "user" ? (
+                    <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">
+                      {msg.content}
+                    </div>
+                  ) : (
+                    <div className="moby-markdown text-[13px] leading-relaxed break-words">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto my-2 -mx-1">
+                              <table className="min-w-full text-[11px] border-collapse">{children}</table>
+                            </div>
+                          ),
+                          thead: ({ children }) => (
+                            <thead className="bg-background/60">{children}</thead>
+                          ),
+                          th: ({ children }) => (
+                            <th className="px-2 py-1 text-left font-semibold border-b border-border/50 whitespace-nowrap">{children}</th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="px-2 py-1 border-b border-border/30 whitespace-nowrap">{children}</td>
+                          ),
+                          p: ({ children }) => (
+                            <p className="mb-1.5 last:mb-0">{children}</p>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-semibold">{children}</strong>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc pl-4 mb-1.5 space-y-0.5">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal pl-4 mb-1.5 space-y-0.5">{children}</ol>
+                          ),
+                          code: ({ children, className }) => {
+                            const isInline = !className;
+                            return isInline ? (
+                              <code className="bg-background/60 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>
+                            ) : (
+                              <pre className="bg-background/60 p-2 rounded-lg text-[10px] font-mono overflow-x-auto my-1.5">
+                                <code>{children}</code>
+                              </pre>
+                            );
+                          },
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                   {msg.sql && msg.role === "assistant" && (
                     <div className="mt-2">
                       <button
