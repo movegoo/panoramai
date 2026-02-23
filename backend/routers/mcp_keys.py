@@ -149,6 +149,45 @@ def diag_check_key(api_key: str):
         db.close()
 
 
+@router.get("/keys/diag/context/{api_key}")
+def diag_context(api_key: str):
+    """Temporary diagnostic: show what context the middleware resolves for this key."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(
+            User.mcp_api_key == api_key,
+            User.is_active == True,
+        ).first()
+        if not user:
+            return {"error": "key not found", "key_prefix": api_key[:12]}
+
+        from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
+        from core.permissions import get_advertiser_competitor_ids
+
+        # Get advertiser (same logic as middleware)
+        ua = db.query(UserAdvertiser).filter(
+            UserAdvertiser.user_id == user.id,
+        ).order_by(UserAdvertiser.id).first()
+
+        if not ua:
+            return {"user_id": user.id, "error": "no advertiser linked"}
+
+        adv = db.query(Advertiser).filter(Advertiser.id == ua.advertiser_id).first()
+        comp_ids = get_advertiser_competitor_ids(db, ua.advertiser_id)
+        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all() if comp_ids else []
+
+        return {
+            "user_id": user.id,
+            "email": user.email,
+            "advertiser_id": ua.advertiser_id,
+            "advertiser_name": adv.company_name if adv else None,
+            "competitor_ids": comp_ids,
+            "competitors": [{"id": c.id, "name": c.name} for c in comps],
+        }
+    finally:
+        db.close()
+
+
 @router.post("/keys/diag/raw-test")
 def diag_raw_test():
     """Temporary: test raw SQL write+read to confirm PostgreSQL persistence."""
