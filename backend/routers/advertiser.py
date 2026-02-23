@@ -469,43 +469,76 @@ async def _add_competitor_by_name(db: Session, name: str, sector: str, user_id: 
 def migrate_advertiser_links(
     db: Session = Depends(get_db),
 ):
-    """One-time migration: for every advertiser with a user_id, ensure a
-    user_advertisers link exists. Fixes legacy data created before the
-    many-to-many join table was introduced.
+    """One-time migration that fixes ALL legacy join-table gaps:
+
+    1. user_advertisers: link advertisers to their creator (via advertiser.user_id)
+    2. advertiser_competitors: link competitors to their advertiser (via competitor.advertiser_id)
 
     No auth required (temporary migration endpoint — remove after use).
     """
-    # Find all advertisers that have a user_id set
+    from database import Competitor as CompModel
+
+    # ── Step 1: Fix user_advertisers ──────────────────────────────
     advertisers = db.query(Advertiser).filter(
         Advertiser.user_id.isnot(None),
         Advertiser.is_active == True,
     ).all()
 
-    created = []
-    skipped = []
+    ua_created = []
+    ua_skipped = []
 
     for adv in advertisers:
-        # Check if link already exists
         existing = db.query(UserAdvertiser).filter(
             UserAdvertiser.user_id == adv.user_id,
             UserAdvertiser.advertiser_id == adv.id,
         ).first()
 
         if existing:
-            skipped.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
+            ua_skipped.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
         else:
             db.add(UserAdvertiser(
                 user_id=adv.user_id,
                 advertiser_id=adv.id,
                 role="owner",
             ))
-            created.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
+            ua_created.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
+
+    # ── Step 2: Fix advertiser_competitors ────────────────────────
+    competitors = db.query(CompModel).filter(
+        CompModel.advertiser_id.isnot(None),
+        CompModel.is_active == True,
+    ).all()
+
+    ac_created = []
+    ac_skipped = []
+
+    for comp in competitors:
+        existing = db.query(AdvertiserCompetitor).filter(
+            AdvertiserCompetitor.advertiser_id == comp.advertiser_id,
+            AdvertiserCompetitor.competitor_id == comp.id,
+        ).first()
+
+        if existing:
+            ac_skipped.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id})
+        else:
+            db.add(AdvertiserCompetitor(
+                advertiser_id=comp.advertiser_id,
+                competitor_id=comp.id,
+                is_brand=comp.is_brand or False,
+            ))
+            ac_created.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id})
 
     db.commit()
 
     return {
-        "created_links": len(created),
-        "skipped_existing": len(skipped),
-        "created": created,
-        "skipped": skipped,
+        "user_advertisers": {
+            "created": len(ua_created),
+            "skipped": len(ua_skipped),
+            "details": ua_created + ua_skipped,
+        },
+        "advertiser_competitors": {
+            "created": len(ac_created),
+            "skipped": len(ac_skipped),
+            "details": ac_created + ac_skipped,
+        },
     }
