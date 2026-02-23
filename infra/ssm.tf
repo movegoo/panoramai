@@ -23,9 +23,9 @@ locals {
   # Config (String)
   config = {
     SCHEDULER_ENABLED  = var.env == "prod" ? "true" : "false"
-    CORS_ORIGINS       = "https://panoramai-eight.vercel.app"
+    CORS_ORIGINS       = "https://panoramai-eight.vercel.app,https://panoramai.mobsuccess.ai"
     DATAGOUV_CACHE_DIR = "/app/cache/datagouv"
-    MCP_ALLOWED_HOSTS  = "CHANGE_ME" # Set to ALB domain after deploy
+    MCP_ALLOWED_HOSTS  = "api.panoramai.mobsuccess.ai"
   }
 }
 
@@ -51,4 +51,8 @@ resource "aws_ssm_parameter" "config" {
   value = each.value
 
   tags = { Name = each.key }
+
+  lifecycle {
+    ignore_changes = [value]
+  }
 }

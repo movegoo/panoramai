@@ -16,6 +16,7 @@ EXPECTED_FILES = [
     "ssm.tf",
     "security_groups.tf",
     "outputs.tf",
+    "dns.tf",
     "dev.tfvars",
     "prod.tfvars",
     "backend-dev.hcl",
@@ -99,3 +100,11 @@ class TestTerraformFiles:
         assert '"prod"' in content
         assert "1024" in content  # 1 vCPU
         assert "2048" in content  # 2 GB RAM
+        assert "acm_certificate_arn" in content
+
+    def test_dns_route53_alias(self):
+        with open(os.path.join(INFRA_DIR, "dns.tf")) as f:
+            content = f.read()
+        assert "panoramai.mobsuccess.ai" in content
+        assert "aws_route53_record" in content
+        assert "alias" in content
