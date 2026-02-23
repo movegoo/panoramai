@@ -9,14 +9,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY backend/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy MCP server package (from repo root via dockerContext)
-COPY competitive-mcp/src/competitive_mcp /app/competitive_mcp
-
 # Copy application code
-COPY backend/ /app/
+COPY . .
 
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv
