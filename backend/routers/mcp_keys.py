@@ -149,10 +149,11 @@ def diag_mcp_keys():
                 "competitors": [{"id": c.id, "name": c.name} for c in comps],
             })
 
-        # Also dump all advertisers and all user_advertisers for debugging
+        # Dump all tables for debugging
         all_advs = db.query(Advertiser).all()
         all_ua = db.query(UserAdvertiser).all()
         all_ac = db.query(AdvertiserCompetitor).all()
+        all_comps = db.query(Competitor).filter(Competitor.is_active == True).all()
 
         return {
             "total_users": len(all_users),
@@ -160,6 +161,10 @@ def diag_mcp_keys():
             "all_advertisers": [
                 {"id": a.id, "name": a.company_name, "user_id": a.user_id, "is_active": a.is_active}
                 for a in all_advs
+            ],
+            "all_competitors": [
+                {"id": c.id, "name": c.name, "user_id": c.user_id, "advertiser_id": c.advertiser_id, "is_brand": c.is_brand}
+                for c in all_comps
             ],
             "all_user_advertisers": [
                 {"id": ua.id, "user_id": ua.user_id, "advertiser_id": ua.advertiser_id, "role": ua.role}

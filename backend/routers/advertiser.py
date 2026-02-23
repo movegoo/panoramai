@@ -504,29 +504,66 @@ def migrate_advertiser_links(
             ua_created.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
 
     # ── Step 2: Fix advertiser_competitors ────────────────────────
-    competitors = db.query(CompModel).filter(
+    # Case A: competitors with advertiser_id set directly
+    competitors_with_adv = db.query(CompModel).filter(
         CompModel.advertiser_id.isnot(None),
+        CompModel.is_active == True,
+    ).all()
+
+    # Case B: competitors with only user_id (legacy) — link to user's first advertiser
+    competitors_with_user = db.query(CompModel).filter(
+        CompModel.advertiser_id.is_(None),
+        CompModel.user_id.isnot(None),
         CompModel.is_active == True,
     ).all()
 
     ac_created = []
     ac_skipped = []
 
-    for comp in competitors:
+    for comp in competitors_with_adv:
         existing = db.query(AdvertiserCompetitor).filter(
             AdvertiserCompetitor.advertiser_id == comp.advertiser_id,
             AdvertiserCompetitor.competitor_id == comp.id,
         ).first()
 
         if existing:
-            ac_skipped.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id})
+            ac_skipped.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id, "source": "advertiser_id"})
         else:
             db.add(AdvertiserCompetitor(
                 advertiser_id=comp.advertiser_id,
                 competitor_id=comp.id,
                 is_brand=comp.is_brand or False,
             ))
-            ac_created.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id})
+            ac_created.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": comp.advertiser_id, "source": "advertiser_id"})
+
+    # For competitors with only user_id, find user's first active advertiser
+    for comp in competitors_with_user:
+        user_adv = db.query(UserAdvertiser).filter(
+            UserAdvertiser.user_id == comp.user_id,
+        ).order_by(UserAdvertiser.id).first()
+
+        if not user_adv:
+            ac_skipped.append({"competitor_id": comp.id, "name": comp.name, "user_id": comp.user_id, "source": "no_advertiser_found"})
+            continue
+
+        adv_id = user_adv.advertiser_id
+
+        existing = db.query(AdvertiserCompetitor).filter(
+            AdvertiserCompetitor.advertiser_id == adv_id,
+            AdvertiserCompetitor.competitor_id == comp.id,
+        ).first()
+
+        if existing:
+            ac_skipped.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": adv_id, "source": "user_id"})
+        else:
+            db.add(AdvertiserCompetitor(
+                advertiser_id=adv_id,
+                competitor_id=comp.id,
+                is_brand=comp.is_brand or False,
+            ))
+            # Also set the advertiser_id on the competitor for future consistency
+            comp.advertiser_id = adv_id
+            ac_created.append({"competitor_id": comp.id, "name": comp.name, "advertiser_id": adv_id, "source": "user_id"})
 
     db.commit()
 

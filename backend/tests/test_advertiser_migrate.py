@@ -110,8 +110,8 @@ def test_migrate_skips_existing_ua_links():
 # ─── Advertiser-Competitor migration ───────────────────────────
 
 
-def test_migrate_creates_missing_ac_links():
-    """Test that migrate creates AdvertiserCompetitor for orphan competitors."""
+def test_migrate_creates_ac_links_from_advertiser_id():
+    """Test that migrate creates AdvertiserCompetitor for competitors with advertiser_id."""
     app = make_app()
     db = MagicMock()
 
@@ -120,6 +120,11 @@ def test_migrate_creates_missing_ac_links():
 
     from database import Advertiser, UserAdvertiser, AdvertiserCompetitor, Competitor
 
+    comp_call = iter([
+        [comp1, comp2],  # Case A: competitors with advertiser_id
+        [],               # Case B: competitors with only user_id
+    ])
+
     def mock_query(model):
         q = MagicMock()
         if model == Advertiser:
@@ -127,9 +132,9 @@ def test_migrate_creates_missing_ac_links():
         elif model == UserAdvertiser:
             q.filter.return_value.first.return_value = None
         elif model == Competitor:
-            q.filter.return_value.all.return_value = [comp1, comp2]
+            q.filter.return_value.all.return_value = next(comp_call)
         elif model == AdvertiserCompetitor:
-            q.filter.return_value.first.return_value = None  # No existing link
+            q.filter.return_value.first.return_value = None
         return q
 
     db.query = mock_query
@@ -144,6 +149,55 @@ def test_migrate_creates_missing_ac_links():
     data = resp.json()
     assert data["advertiser_competitors"]["created"] == 2
     assert data["advertiser_competitors"]["skipped"] == 0
+
+
+def test_migrate_creates_ac_links_from_user_id():
+    """Test that migrate links competitors with only user_id to user's advertiser."""
+    app = make_app()
+    db = MagicMock()
+
+    comp1 = make_competitor(200, advertiser_id=None, name="Carrefour")
+    comp1.user_id = 15
+
+    mock_ua = MagicMock()
+    mock_ua.advertiser_id = 2
+
+    from database import Advertiser, UserAdvertiser, AdvertiserCompetitor, Competitor
+
+    comp_call = iter([
+        [],        # Case A: no competitors with advertiser_id
+        [comp1],   # Case B: competitors with only user_id
+    ])
+
+    def mock_query(model):
+        q = MagicMock()
+        if model == Advertiser:
+            q.filter.return_value.all.return_value = []
+        elif model == UserAdvertiser:
+            # For checking existing link: None
+            q.filter.return_value.first.return_value = None
+            # For finding user's advertiser: return mock_ua
+            q.filter.return_value.order_by.return_value.first.return_value = mock_ua
+        elif model == Competitor:
+            q.filter.return_value.all.return_value = next(comp_call)
+        elif model == AdvertiserCompetitor:
+            q.filter.return_value.first.return_value = None
+        return q
+
+    db.query = mock_query
+
+    from database import get_db
+    app.dependency_overrides[get_db] = lambda: db
+
+    client = TestClient(app)
+    resp = client.post("/api/advertiser/migrate-links")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["advertiser_competitors"]["created"] == 1
+    assert data["advertiser_competitors"]["details"][0]["name"] == "Carrefour"
+    assert data["advertiser_competitors"]["details"][0]["advertiser_id"] == 2
+    assert data["advertiser_competitors"]["details"][0]["source"] == "user_id"
 
 
 def test_migrate_empty_db():
