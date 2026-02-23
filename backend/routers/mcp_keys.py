@@ -55,6 +55,33 @@ def get_mcp_key(
     }
 
 
+@router.get("/keys/debug")
+def debug_mcp_key(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Debug: check if key is stored and findable."""
+    from database import SessionLocal
+    # Check via same path as MCPAuthMiddleware
+    direct_db = SessionLocal()
+    try:
+        stored_key = user.mcp_api_key
+        found = direct_db.query(User).filter(
+            User.mcp_api_key == stored_key,
+            User.is_active == True,
+        ).first()
+        return {
+            "user_id": user.id,
+            "has_key": bool(stored_key),
+            "key_prefix": stored_key[:12] + "..." if stored_key else None,
+            "key_length": len(stored_key) if stored_key else 0,
+            "findable_by_middleware": found is not None,
+            "found_user_id": found.id if found else None,
+        }
+    finally:
+        direct_db.close()
+
+
 @router.delete("/keys")
 def revoke_mcp_key(
     user: User = Depends(get_current_user),
