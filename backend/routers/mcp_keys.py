@@ -149,6 +149,63 @@ def diag_check_key(api_key: str):
         db.close()
 
 
+@router.post("/keys/diag/raw-test")
+def diag_raw_test():
+    """Temporary: test raw SQL write+read to confirm PostgreSQL persistence."""
+    from sqlalchemy import text
+    from database import engine
+    steps = []
+
+    # Step 1: Read current state of all users' mcp_api_key
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, email, mcp_api_key FROM users")).fetchall()
+        steps.append({
+            "step": "initial_read",
+            "users": [{"id": r[0], "email": r[1], "has_key": r[2] is not None, "key_prefix": r[2][:12] + "..." if r[2] else None} for r in rows],
+        })
+
+    # Step 2: Write a test key to user id=15 using raw SQL with autocommit
+    test_key = f"pnrm_{secrets.token_hex(16)}"
+    with engine.begin() as conn:  # engine.begin() auto-commits
+        result = conn.execute(
+            text("UPDATE users SET mcp_api_key = :key WHERE id = 15"),
+            {"key": test_key},
+        )
+        steps.append({
+            "step": "raw_update",
+            "rowcount": result.rowcount,
+            "test_key_prefix": test_key[:12] + "...",
+        })
+
+    # Step 3: Read back with fresh connection
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT id, mcp_api_key FROM users WHERE id = 15"),
+        ).fetchone()
+        saved_key = row[1] if row else None
+        steps.append({
+            "step": "read_back",
+            "found": saved_key is not None,
+            "match": saved_key == test_key,
+            "saved_prefix": saved_key[:12] + "..." if saved_key else None,
+        })
+
+    # Step 4: Also verify via ORM SessionLocal
+    verify_db = SessionLocal()
+    try:
+        user = verify_db.query(User).filter(User.id == 15).first()
+        orm_key = user.mcp_api_key if user else None
+        steps.append({
+            "step": "orm_verify",
+            "found": orm_key is not None,
+            "match": orm_key == test_key,
+        })
+    finally:
+        verify_db.close()
+
+    return {"test_key": test_key, "steps": steps}
+
+
 @router.delete("/keys")
 def revoke_mcp_key(
     user: User = Depends(get_current_user),
