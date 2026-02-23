@@ -459,3 +459,53 @@ async def _add_competitor_by_name(db: Session, name: str, sector: str, user_id: 
             return existing
 
     return None
+
+
+# =============================================================================
+# MIGRATION: Link orphan advertisers to their creators
+# =============================================================================
+
+@router.post("/migrate-links")
+def migrate_advertiser_links(
+    db: Session = Depends(get_db),
+):
+    """One-time migration: for every advertiser with a user_id, ensure a
+    user_advertisers link exists. Fixes legacy data created before the
+    many-to-many join table was introduced.
+
+    No auth required (temporary migration endpoint — remove after use).
+    """
+    # Find all advertisers that have a user_id set
+    advertisers = db.query(Advertiser).filter(
+        Advertiser.user_id.isnot(None),
+        Advertiser.is_active == True,
+    ).all()
+
+    created = []
+    skipped = []
+
+    for adv in advertisers:
+        # Check if link already exists
+        existing = db.query(UserAdvertiser).filter(
+            UserAdvertiser.user_id == adv.user_id,
+            UserAdvertiser.advertiser_id == adv.id,
+        ).first()
+
+        if existing:
+            skipped.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
+        else:
+            db.add(UserAdvertiser(
+                user_id=adv.user_id,
+                advertiser_id=adv.id,
+                role="owner",
+            ))
+            created.append({"advertiser_id": adv.id, "name": adv.company_name, "user_id": adv.user_id})
+
+    db.commit()
+
+    return {
+        "created_links": len(created),
+        "skipped_existing": len(skipped),
+        "created": created,
+        "skipped": skipped,
+    }
