@@ -616,6 +616,26 @@ async def seed_advertiser(
             Advertiser.id.in_(user_adv_ids),
         ).first()
 
+    # Also check for inactive advertisers with same name (reactivate them)
+    if not existing_adv:
+        from sqlalchemy import func as sa_func2
+        existing_adv = db.query(Advertiser).filter(
+            sa_func2.lower(Advertiser.company_name) == company_name.lower(),
+        ).first()
+        if existing_adv:
+            existing_adv.is_active = True
+            existing_adv.user_id = user_id
+            existing_adv.sector = sector
+            # Create user-advertiser link if missing
+            ua_link = db.query(UserAdvertiser).filter(
+                UserAdvertiser.user_id == user_id,
+                UserAdvertiser.advertiser_id == existing_adv.id,
+            ).first()
+            if not ua_link:
+                db.add(UserAdvertiser(user_id=user_id, advertiser_id=existing_adv.id, role="owner"))
+            db.commit()
+            db.refresh(existing_adv)
+
     if existing_adv:
         advertiser = existing_adv
     else:
