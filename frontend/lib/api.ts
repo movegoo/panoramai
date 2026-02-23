@@ -1385,6 +1385,29 @@ export const adsOverviewAPI = {
   },
 };
 
+// Moby AI Assistant
+export interface MobyResponse {
+  answer: string;
+  sql: string | null;
+  row_count: number;
+  error: string | null;
+}
+
+export interface MobyConfig {
+  enabled: boolean;
+  position: string;
+}
+
+export const mobyAPI = {
+  ask: (question: string, history: { role: string; content: string }[] = []) =>
+    fetchAPI<MobyResponse>("/moby/ask", {
+      method: "POST",
+      body: JSON.stringify({ question, history }),
+    }),
+
+  getConfig: () => fetchAPI<MobyConfig>("/moby/config"),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(

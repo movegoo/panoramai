@@ -8,6 +8,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { Breadcrumb } from "./breadcrumb";
 import { BSODScreen, Win98Taskbar } from "@/components/win98-overlay";
 import { Menu, X } from "lucide-react";
+import { MobyChatbot } from "@/components/moby-chatbot";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -119,6 +120,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      <MobyChatbot />
     </>
   );
 }

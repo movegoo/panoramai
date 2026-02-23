@@ -22,6 +22,7 @@ load_dotenv(dotenv_path=".env")
 # Routers
 from routers import auth, brand, watch, competitors, geo, layers, admin, advertiser, freshness
 from routers import facebook, playstore, appstore, aso, instagram, tiktok, youtube, google_ads, snapchat, creative_analysis, social_analysis, seo, geo_tracking, enrichment, signals, trends, ads_overview
+from routers import moby
 from services.scheduler import scheduler
 
 # Logging
@@ -256,6 +257,7 @@ def _seed_prompt_templates():
     """Seed default AI prompt templates if not already in DB (by key)."""
     from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
     from services.social_content_analyzer import ANALYSIS_PROMPT as SOCIAL_PROMPT
+    from services.moby_ai import SYSTEM_PROMPT as MOBY_PROMPT
 
     defaults = [
         {
@@ -290,6 +292,13 @@ def _seed_prompt_templates():
             "key": "geo_analysis",
             "label": "Diagnostic GEO (visibilite IA)",
             "prompt_text": GEO_ANALYSIS_PROMPT,
+            "model_id": "claude-haiku-4-5-20251001",
+            "max_tokens": 1024,
+        },
+        {
+            "key": "moby_assistant",
+            "label": "Moby - Assistant IA conversationnel",
+            "prompt_text": MOBY_PROMPT,
             "model_id": "claude-haiku-4-5-20251001",
             "max_tokens": 1024,
         },
@@ -506,6 +515,7 @@ app.include_router(signals.router, prefix="/api/signals", tags=["Signaux & Alert
 app.include_router(trends.router, prefix="/api/trends", tags=["Tendances & Evolution"])
 app.include_router(ads_overview.router, prefix="/api/ads", tags=["Ads Overview"])
 app.include_router(freshness.router, prefix="/api/freshness", tags=["Fraîcheur des données"])
+app.include_router(moby.router, prefix="/api/moby", tags=["Moby AI Assistant"])
 
 
 # =============================================================================
