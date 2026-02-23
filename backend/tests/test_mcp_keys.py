@@ -325,7 +325,7 @@ async def test_auth_middleware_valid_key():
 
 
 @pytest.mark.asyncio
-async def test_auth_middleware_messages_reuses_session():
+async def test_auth_middleware_messages_reuses_cached_session():
     """Test that /messages/ endpoint reuses cached session context."""
     from core.mcp_auth import MCPAuthMiddleware, _session_contexts
 
@@ -359,3 +359,31 @@ async def test_auth_middleware_messages_reuses_session():
 
     # Clean up
     del _session_contexts["test-session-123"]
+
+
+@pytest.mark.asyncio
+async def test_auth_middleware_messages_passes_through_without_cache():
+    """Test that /messages/ with session_id passes through even without cache."""
+    from core.mcp_auth import MCPAuthMiddleware
+
+    called = []
+
+    async def inner_app(scope, receive, send):
+        called.append(True)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    middleware = MCPAuthMiddleware(inner_app)
+
+    scope = {
+        "type": "http",
+        "query_string": b"session_id=unknown-session-456",
+        "method": "POST",
+        "path": "/mcp/messages/",
+        "headers": [],
+    }
+
+    await middleware(scope, AsyncMock(), AsyncMock())
+
+    # Should pass through to inner app (not 401)
+    assert len(called) == 1

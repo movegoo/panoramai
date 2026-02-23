@@ -36,14 +36,20 @@ class MCPAuthMiddleware:
         api_key = (qs.get("api_key") or [None])[0]
         session_id = (qs.get("session_id") or [None])[0]
 
-        # Messages endpoint: reuse context from SSE session
-        if "/messages" in path and session_id and session_id in _session_contexts:
-            ctx = _session_contexts[session_id]
-            token = mcp_user_context.set(ctx)
-            try:
+        # Messages endpoint: session_id is the auth token (random UUID)
+        # Auth was already validated on SSE connect. Let the MCP framework
+        # validate the session_id internally.
+        if "/messages" in path and session_id:
+            # Try to restore context from cache, otherwise pass through
+            ctx = _session_contexts.get(session_id)
+            if ctx:
+                token = mcp_user_context.set(ctx)
+                try:
+                    await self.app(scope, receive, send)
+                finally:
+                    mcp_user_context.reset(token)
+            else:
                 await self.app(scope, receive, send)
-            finally:
-                mcp_user_context.reset(token)
             return
 
         # SSE endpoint: validate api_key
