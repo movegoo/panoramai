@@ -22,10 +22,35 @@ def generate_mcp_key(
     db: Session = Depends(get_db),
 ):
     """Generate (or regenerate) an MCP API key for the current user."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     key = f"pnrm_{secrets.token_hex(16)}"
-    # Update via direct query to avoid detached instance issues
-    db.query(User).filter(User.id == user.id).update({"mcp_api_key": key})
-    db.commit()
+    try:
+        # Ensure column exists by trying a raw SQL update
+        from sqlalchemy import text
+        db.execute(
+            text('UPDATE users SET mcp_api_key = :key WHERE id = :uid'),
+            {"key": key, "uid": user.id},
+        )
+        db.commit()
+        logger.info(f"MCP key generated for user {user.id}: {key[:12]}...")
+
+        # Verify it was saved
+        from database import SessionLocal
+        verify_db = SessionLocal()
+        try:
+            saved = verify_db.query(User).filter(User.id == user.id).first()
+            saved_key = saved.mcp_api_key if saved else None
+            logger.info(f"MCP key verification: saved={saved_key is not None}, match={saved_key == key}")
+        finally:
+            verify_db.close()
+
+    except Exception as e:
+        logger.error(f"MCP key generation failed: {e}")
+        db.rollback()
+        return {"api_key": key, "error": str(e), "message": "Cle generee mais erreur de sauvegarde"}
+
     return {
         "api_key": key,
         "message": "Cle API MCP generee avec succes",
@@ -86,6 +111,55 @@ def debug_mcp_key(
         }
     finally:
         direct_db.close()
+
+
+@router.post("/keys/generate-and-verify")
+def generate_and_verify_mcp_key(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate key and immediately verify it's persisted. Returns diagnostic info."""
+    from sqlalchemy import text
+    from database import SessionLocal
+
+    key = f"pnrm_{secrets.token_hex(16)}"
+    steps = []
+
+    # Step 1: raw SQL update
+    try:
+        result = db.execute(
+            text('UPDATE users SET mcp_api_key = :key WHERE id = :uid'),
+            {"key": key, "uid": user.id},
+        )
+        steps.append(f"UPDATE rowcount={result.rowcount}")
+    except Exception as e:
+        steps.append(f"UPDATE failed: {e}")
+        return {"api_key": key, "steps": steps, "verified": False}
+
+    # Step 2: commit
+    try:
+        db.commit()
+        steps.append("COMMIT ok")
+    except Exception as e:
+        steps.append(f"COMMIT failed: {e}")
+        return {"api_key": key, "steps": steps, "verified": False}
+
+    # Step 3: verify with fresh session (same path as middleware)
+    verify_db = SessionLocal()
+    try:
+        found = verify_db.query(User).filter(
+            User.mcp_api_key == key,
+            User.is_active == True,
+        ).first()
+        steps.append(f"VERIFY found={found is not None}")
+        return {
+            "api_key": key,
+            "steps": steps,
+            "verified": found is not None,
+            "message": "Cle API MCP generee avec succes" if found else "ERREUR: cle non trouvee apres sauvegarde",
+        }
+    finally:
+        verify_db.close()
 
 
 @router.get("/keys/check/{api_key}")
