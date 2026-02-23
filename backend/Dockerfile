@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install hatchling (build backend for competitive-mcp)
+RUN pip install --no-cache-dir hatchling
+
 # Copy and install competitive-mcp package
 COPY competitive-mcp /tmp/competitive-mcp
 RUN pip install --no-cache-dir /tmp/competitive-mcp && rm -rf /tmp/competitive-mcp
