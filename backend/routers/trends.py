@@ -13,6 +13,7 @@ import logging
 from database import (
     get_db, Competitor, Ad, InstagramData, TikTokData,
     YouTubeData, AppData, AdSnapshot, User, SnapchatData,
+    GoogleTrendsData,
 )
 from core.auth import get_current_user
 from core.permissions import get_user_competitors, get_user_competitor_ids, parse_advertiser_header
@@ -64,6 +65,7 @@ async def get_timeseries(
             "appstore": _get_app_series(db, comp_id, "appstore", start, end),
             "ads": _get_ads_series(db, comp_id, start, end),
             "snapchat": _get_snapchat_series(db, comp_id, start, end),
+            "google_trends": _get_google_trends_series(db, comp_id, start, end),
         }
         result[str(comp_id)] = comp_data
 
@@ -227,6 +229,25 @@ def _get_snapchat_series(db: Session, comp_id: int, start: datetime, end: dateti
         "subscribers": [{"date": r.recorded_at.isoformat(), "value": r.subscribers} for r in profile_rows],
         "engagement_rate": [{"date": r.recorded_at.isoformat(), "value": r.engagement_rate} for r in profile_rows],
         "spotlight_count": [{"date": r.recorded_at.isoformat(), "value": r.spotlight_count} for r in profile_rows],
+    }
+
+
+def _get_google_trends_series(db: Session, comp_id: int, start: datetime, end: datetime) -> dict:
+    """Google Trends interest score timeseries."""
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
+    rows = (
+        db.query(GoogleTrendsData)
+        .filter(
+            GoogleTrendsData.competitor_id == comp_id,
+            GoogleTrendsData.date >= start_str,
+            GoogleTrendsData.date <= end_str,
+        )
+        .order_by(GoogleTrendsData.date)
+        .all()
+    )
+    return {
+        "interest": [{"date": r.date, "value": r.value} for r in rows],
     }
 
 

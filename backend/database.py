@@ -520,6 +520,38 @@ class AdSnapshot(Base):
     competitor = relationship("Competitor", backref="ad_snapshots")
 
 
+class GoogleTrendsData(Base):
+    """Google Trends interest score (0-100) per competitor per day."""
+    __tablename__ = "google_trends_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    keyword = Column(String(255), index=True)
+    date = Column(String(20), index=True)  # "2026-02-23"
+    value = Column(Integer)  # 0-100
+    recorded_at = Column(DateTime, default=datetime.utcnow)
+
+    competitor = relationship("Competitor", backref="google_trends_data")
+
+
+class GoogleNewsArticle(Base):
+    """News article collected via Google News."""
+    __tablename__ = "google_news_articles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), index=True)
+    title = Column(String(1000))
+    link = Column(String(1000), unique=True)
+    source = Column(String(255))
+    date = Column(String(100))  # raw string from Google News
+    published_at = Column(DateTime, nullable=True)
+    snippet = Column(Text)
+    thumbnail = Column(String(1000))
+    collected_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    competitor = relationship("Competitor", backref="google_news_articles")
+
+
 class Signal(Base):
     """Detected signal (anomaly, trend change, competitive move)."""
     __tablename__ = "signals"
@@ -861,7 +893,7 @@ def _merge_competitor_group(conn, ids: list[int], merged_ids: set[int]):
         # Re-point all FK references to canonical
         for fk_table in ("ads", "instagram_data", "app_data", "tiktok_data", "youtube_data",
                          "store_locations", "social_posts", "serp_results", "geo_results",
-                         "ad_snapshots", "signals"):
+                         "ad_snapshots", "signals", "google_trends_data", "google_news_articles"):
             try:
                 conn.execute(text(
                     f'UPDATE "{fk_table}" SET competitor_id = :canonical WHERE competitor_id = :old'

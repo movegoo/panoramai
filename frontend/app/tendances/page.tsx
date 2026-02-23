@@ -14,7 +14,9 @@ import {
   Star, Users, Eye, Heart, BarChart3, Globe, ArrowUpRight,
   ArrowDownRight, ChevronDown, Sparkles, Activity,
   MessageCircle, ThumbsUp, Download, Target, Zap,
+  Search, Newspaper, RefreshCw, ExternalLink,
 } from "lucide-react";
+import { API_BASE, getCurrentAdvertiserId } from "@/lib/api";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -35,6 +37,7 @@ interface CompetitorTrends {
   appstore: MetricSeries;
   ads: MetricSeries;
   snapchat: MetricSeries;
+  google_trends: MetricSeries;
 }
 
 interface TimeseriesResponse {
@@ -62,6 +65,31 @@ interface SummaryResponse {
   date_from: string;
   date_to: string;
   competitors: CompetitorSummary[];
+}
+
+interface NewsArticle {
+  id: number;
+  competitor_id: number;
+  competitor_name: string;
+  title: string;
+  link: string;
+  source: string;
+  date: string;
+  snippet: string;
+  thumbnail: string;
+  collected_at: string | null;
+}
+
+interface TrendsInterestResponse {
+  competitors: Record<string, { name: string; data: DataPoint[] }>;
+  source: string;
+}
+
+interface TrendsRelatedResponse {
+  competitor_id: number;
+  name: string;
+  rising: { query: string; value: number }[];
+  top: { query: string; value: number }[];
 }
 
 function SnapIcon({ className }: { className?: string }) {
@@ -128,6 +156,20 @@ const METRIC_CATEGORIES = [
       { key: "ads_spend", label: "Budget pub (max)", icon: <BarChart3 className="h-3.5 w-3.5" />, source: "ads", field: "spend_max", format: "euro" },
       { key: "ads_reach", label: "Couverture EU", icon: <Globe className="h-3.5 w-3.5" />, source: "ads", field: "total_reach", format: "number" },
     ],
+  },
+  {
+    id: "google_trends",
+    label: "Recherche Google",
+    icon: <Search className="h-4 w-4" />,
+    metrics: [
+      { key: "gt_interest", label: "Interet de recherche", icon: <TrendingUp className="h-3.5 w-3.5" />, source: "google_trends", field: "interest", format: "number" },
+    ],
+  },
+  {
+    id: "presse",
+    label: "Presse",
+    icon: <Newspaper className="h-4 w-4" />,
+    metrics: [],  // Custom rendering, no sparkline metrics
   },
 ];
 
@@ -244,6 +286,45 @@ export default function TendancesPage() {
   );
 
   const selectedCat = METRIC_CATEGORIES.find((c) => c.id === selectedCategory)!;
+
+  // Google News data
+  const { data: newsData, isLoading: newsLoading } = useAPI<{ articles: NewsArticle[]; total: number }>(
+    selectedCategory === "presse" ? `/google/news` : null
+  );
+  const [newsRefreshing, setNewsRefreshing] = useState(false);
+  const [newsFilter, setNewsFilter] = useState<number | null>(null);
+
+  async function refreshNews() {
+    setNewsRefreshing(true);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const advId = getCurrentAdvertiserId();
+      if (advId) headers["X-Advertiser-Id"] = advId;
+      await fetch(`${API_BASE}/google/news/refresh`, { method: "POST", headers });
+    } catch (e) {
+      // ignore
+    } finally {
+      setNewsRefreshing(false);
+    }
+  }
+
+  const filteredNews = useMemo(() => {
+    const articles = newsData?.articles || [];
+    if (!newsFilter) return articles;
+    return articles.filter((a) => a.competitor_id === newsFilter);
+  }, [newsData, newsFilter]);
+
+  // Unique competitor names from news
+  const newsCompetitors = useMemo(() => {
+    const articles = newsData?.articles || [];
+    const map = new Map<number, string>();
+    for (const a of articles) {
+      if (!map.has(a.competitor_id)) map.set(a.competitor_id, a.competitor_name);
+    }
+    return Array.from(map.entries());
+  }, [newsData]);
 
   // Build chart data: merge all competitors' timeseries into unified date rows
   function buildChartData(source: string, field: string) {
@@ -443,7 +524,115 @@ export default function TendancesPage() {
         ))}
       </div>
 
-      {isLoading ? (
+      {/* ─── Presse tab (custom rendering) ─── */}
+      {selectedCategory === "presse" ? (
+        <div className="space-y-4">
+          {/* Toolbar: filter + refresh */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setNewsFilter(null)}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                  !newsFilter ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white text-muted-foreground"
+                }`}
+              >
+                Tous
+              </button>
+              {newsCompetitors.map(([id, name]) => (
+                <button
+                  key={id}
+                  onClick={() => setNewsFilter(newsFilter === id ? null : id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                    newsFilter === id ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white text-muted-foreground"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={refreshNews}
+              disabled={newsRefreshing}
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border bg-white hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${newsRefreshing ? "animate-spin" : ""}`} />
+              {newsRefreshing ? "Collecte..." : "Actualiser"}
+            </button>
+          </div>
+
+          {newsLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border bg-card p-4 animate-pulse">
+                  <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
+                </div>
+              ))}
+            </div>
+          ) : filteredNews.length === 0 ? (
+            <div className="rounded-2xl border bg-card p-8 text-center">
+              <Newspaper className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-2">Aucun article collecte</p>
+              <p className="text-xs text-muted-foreground/70 mb-4">
+                Cliquez sur Actualiser pour collecter les dernieres actualites presse.
+              </p>
+              <button
+                onClick={refreshNews}
+                disabled={newsRefreshing}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-4 py-2 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${newsRefreshing ? "animate-spin" : ""}`} />
+                Collecter les actualites
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredNews.map((article) => (
+                <a
+                  key={article.id}
+                  href={article.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-2xl border bg-card p-4 hover:bg-muted/30 transition-colors group"
+                >
+                  <div className="flex gap-4">
+                    {article.thumbnail && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={article.thumbnail}
+                        alt=""
+                        className="h-20 w-28 rounded-lg object-cover shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-semibold leading-snug line-clamp-2 group-hover:text-indigo-600 transition-colors">
+                          {article.title}
+                        </h3>
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      {article.snippet && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{article.snippet}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                          {article.competitor_name}
+                        </span>
+                        {article.source && (
+                          <span className="text-[11px] text-muted-foreground">{article.source}</span>
+                        )}
+                        {article.date && (
+                          <span className="text-[11px] text-muted-foreground">{article.date}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="rounded-2xl border bg-card p-4 animate-pulse">
@@ -631,6 +820,53 @@ export default function TendancesPage() {
           </div>
         </>
       )}
+
+      {/* ─── News Dashboard Widget ─── */}
+      <LatestNewsWidget />
+    </div>
+  );
+}
+
+
+/* ─── Latest News Widget ──────────────────────── */
+
+function LatestNewsWidget() {
+  const { data, isLoading } = useAPI<{ articles: NewsArticle[] }>("/google/news/latest");
+  const articles = data?.articles || [];
+
+  if (isLoading || articles.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border bg-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-sm flex items-center gap-2">
+          <Newspaper className="h-4 w-4 text-indigo-500" />
+          Actualites presse
+        </h2>
+      </div>
+      <div className="space-y-3">
+        {articles.slice(0, 5).map((article) => (
+          <a
+            key={article.id}
+            href={article.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-3 group"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium leading-snug line-clamp-1 group-hover:text-indigo-600 transition-colors">
+                {article.title}
+              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] text-indigo-500 font-medium">{article.competitor_name}</span>
+                {article.source && <span className="text-[10px] text-muted-foreground">{article.source}</span>}
+                {article.date && <span className="text-[10px] text-muted-foreground">{article.date}</span>}
+              </div>
+            </div>
+            <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
