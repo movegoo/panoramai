@@ -1,5 +1,6 @@
 """Entry point MCP — Registration des 12 tools."""
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 mcp = FastMCP(
     "Veille Concurrentielle",
@@ -7,6 +8,15 @@ mcp = FastMCP(
         "Serveur MCP de veille concurrentielle pour la grande distribution. "
         "Interroge les données concurrentielles : réseaux sociaux, publicités, apps, SEO, magasins. "
         "Les résultats sont en français."
+    ),
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "localhost:*",
+            "127.0.0.1:*",
+            "panoramai-api.onrender.com:*",
+            "panoramai-api.onrender.com",
+        ],
     ),
 )
 
