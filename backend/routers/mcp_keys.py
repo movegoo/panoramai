@@ -104,21 +104,32 @@ def diag_mcp_keys():
 
         users_detail = []
         for u in users_with_keys:
-            ua = db.query(UserAdvertiser).filter(
+            user_advs = db.query(UserAdvertiser).filter(
                 UserAdvertiser.user_id == u.id,
-            ).order_by(UserAdvertiser.id).first()
-            adv = db.query(Advertiser).filter(Advertiser.id == ua.advertiser_id).first() if ua else None
-            comp_ids = get_advertiser_competitor_ids(db, ua.advertiser_id) if ua else []
-            comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all() if comp_ids else []
+            ).order_by(UserAdvertiser.id).all()
+
+            advs_info = []
+            all_comp_ids = set()
+            for ua in user_advs:
+                adv = db.query(Advertiser).filter(Advertiser.id == ua.advertiser_id).first()
+                cids = get_advertiser_competitor_ids(db, ua.advertiser_id)
+                all_comp_ids.update(cids)
+                advs_info.append({
+                    "id": ua.advertiser_id,
+                    "name": adv.company_name if adv else None,
+                    "competitor_count": len(cids),
+                })
+
+            all_comp_ids = list(all_comp_ids)
+            comps = db.query(Competitor).filter(Competitor.id.in_(all_comp_ids)).all() if all_comp_ids else []
 
             users_detail.append({
                 "user_id": u.id,
                 "email": u.email,
                 "key_prefix": u.mcp_api_key[:12] + "..." if u.mcp_api_key else None,
                 "is_active": u.is_active,
-                "advertiser_id": ua.advertiser_id if ua else None,
-                "advertiser_name": adv.company_name if adv else None,
-                "competitor_ids": comp_ids,
+                "advertisers": advs_info,
+                "total_competitor_ids": all_comp_ids,
                 "competitors": [{"id": c.id, "name": c.name} for c in comps],
             })
 

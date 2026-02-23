@@ -30,20 +30,27 @@ def _resolve_context(api_key: str) -> MCPUserContext | None:
         if not user:
             return None
 
-        ua = db.query(UserAdvertiser).filter(
+        # Get ALL advertisers for this user
+        user_advs = db.query(UserAdvertiser).filter(
             UserAdvertiser.user_id == user.id,
-        ).order_by(UserAdvertiser.id).first()
+        ).order_by(UserAdvertiser.id).all()
 
-        if not ua:
+        if not user_advs:
             return None
 
-        competitor_ids = get_advertiser_competitor_ids(db, ua.advertiser_id)
+        # Aggregate competitors from ALL advertisers
+        all_adv_ids = [ua.advertiser_id for ua in user_advs]
+        all_comp_ids = set()
+        for adv_id in all_adv_ids:
+            all_comp_ids.update(get_advertiser_competitor_ids(db, adv_id))
 
         ctx = MCPUserContext(
             user_id=user.id,
-            advertiser_id=ua.advertiser_id,
-            competitor_ids=competitor_ids,
+            advertiser_id=user_advs[0].advertiser_id,
+            advertiser_ids=all_adv_ids,
+            competitor_ids=list(all_comp_ids),
         )
+        logger.info(f"MCP context resolved: user={user.id}, advertisers={all_adv_ids}, competitors={list(all_comp_ids)}")
 
         # Cache for reuse (limit size)
         _key_contexts[api_key] = ctx

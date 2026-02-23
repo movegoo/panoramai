@@ -297,9 +297,9 @@ async def test_auth_middleware_valid_key():
 
     mock_db = MagicMock()
     # User lookup: query().filter().first()
-    # UserAdvertiser lookup: query().filter().order_by().first()
+    # UserAdvertiser lookup: query().filter().order_by().all() (returns list)
     mock_db.query.return_value.filter.return_value.first.return_value = mock_user
-    mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = mock_ua
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [mock_ua]
 
     scope = {
         "type": "http",
