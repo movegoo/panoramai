@@ -15,7 +15,7 @@ class TestBuildAllowedHosts:
         return mod._build_allowed_hosts
 
     def test_default_hosts_without_env(self):
-        """Without MCP_ALLOWED_HOSTS env, should include Render defaults."""
+        """Without MCP_ALLOWED_HOSTS env, should include AWS defaults."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MCP_ALLOWED_HOSTS", None)
             build = self._import_fresh()
@@ -23,8 +23,8 @@ class TestBuildAllowedHosts:
 
         assert "localhost:*" in hosts
         assert "127.0.0.1:*" in hosts
-        assert "panoramai-api.onrender.com:*" in hosts
-        assert "panoramai-api.onrender.com" in hosts
+        assert "api.panoramai.mobsuccess.ai:*" in hosts
+        assert "api.panoramai.mobsuccess.ai" in hosts
 
     def test_custom_hosts_from_env(self):
         """MCP_ALLOWED_HOSTS should add custom hosts."""
@@ -38,8 +38,8 @@ class TestBuildAllowedHosts:
         assert "my-alb.example.com:*" in hosts
         assert "api.prod.com" in hosts
         assert "api.prod.com:*" in hosts
-        # Render defaults should NOT be present
-        assert "panoramai-api.onrender.com:*" not in hosts
+        # AWS defaults should NOT be present when custom hosts set
+        assert "api.panoramai.mobsuccess.ai:*" not in hosts
 
     def test_empty_env_uses_defaults(self):
         """Empty MCP_ALLOWED_HOSTS should fall back to defaults."""
@@ -47,7 +47,7 @@ class TestBuildAllowedHosts:
             build = self._import_fresh()
             hosts = build()
 
-        assert "panoramai-api.onrender.com:*" in hosts
+        assert "api.panoramai.mobsuccess.ai:*" in hosts
 
     def test_host_with_port_not_duplicated(self):
         """Hosts already containing ':' should not get ':*' added."""

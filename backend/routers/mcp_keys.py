@@ -15,7 +15,7 @@ router = APIRouter()
 
 MCP_BASE_URL = os.getenv(
     "MCP_BASE_URL",
-    "https://panoramai-api.onrender.com",
+    "https://api.panoramai.mobsuccess.ai",
 )
 
 

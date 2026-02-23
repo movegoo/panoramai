@@ -17,10 +17,10 @@ def _build_allowed_hosts() -> list[str]:
                 if ":*" not in h and ":" not in h:
                     hosts.append(f"{h}:*")
     else:
-        # Default: Render
+        # Default: AWS production
         hosts.extend([
-            "panoramai-api.onrender.com:*",
-            "panoramai-api.onrender.com",
+            "api.panoramai.mobsuccess.ai:*",
+            "api.panoramai.mobsuccess.ai",
         ])
     return hosts
 
