@@ -465,7 +465,9 @@ function MCPSection() {
       setFullKey(res.api_key);
       const updated = await mcpAPI.getKey();
       setMcpData(updated);
-    } catch {
+    } catch (err: any) {
+      console.error("MCP key generation failed:", err);
+      alert(err.message || "Erreur lors de la generation de la cle");
     } finally {
       setGenerating(false);
     }
