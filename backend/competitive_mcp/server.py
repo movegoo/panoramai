@@ -76,18 +76,18 @@ def search_ads(
     competitor_name: str | None = None,
     platform: str | None = None,
     category: str | None = None,
-    limit: int = 50,
+    days: int | None = None,
 ) -> str:
-    """Recherche et filtre les publicités des concurrents.
+    """Recherche et filtre les publicités des concurrents. Retourne TOUTES les pubs correspondantes.
 
     Args:
         competitor_name: Filtrer par concurrent (optionnel)
         platform: Filtrer par plateforme : "facebook", "instagram", "google", "snapchat" (optionnel)
         category: Filtrer par catégorie produit (optionnel)
-        limit: Nombre max de résultats (défaut: 50, max: 100)
+        days: Filtrer par période en jours (ex: 30 pour les 30 derniers jours) (optionnel)
     """
     from competitive_mcp.tools.ads import search_ads as _impl
-    return _impl(competitor_name=competitor_name, platform=platform, category=category, limit=limit)
+    return _impl(competitor_name=competitor_name, platform=platform, category=category, days=days)
 
 
 # ─── 6. Ad Intelligence ──────────────────────────────────────────
@@ -144,16 +144,18 @@ def get_top_social_posts(
     competitor_name: str | None = None,
     platform: str | None = None,
     sort_by: str = "views",
+    days: int | None = None,
 ) -> str:
-    """Posts sociaux les plus performants (TikTok, YouTube, Instagram).
+    """Posts sociaux les plus performants (TikTok, YouTube, Instagram). Retourne TOUS les posts.
 
     Args:
         competitor_name: Filtrer par concurrent (optionnel)
         platform: Filtrer par plateforme : "tiktok", "youtube", "instagram" (optionnel)
         sort_by: Trier par : "views", "likes", "comments", "engagement" (défaut: "views")
+        days: Filtrer par période en jours (optionnel)
     """
     from competitive_mcp.tools.social import get_top_social_posts as _impl
-    return _impl(competitor_name=competitor_name, platform=platform, sort_by=sort_by)
+    return _impl(competitor_name=competitor_name, platform=platform, sort_by=sort_by, days=days)
 
 
 # ─── 10. SEO Rankings ────────────────────────────────────────────
@@ -179,17 +181,17 @@ def get_seo_rankings(
 def get_signals(
     severity: str | None = None,
     platform: str | None = None,
-    limit: int = 20,
+    days: int | None = None,
 ) -> str:
-    """Alertes et anomalies détectées : pics de followers, baisses de notes, nouvelles campagnes.
+    """Alertes et anomalies détectées : pics de followers, baisses de notes, nouvelles campagnes. Retourne TOUS les signaux.
 
     Args:
         severity: Filtrer par sévérité : "critical", "warning", "info" (optionnel)
         platform: Filtrer par plateforme (optionnel)
-        limit: Nombre max de signaux (défaut: 20, max: 100)
+        days: Filtrer par période en jours (optionnel)
     """
     from competitive_mcp.tools.signals import get_signals as _impl
-    return _impl(severity=severity, platform=platform, limit=limit)
+    return _impl(severity=severity, platform=platform, days=days)
 
 
 # ─── 12. Store Locations ─────────────────────────────────────────

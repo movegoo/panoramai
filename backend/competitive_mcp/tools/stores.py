@@ -67,13 +67,13 @@ def get_store_locations(
                 lines.append(f"- **{dept or 'N/A'}** : {count} magasins{rating_str}")
             lines.append("")
 
-        # Show individual stores (limited)
+        # Show individual stores
         stores = query.order_by(
             StoreLocation.google_rating.desc().nullslast()
-        ).limit(100).all()
+        ).all()
 
         if stores:
-            lines.append(f"## Détail (top {len(stores)})")
+            lines.append(f"## Détail ({len(stores)} magasins)")
             for s in stores:
                 rating_str = f" — {format_rating(s.google_rating)}" if s.google_rating else ""
                 reviews_str = f" ({s.google_reviews_count} avis)" if s.google_reviews_count else ""

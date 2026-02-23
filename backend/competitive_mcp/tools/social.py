@@ -115,9 +115,10 @@ def get_top_social_posts(
     competitor_name: str | None = None,
     platform: str | None = None,
     sort_by: str = "views",
-    limit: int = 10,
+    days: int | None = None,
 ) -> str:
     """Posts sociaux les plus performants."""
+    from datetime import datetime, timedelta
     db = get_session()
     try:
         query = db.query(SocialPost, Competitor.name).join(
@@ -133,6 +134,10 @@ def get_top_social_posts(
         if platform:
             query = query.filter(SocialPost.platform.ilike(f"%{platform}%"))
 
+        if days:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            query = query.filter(SocialPost.posted_at >= cutoff)
+
         # Sort
         sort_col = {
             "views": SocialPost.views,
@@ -141,7 +146,7 @@ def get_top_social_posts(
             "engagement": SocialPost.content_engagement_score,
         }.get(sort_by, SocialPost.views)
 
-        posts = query.order_by(desc(sort_col)).limit(min(limit, 100)).all()
+        posts = query.order_by(desc(sort_col)).all()
 
         if not posts:
             return "Aucun post social trouvé avec ces critères."

@@ -11,9 +11,10 @@ from competitive_mcp.formatting import format_number, format_percent, format_dat
 def get_signals(
     severity: str | None = None,
     platform: str | None = None,
-    limit: int = 20,
+    days: int | None = None,
 ) -> str:
     """Alertes et anomalies détectées (signaux de veille)."""
+    from datetime import datetime, timedelta
     db = get_session()
     try:
         competitors = get_all_competitors(db)
@@ -31,7 +32,11 @@ def get_signals(
         if platform:
             query = query.filter(Signal.platform.ilike(f"%{platform}%"))
 
-        signals = query.order_by(desc(Signal.detected_at)).limit(min(limit, 100)).all()
+        if days:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            query = query.filter(Signal.detected_at >= cutoff)
+
+        signals = query.order_by(desc(Signal.detected_at)).all()
 
         if not signals:
             return "Aucun signal détecté." + (" Filtres appliqués : " + ", ".join(
