@@ -23,7 +23,8 @@ def generate_mcp_key(
 ):
     """Generate (or regenerate) an MCP API key for the current user."""
     key = f"pnrm_{secrets.token_hex(16)}"
-    user.mcp_api_key = key
+    # Update via direct query to avoid detached instance issues
+    db.query(User).filter(User.id == user.id).update({"mcp_api_key": key})
     db.commit()
     return {
         "api_key": key,
@@ -70,6 +71,10 @@ def debug_mcp_key(
             User.mcp_api_key == stored_key,
             User.is_active == True,
         ).first()
+        # Also count how many users have any key at all
+        any_keys = direct_db.query(User).filter(
+            User.mcp_api_key.isnot(None),
+        ).count()
         return {
             "user_id": user.id,
             "has_key": bool(stored_key),
@@ -77,6 +82,31 @@ def debug_mcp_key(
             "key_length": len(stored_key) if stored_key else 0,
             "findable_by_middleware": found is not None,
             "found_user_id": found.id if found else None,
+            "users_with_any_key": any_keys,
+        }
+    finally:
+        direct_db.close()
+
+
+@router.get("/keys/check/{api_key}")
+def check_mcp_key(api_key: str):
+    """Public debug: check if a specific key exists in DB (no auth required)."""
+    from database import SessionLocal
+    direct_db = SessionLocal()
+    try:
+        user = direct_db.query(User).filter(
+            User.mcp_api_key == api_key,
+            User.is_active == True,
+        ).first()
+        # Also check without is_active filter
+        user_any = direct_db.query(User).filter(
+            User.mcp_api_key == api_key,
+        ).first()
+        return {
+            "key_found_active": user is not None,
+            "key_found_any": user_any is not None,
+            "user_id": user.id if user else (user_any.id if user_any else None),
+            "is_active": user_any.is_active if user_any else None,
         }
     finally:
         direct_db.close()
