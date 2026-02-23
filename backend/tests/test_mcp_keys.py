@@ -331,9 +331,10 @@ async def test_auth_middleware_valid_key():
 
 
 @pytest.mark.asyncio
-async def test_auth_middleware_messages_reuses_session():
-    """Test that /messages/ endpoint restores context via session -> api_key cache."""
-    from core.mcp_auth import MCPAuthMiddleware, _session_keys, _key_contexts
+async def test_auth_middleware_messages_reuses_last_context():
+    """Test that /messages/ endpoint reuses last authenticated context."""
+    import core.mcp_auth as mcp_auth_mod
+    from core.mcp_auth import MCPAuthMiddleware
 
     captured_ctx = []
 
@@ -345,10 +346,10 @@ async def test_auth_middleware_messages_reuses_session():
 
     middleware = MCPAuthMiddleware(inner_app)
 
-    # Pre-cache: session -> api_key -> context
+    # Set last context
     test_ctx = MCPUserContext(user_id=42, advertiser_id=10, competitor_ids=[1, 2])
-    _session_keys["test-session-123"] = "pnrm_testkey"
-    _key_contexts["pnrm_testkey"] = test_ctx
+    old_ctx = mcp_auth_mod._last_context
+    mcp_auth_mod._last_context = test_ctx
 
     scope = {
         "type": "http",
@@ -364,9 +365,8 @@ async def test_auth_middleware_messages_reuses_session():
     assert captured_ctx[0].user_id == 42
     assert captured_ctx[0].advertiser_id == 10
 
-    # Clean up
-    del _session_keys["test-session-123"]
-    del _key_contexts["pnrm_testkey"]
+    # Restore
+    mcp_auth_mod._last_context = old_ctx
 
 
 @pytest.mark.asyncio
