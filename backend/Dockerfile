@@ -9,11 +9,15 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy and install competitive-mcp package
+COPY competitive-mcp /tmp/competitive-mcp
+RUN pip install --no-cache-dir /tmp/competitive-mcp && rm -rf /tmp/competitive-mcp
+
 # Copy application code
-COPY . .
+COPY backend/ .
 
 # Create cache directory
 RUN mkdir -p /app/cache/datagouv

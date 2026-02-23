@@ -1,0 +1,10 @@
+frontend/
+.next/
+node_modules/
+.git/
+.env
+*.pyc
+__pycache__/
+venv/
+backend/.coverage
+backend/test.db
