@@ -25,7 +25,7 @@ locals {
     SCHEDULER_ENABLED  = var.env == "prod" ? "true" : "false"
     CORS_ORIGINS       = "https://panoramai-eight.vercel.app"
     DATAGOUV_CACHE_DIR = "/app/cache/datagouv"
-    MCP_ALLOWED_HOSTS  = "" # Set to ALB domain after deploy
+    MCP_ALLOWED_HOSTS  = "CHANGE_ME" # Set to ALB domain after deploy
   }
 }
 
