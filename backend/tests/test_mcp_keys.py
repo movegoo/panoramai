@@ -160,9 +160,13 @@ def test_get_key_claude_config():
     config = data["claude_config"]
     assert "mcpServers" in config
     assert "panoramai" in config["mcpServers"]
-    url = config["mcpServers"]["panoramai"]["url"]
-    assert url.endswith(f"?api_key={key}")
-    assert "/mcp/sse" in url
+    server = config["mcpServers"]["panoramai"]
+    assert server["command"] == "npx"
+    assert "mcp-remote" in server["args"]
+    # The SSE URL with api_key should be in args
+    sse_url = server["args"][-1]
+    assert f"api_key={key}" in sse_url
+    assert "/mcp/sse" in sse_url
 
 
 # ─── Key Revocation ──────────────────────────────────────────────

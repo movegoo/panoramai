@@ -80,7 +80,12 @@ def get_mcp_key(
         "claude_config": {
             "mcpServers": {
                 "panoramai": {
-                    "url": f"{MCP_BASE_URL}/mcp/sse?api_key={key}",
+                    "command": "npx",
+                    "args": [
+                        "-y",
+                        "mcp-remote",
+                        f"{MCP_BASE_URL}/mcp/sse?api_key={key}",
+                    ],
                 }
             }
         },
