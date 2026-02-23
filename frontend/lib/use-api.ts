@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
-import { API_BASE, getCurrentAdvertiserId, clearToken } from "./api";
+import { API_BASE, getCurrentAdvertiserId } from "./api";
 
 /**
  * Generic SWR-based API hook with advertiser-scoped caching.
@@ -29,10 +29,7 @@ export function useAPI<T>(
       const res = await fetch(`${API_BASE}${endpoint}`, { headers });
       if (!res.ok) {
         if (res.status === 401 && typeof window !== "undefined") {
-          clearToken();
-          localStorage.removeItem("current_advertiser_id");
-          window.location.href = "/login";
-          throw new Error("Session expirée");
+          window.dispatchEvent(new Event("auth:expired"));
         }
         const err = await res.json().catch(() => ({}));
         const error = new Error(err.detail || `API Error: ${res.status}`);

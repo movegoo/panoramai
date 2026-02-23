@@ -60,6 +60,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refresh]);
 
+  // Listen for 401 from any API call mid-session → auto-logout
+  useEffect(() => {
+    function handleExpired() {
+      clearToken();
+      clearCurrentAdvertiserId();
+      setUser(null);
+      setCurrentAdvId(null);
+    }
+    window.addEventListener("auth:expired", handleExpired);
+    return () => window.removeEventListener("auth:expired", handleExpired);
+  }, []);
+
   async function login(email: string, password: string) {
     const res = await authAPI.login(email, password);
     setToken(res.token);
