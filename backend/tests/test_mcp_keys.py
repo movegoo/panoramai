@@ -311,6 +311,9 @@ async def test_auth_middleware_valid_key():
 
     with patch("core.mcp_auth.SessionLocal", return_value=mock_db):
         with patch("core.mcp_auth.get_advertiser_competitor_ids", return_value=[1, 2, 3]):
+            # Clear cache to force DB lookup
+            from core.mcp_auth import _key_contexts
+            _key_contexts.clear()
             await middleware(scope, lambda: {"type": "http.request", "body": b""}, AsyncMock())
 
     assert len(captured_ctx) == 1
@@ -323,11 +326,14 @@ async def test_auth_middleware_valid_key():
     # Context should be reset after middleware completes
     assert mcp_user_context.get(None) is None
 
+    # Clean up
+    _key_contexts.clear()
+
 
 @pytest.mark.asyncio
-async def test_auth_middleware_messages_reuses_cached_session():
-    """Test that /messages/ endpoint reuses cached session context."""
-    from core.mcp_auth import MCPAuthMiddleware, _session_contexts
+async def test_auth_middleware_messages_reuses_session():
+    """Test that /messages/ endpoint restores context via session -> api_key cache."""
+    from core.mcp_auth import MCPAuthMiddleware, _session_keys, _key_contexts
 
     captured_ctx = []
 
@@ -339,9 +345,10 @@ async def test_auth_middleware_messages_reuses_cached_session():
 
     middleware = MCPAuthMiddleware(inner_app)
 
-    # Pre-cache a session context
+    # Pre-cache: session -> api_key -> context
     test_ctx = MCPUserContext(user_id=42, advertiser_id=10, competitor_ids=[1, 2])
-    _session_contexts["test-session-123"] = test_ctx
+    _session_keys["test-session-123"] = "pnrm_testkey"
+    _key_contexts["pnrm_testkey"] = test_ctx
 
     scope = {
         "type": "http",
@@ -358,7 +365,8 @@ async def test_auth_middleware_messages_reuses_cached_session():
     assert captured_ctx[0].advertiser_id == 10
 
     # Clean up
-    del _session_contexts["test-session-123"]
+    del _session_keys["test-session-123"]
+    del _key_contexts["pnrm_testkey"]
 
 
 @pytest.mark.asyncio

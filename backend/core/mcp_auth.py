@@ -11,16 +11,62 @@ from core.permissions import get_advertiser_competitor_ids
 
 logger = logging.getLogger(__name__)
 
-# Cache: session_id -> MCPUserContext (set on SSE connect, reused on messages)
-_session_contexts: dict[str, MCPUserContext] = {}
+# Cache: api_key -> MCPUserContext (avoids DB lookup on every /messages/ call)
+_key_contexts: dict[str, MCPUserContext] = {}
+
+
+def _resolve_context(api_key: str) -> MCPUserContext | None:
+    """Resolve user context from api_key, with cache."""
+    if api_key in _key_contexts:
+        return _key_contexts[api_key]
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(
+            User.mcp_api_key == api_key,
+            User.is_active == True,
+        ).first()
+
+        if not user:
+            return None
+
+        ua = db.query(UserAdvertiser).filter(
+            UserAdvertiser.user_id == user.id,
+        ).order_by(UserAdvertiser.id).first()
+
+        if not ua:
+            return None
+
+        competitor_ids = get_advertiser_competitor_ids(db, ua.advertiser_id)
+
+        ctx = MCPUserContext(
+            user_id=user.id,
+            advertiser_id=ua.advertiser_id,
+            competitor_ids=competitor_ids,
+        )
+
+        # Cache for reuse (limit size)
+        _key_contexts[api_key] = ctx
+        if len(_key_contexts) > 50:
+            oldest = next(iter(_key_contexts))
+            del _key_contexts[oldest]
+
+        return ctx
+    finally:
+        db.close()
+
+
+# Cache: session_id -> api_key (set on SSE connect, reused on messages)
+_session_keys: dict[str, str] = {}
 
 
 class MCPAuthMiddleware:
     """Wrap the MCP SSE ASGI app with API key authentication.
 
     Auth flow:
-    1. Client connects to /sse?api_key=pnrm_xxx → validates key, caches context by session_id
-    2. Client posts to /messages/?session_id=xxx → reuses cached context (no api_key needed)
+    1. Client connects to /sse?api_key=pnrm_xxx → validates key, caches context
+    2. Server returns session_id → we cache session_id -> api_key mapping
+    3. Client posts to /messages/?session_id=xxx → we look up api_key from cache
     """
 
     def __init__(self, app: ASGIApp):
@@ -36,20 +82,21 @@ class MCPAuthMiddleware:
         api_key = (qs.get("api_key") or [None])[0]
         session_id = (qs.get("session_id") or [None])[0]
 
-        # Messages endpoint: session_id is the auth token (random UUID)
-        # Auth was already validated on SSE connect. Let the MCP framework
-        # validate the session_id internally.
+        # Messages endpoint: restore context from session -> api_key cache
         if "/messages" in path and session_id:
-            # Try to restore context from cache, otherwise pass through
-            ctx = _session_contexts.get(session_id)
-            if ctx:
-                token = mcp_user_context.set(ctx)
-                try:
-                    await self.app(scope, receive, send)
-                finally:
-                    mcp_user_context.reset(token)
-            else:
-                await self.app(scope, receive, send)
+            cached_key = _session_keys.get(session_id)
+            if cached_key:
+                ctx = _resolve_context(cached_key)
+                if ctx:
+                    token = mcp_user_context.set(ctx)
+                    try:
+                        await self.app(scope, receive, send)
+                    finally:
+                        mcp_user_context.reset(token)
+                    return
+
+            # No cached context — still pass through (MCP validates session_id)
+            await self.app(scope, receive, send)
             return
 
         # SSE endpoint: validate api_key
@@ -61,68 +108,35 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        # Lookup user by MCP API key
-        db = SessionLocal()
-        try:
-            user = db.query(User).filter(
-                User.mcp_api_key == api_key,
-                User.is_active == True,
-            ).first()
-
-            if not user:
-                response = JSONResponse(
-                    {"detail": "API key invalide ou revoquee"},
-                    status_code=401,
-                )
-                await response(scope, receive, send)
-                return
-
-            # Resolve advertiser (first one)
-            ua = db.query(UserAdvertiser).filter(
-                UserAdvertiser.user_id == user.id,
-            ).order_by(UserAdvertiser.id).first()
-
-            if not ua:
-                response = JSONResponse(
-                    {"detail": "Aucune enseigne configuree pour cet utilisateur"},
-                    status_code=403,
-                )
-                await response(scope, receive, send)
-                return
-
-            competitor_ids = get_advertiser_competitor_ids(db, ua.advertiser_id)
-
-            ctx = MCPUserContext(
-                user_id=user.id,
-                advertiser_id=ua.advertiser_id,
-                competitor_ids=competitor_ids,
+        ctx = _resolve_context(api_key)
+        if not ctx:
+            response = JSONResponse(
+                {"detail": "API key invalide ou revoquee"},
+                status_code=401,
             )
-        finally:
-            db.close()
+            await response(scope, receive, send)
+            return
 
-        # Capture session_id from SSE response to cache the context
+        # Capture session_id from SSE response to map session -> api_key
         original_send = send
 
         async def capturing_send(message):
             if message.get("type") == "http.response.body":
                 body = message.get("body", b"").decode(errors="ignore")
-                # SSE sends "data: /messages/?session_id=xxx"
                 if "session_id=" in body:
                     for line in body.split("\n"):
                         if "session_id=" in line:
                             sid_qs = parse_qs(line.split("?", 1)[-1])
                             sid = (sid_qs.get("session_id") or [None])[0]
                             if sid:
-                                _session_contexts[sid] = ctx
-                                logger.info(f"MCP session {sid[:8]}... cached for user {ctx.user_id}")
-                                # Limit cache size
-                                if len(_session_contexts) > 100:
-                                    oldest = next(iter(_session_contexts))
-                                    del _session_contexts[oldest]
+                                _session_keys[sid] = api_key
+                                logger.info(f"MCP session {sid[:8]}... mapped to user {ctx.user_id}")
+                                if len(_session_keys) > 100:
+                                    oldest = next(iter(_session_keys))
+                                    del _session_keys[oldest]
                                 break
             await original_send(message)
 
-        # Set context var and call the app
         token = mcp_user_context.set(ctx)
         try:
             await self.app(scope, receive, capturing_send)
