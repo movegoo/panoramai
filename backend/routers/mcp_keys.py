@@ -87,6 +87,68 @@ def get_mcp_key(
     }
 
 
+@router.get("/keys/diag")
+def diag_mcp_keys():
+    """Temporary diagnostic: check all MCP keys in DB (no auth, remove after fix)."""
+    db = SessionLocal()
+    try:
+        users_with_keys = db.query(
+            User.id, User.email, User.mcp_api_key, User.is_active,
+        ).filter(User.mcp_api_key.isnot(None)).all()
+
+        all_users = db.query(User.id, User.email, User.is_active).all()
+
+        return {
+            "total_users": len(all_users),
+            "users_with_keys": [
+                {
+                    "user_id": u.id,
+                    "email": u.email,
+                    "key_prefix": u.mcp_api_key[:12] + "..." if u.mcp_api_key else None,
+                    "key_length": len(u.mcp_api_key) if u.mcp_api_key else 0,
+                    "is_active": u.is_active,
+                }
+                for u in users_with_keys
+            ],
+            "all_user_ids": [u.id for u in all_users],
+        }
+    finally:
+        db.close()
+
+
+@router.get("/keys/diag/check/{api_key}")
+def diag_check_key(api_key: str):
+    """Temporary diagnostic: check specific key lookup (same as middleware)."""
+    db = SessionLocal()
+    try:
+        # Exact same query as MCPAuthMiddleware
+        user = db.query(User).filter(
+            User.mcp_api_key == api_key,
+            User.is_active == True,
+        ).first()
+
+        # Also try without is_active filter
+        user_any = db.query(User).filter(
+            User.mcp_api_key == api_key,
+        ).first()
+
+        # Check column exists
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.bind)
+        columns = [c["name"] for c in inspector.get_columns("users")]
+
+        return {
+            "key_found_active": user is not None,
+            "key_found_any": user_any is not None,
+            "user_id": user.id if user else (user_any.id if user_any else None),
+            "is_active": user_any.is_active if user_any else None,
+            "mcp_api_key_column_exists": "mcp_api_key" in columns,
+            "users_table_columns": columns,
+        }
+    finally:
+        db.close()
+
+
 @router.delete("/keys")
 def revoke_mcp_key(
     user: User = Depends(get_current_user),
