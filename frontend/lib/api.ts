@@ -1408,6 +1408,34 @@ export const mobyAPI = {
   getConfig: () => fetchAPI<MobyConfig>("/moby/config"),
 };
 
+// MCP Integration API
+export interface MCPKeyResponse {
+  has_key: boolean;
+  api_key_masked: string | null;
+  claude_config: {
+    mcpServers: {
+      panoramai: {
+        url: string;
+      };
+    };
+  } | null;
+}
+
+export interface MCPGenerateResponse {
+  api_key: string;
+  message: string;
+}
+
+export const mcpAPI = {
+  getKey: () => fetchAPI<MCPKeyResponse>("/mcp/keys"),
+
+  generateKey: () =>
+    fetchAPI<MCPGenerateResponse>("/mcp/keys/generate", { method: "POST" }),
+
+  revokeKey: () =>
+    fetchAPI<{ message: string }>("/mcp/keys", { method: "DELETE" }),
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(

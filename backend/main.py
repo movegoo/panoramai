@@ -23,6 +23,7 @@ load_dotenv(dotenv_path=".env")
 from routers import auth, brand, watch, competitors, geo, layers, admin, advertiser, freshness
 from routers import facebook, playstore, appstore, aso, instagram, tiktok, youtube, google_ads, snapchat, creative_analysis, social_analysis, seo, geo_tracking, enrichment, signals, trends, ads_overview
 from routers import moby
+from routers import mcp_keys
 from services.scheduler import scheduler
 
 # Logging
@@ -516,6 +517,16 @@ app.include_router(trends.router, prefix="/api/trends", tags=["Tendances & Evolu
 app.include_router(ads_overview.router, prefix="/api/ads", tags=["Ads Overview"])
 app.include_router(freshness.router, prefix="/api/freshness", tags=["Fraîcheur des données"])
 app.include_router(moby.router, prefix="/api/moby", tags=["Moby AI Assistant"])
+app.include_router(mcp_keys.router, prefix="/api/mcp", tags=["MCP Integration"])
+
+# Mount MCP SSE server (non-fatal if competitive-mcp not available)
+try:
+    from competitive_mcp.server import mcp as mcp_server
+    from core.mcp_auth import MCPAuthMiddleware
+    app.mount("/mcp", MCPAuthMiddleware(mcp_server.sse_app()))
+    logger.info("MCP SSE server mounted at /mcp")
+except Exception as e:
+    logger.warning(f"MCP SSE mount skipped: {e}")
 
 
 # =============================================================================

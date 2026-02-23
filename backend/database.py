@@ -28,6 +28,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    mcp_api_key = Column(String(64), unique=True, nullable=True, index=True)
 
     advertisers = relationship("Advertiser", back_populates="user")
     competitors = relationship("Competitor", back_populates="user")
@@ -641,6 +642,8 @@ def _run_migrations(engine):
             ("ads", "price_visible", "BOOLEAN"),
             ("ads", "price_value", "VARCHAR(20)"),
             ("ads", "seasonal_event", "VARCHAR(50)"),
+            # MCP API key
+            ("users", "mcp_api_key", "VARCHAR(64)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

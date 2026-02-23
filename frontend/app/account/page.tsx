@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   brandAPI,
+  mcpAPI,
+  MCPKeyResponse,
   BrandProfileData,
   BrandSetupData,
   BrandListItem,
@@ -60,6 +62,10 @@ import {
   ShieldCheck,
   Zap,
   Camera,
+  Terminal,
+  Copy,
+  Trash2,
+  Key,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -436,6 +442,178 @@ const CATEGORY_LABELS: Record<string, string> = {
   data: "Data & ERP",
   reviews: "Avis & Reputation",
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* MCP Integration Section                                                   */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+function MCPSection() {
+  const [mcpData, setMcpData] = useState<MCPKeyResponse | null>(null);
+  const [fullKey, setFullKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    mcpAPI.getKey().then(setMcpData).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await mcpAPI.generateKey();
+      setFullKey(res.api_key);
+      const updated = await mcpAPI.getKey();
+      setMcpData(updated);
+    } catch {
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleRevoke() {
+    if (!confirm("Revoquer la cle API MCP ? Claude Desktop ne pourra plus se connecter.")) return;
+    setRevoking(true);
+    try {
+      await mcpAPI.revokeKey();
+      setMcpData({ has_key: false, api_key_masked: null, claude_config: null });
+      setFullKey(null);
+    } catch {
+    } finally {
+      setRevoking(false);
+    }
+  }
+
+  function copyToClipboard(text: string, label: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(label);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  if (loading) return null;
+
+  const configJson = mcpData?.claude_config
+    ? JSON.stringify(mcpData.claude_config, null, 2)
+    : null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-100 to-orange-100">
+            <Terminal className="h-5 w-5 text-amber-600" />
+          </div>
+          <div>
+            <CardTitle className="text-lg">Integration MCP — Claude Desktop</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Connectez Claude Desktop a vos donnees de veille concurrentielle
+            </p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!mcpData?.has_key ? (
+          /* No key yet */
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Generez une cle API pour connecter Claude Desktop (ou tout client MCP) a PanoramAI.
+              Vous pourrez interroger vos donnees concurrentielles directement depuis Claude.
+            </p>
+            <Button onClick={handleGenerate} disabled={generating}>
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Key className="h-4 w-4 mr-1.5" />
+              )}
+              Generer une cle API
+            </Button>
+          </div>
+        ) : (
+          /* Key exists */
+          <div className="space-y-4">
+            {/* Key display */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2">
+                <Key className="h-4 w-4 text-amber-500 shrink-0" />
+                <code className="text-sm font-mono">
+                  {fullKey || mcpData.api_key_masked}
+                </code>
+              </div>
+              {fullKey && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(fullKey, "key")}
+                >
+                  {copied === "key" ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRevoke}
+                disabled={revoking}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                {revoking ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+
+            {/* Claude Desktop config */}
+            {configJson && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Configuration Claude Desktop
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => copyToClipboard(configJson, "config")}
+                  >
+                    {copied === "config" ? (
+                      <>
+                        <Check className="h-3 w-3 mr-1 text-emerald-500" />
+                        Copie !
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copier
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <pre className="rounded-lg border bg-slate-950 p-4 text-xs text-slate-200 overflow-x-auto">
+                  {configJson}
+                </pre>
+              </div>
+            )}
+
+            {/* Instructions */}
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-2">
+              <p className="text-sm font-medium text-amber-800">Comment connecter :</p>
+              <ol className="text-xs text-amber-700 space-y-1 list-decimal list-inside">
+                <li>Copiez la configuration JSON ci-dessus</li>
+                <li>Ouvrez Claude Desktop → Settings → Developer → Edit Config</li>
+                <li>Collez le bloc dans <code className="font-mono bg-amber-100 px-1 rounded">mcpServers</code></li>
+              </ol>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function ConnectorsSection() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
@@ -1268,6 +1446,13 @@ export default function AccountPage() {
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {!isNewBrand && profile && (
         <ConnectorsSection />
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* Section 2b : Integration MCP                                      */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {!isNewBrand && profile && (
+        <MCPSection />
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}

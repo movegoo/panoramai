@@ -47,27 +47,48 @@ def get_session():
     return SessionLocal()
 
 
+def get_scoped_competitor_ids() -> list[int] | None:
+    """Return competitor IDs from MCP SSE context, or None if running in stdio mode."""
+    try:
+        from core.mcp_context import mcp_user_context
+        ctx = mcp_user_context.get(None)
+        return ctx.competitor_ids if ctx else None
+    except ImportError:
+        return None  # stdio mode — no scoping
+
+
 def find_competitor(db, name: str):
     """Recherche un concurrent par nom (insensible à la casse, fuzzy)."""
+    scoped_ids = get_scoped_competitor_ids()
+
     # Exact match (case-insensitive)
-    comp = db.query(Competitor).filter(
+    query = db.query(Competitor).filter(
         Competitor.is_active == True,
         Competitor.name.ilike(name),
-    ).first()
+    )
+    if scoped_ids is not None:
+        query = query.filter(Competitor.id.in_(scoped_ids))
+    comp = query.first()
     if comp:
         return comp
 
     # Partial match
-    comp = db.query(Competitor).filter(
+    query = db.query(Competitor).filter(
         Competitor.is_active == True,
         Competitor.name.ilike(f"%{name}%"),
-    ).first()
-    return comp
+    )
+    if scoped_ids is not None:
+        query = query.filter(Competitor.id.in_(scoped_ids))
+    return query.first()
 
 
 def get_all_competitors(db, include_brand: bool = True):
     """Retourne tous les concurrents actifs."""
+    scoped_ids = get_scoped_competitor_ids()
+
     query = db.query(Competitor).filter(Competitor.is_active == True)
     if not include_brand:
         query = query.filter(Competitor.is_brand == False)
+    if scoped_ids is not None:
+        query = query.filter(Competitor.id.in_(scoped_ids))
     return query.all()
