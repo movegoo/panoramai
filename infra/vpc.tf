@@ -45,21 +45,8 @@ resource "aws_subnet" "private_b" {
   tags              = { Name = "${local.name_prefix}-private-b" }
 }
 
-# ─── NAT Gateway (prod only; dev uses public subnets for ECS) ──────
-resource "aws_eip" "nat" {
-  count  = var.env == "prod" ? 1 : 0
-  domain = "vpc"
-  tags   = { Name = "${local.name_prefix}-nat-eip" }
-}
-
-resource "aws_nat_gateway" "main" {
-  count         = var.env == "prod" ? 1 : 0
-  allocation_id = aws_eip.nat[0].id
-  subnet_id     = aws_subnet.public_a.id
-  tags          = { Name = "${local.name_prefix}-nat" }
-
-  depends_on = [aws_internet_gateway.main]
-}
+# NAT Gateway removed — ECS runs in public subnets with public IP.
+# RDS stays in private subnets (no internet access needed).
 
 # ─── Route Tables ──────────────────────────────────────────────────
 resource "aws_route_table" "public" {
@@ -88,20 +75,7 @@ resource "aws_route_table" "private" {
   tags   = { Name = "${local.name_prefix}-private-rt" }
 }
 
-# Prod: NAT gateway route; Dev: internet gateway route (public subnets used)
-resource "aws_route" "private_nat" {
-  count                  = var.env == "prod" ? 1 : 0
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.main[0].id
-}
-
-resource "aws_route" "private_igw" {
-  count                  = var.env == "dev" ? 1 : 0
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.main.id
-}
+# Private subnets have no internet route (RDS only, no internet needed)
 
 resource "aws_route_table_association" "private_a" {
   subnet_id      = aws_subnet.private_a.id
