@@ -60,6 +60,10 @@ class Settings:
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
     JWT_EXPIRATION_DAYS: int = int(os.getenv("JWT_EXPIRATION_DAYS", "7"))
 
+    # Mobsuccess Lambda Authorizer
+    MS_LAMBDA_AUTHORIZER_URL: str = os.getenv("MS_LAMBDA_AUTHORIZER_URL", "")
+    MS_AUTH_ENABLED: bool = os.getenv("MS_AUTH_ENABLED", "false").lower() == "true"
+
     # Rate limiting
     MIN_FETCH_INTERVAL_HOURS: int = 1
 

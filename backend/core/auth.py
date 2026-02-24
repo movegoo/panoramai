@@ -2,7 +2,9 @@
 Authentication utilities.
 JWT token management and password hashing.
 """
+import logging
 import bcrypt
+import httpx
 import jwt
 from datetime import datetime, timedelta
 from fastapi import Depends, Header, HTTPException, status
@@ -11,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from database import get_db, User, Advertiser, UserAdvertiser
+
+logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
@@ -44,6 +48,62 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token invalide")
 
 
+def _validate_mobsuccess_token(token: str, db: Session) -> User:
+    """Validate a Mobsuccess Bearer token via the Lambda Authorizer and upsert a local user."""
+    try:
+        response = httpx.post(
+            settings.MS_LAMBDA_AUTHORIZER_URL,
+            json={"authorizerAccessRules": "logged-in"},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception:
+        logger.debug("Mobsuccess Lambda call failed", exc_info=True)
+        raise HTTPException(status_code=401, detail="Authentification requise")
+
+    if not data.get("isAuthorized"):
+        raise HTTPException(status_code=401, detail="Authentification requise")
+
+    ctx = data.get("context", {})
+    ms_id = int(ctx["id_user"])
+    email = ctx.get("email", "")
+    firstname = ctx.get("firstname", "")
+    lastname = ctx.get("lastname", "")
+    is_admin = bool(ctx.get("admin"))
+    name = f"{firstname} {lastname}".strip()
+
+    # Lookup by ms_user_id first, then email
+    user = db.query(User).filter(User.ms_user_id == ms_id).first()
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
+
+    if user:
+        user.name = name
+        user.ms_user_id = ms_id
+        if email:
+            user.email = email
+        user.is_admin = is_admin
+        user.is_active = True
+        db.commit()
+        db.refresh(user)
+    else:
+        user = User(
+            email=email,
+            name=name,
+            password_hash="ms-auth",
+            ms_user_id=ms_id,
+            is_admin=is_admin,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    return user
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -52,18 +112,23 @@ def get_current_user(
     if not credentials:
         raise HTTPException(status_code=401, detail="Authentification requise")
 
-    payload = decode_token(credentials.credentials)
-    user_id = payload.get("sub")
-    if user_id is not None:
-        user_id = int(user_id)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token invalide")
+    token = credentials.credentials
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="Utilisateur non trouvé")
+    # Try 1: JWT local
+    try:
+        payload = decode_token(token)
+        user_id = int(payload.get("sub"))
+        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        if user:
+            return user
+    except Exception:
+        pass
 
-    return user
+    # Try 2: Mobsuccess Lambda
+    if settings.MS_AUTH_ENABLED and settings.MS_LAMBDA_AUTHORIZER_URL:
+        return _validate_mobsuccess_token(token, db)
+
+    raise HTTPException(status_code=401, detail="Authentification requise")
 
 
 def get_admin_user(user: User = Depends(get_current_user)) -> User:
