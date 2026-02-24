@@ -144,7 +144,7 @@ class SocialContentAnalyzer:
     # ── Gemini Vision (thumbnail) ────────────────────────────────────
 
     async def _call_gemini_vision(
-        self, prompt: str, thumbnail_url: str, model: str = "gemini-2.5-flash",
+        self, prompt: str, thumbnail_url: str, model: str = "gemini-3-flash-preview",
     ) -> Optional[dict]:
         """Download thumbnail + send to Gemini Vision."""
         image_data, media_type = await self._download_image(thumbnail_url)
@@ -172,7 +172,7 @@ class SocialContentAnalyzer:
 
     # ── Gemini Text ──────────────────────────────────────────────────
 
-    async def _call_gemini_text(self, prompt: str, model: str = "gemini-2.0-flash") -> Optional[dict]:
+    async def _call_gemini_text(self, prompt: str, model: str = "gemini-3-flash-preview") -> Optional[dict]:
         if not self.gemini_key:
             return None
         url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
@@ -244,7 +244,7 @@ class SocialContentAnalyzer:
                 usage = body.get("usage", body.get("usageMetadata", {}))
                 trace_generation(
                     name=f"social_content_{label.lower()}",
-                    model=payload.get("model", "gemini-2.0-flash"),
+                    model=payload.get("model", "gemini-3-flash-preview"),
                     input=prompt if isinstance((prompt := self._extract_prompt(payload, is_gemini)), str) else "",
                     output=text,
                     usage={"input_tokens": usage.get("input_tokens", usage.get("promptTokenCount")),

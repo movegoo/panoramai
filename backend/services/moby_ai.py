@@ -129,7 +129,7 @@ class MobyService:
             role_label = "Utilisateur" if msg["role"] == "user" else "Assistant"
             parts.append({"text": f"[{role_label}]\n{msg['content']}"})
 
-        url = GEMINI_API_URL.format(model="gemini-2.0-flash") + f"?key={self.gemini_key}"
+        url = GEMINI_API_URL.format(model="gemini-3-flash-preview") + f"?key={self.gemini_key}"
         payload = {
             "contents": [{"parts": parts}],
             "generationConfig": {

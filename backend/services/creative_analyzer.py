@@ -159,7 +159,7 @@ class CreativeAnalyzer:
 
         return await self._call_gemini_vision(
             b64_image, media_type, prompt,
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             ad_id=ad_id,
         )
 
@@ -179,7 +179,7 @@ class CreativeAnalyzer:
         )
 
         # Run both models in parallel
-        gemini_task = self._call_gemini_text(prompt, model="gemini-2.0-flash")
+        gemini_task = self._call_gemini_text(prompt, model="gemini-3-flash-preview")
         mistral_task = self._call_mistral(prompt, model="mistral-small-latest")
 
         results = await asyncio.gather(gemini_task, mistral_task, return_exceptions=True)
@@ -202,7 +202,7 @@ class CreativeAnalyzer:
         b64_image: str,
         media_type: str,
         prompt: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3-flash-preview",
         ad_id: str = "",
     ) -> Optional[dict]:
         url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
@@ -226,7 +226,7 @@ class CreativeAnalyzer:
     async def _call_gemini_text(
         self,
         prompt: str,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3-flash-preview",
     ) -> Optional[dict]:
         if not self.gemini_key:
             return None

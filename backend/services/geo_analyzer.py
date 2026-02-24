@@ -408,7 +408,7 @@ class GeoAnalyzer:
         try:
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/"
-                f"models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
+                f"models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
             )
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
@@ -427,7 +427,7 @@ class GeoAnalyzer:
                 um = data.get("usageMetadata", {})
                 trace_generation(
                     name="geo_analyzer.query_gemini",
-                    model="gemini-2.0-flash",
+                    model="gemini-3-flash-preview",
                     input=query,
                     output=answer,
                     usage={"input_tokens": um.get("promptTokenCount"), "output_tokens": um.get("candidatesTokenCount")},
@@ -566,7 +566,7 @@ class GeoAnalyzer:
             answer=answer,
         )
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     url,
@@ -590,7 +590,7 @@ class GeoAnalyzer:
                 usage = resp_data.get("usageMetadata", {})
                 trace_generation(
                     name="geo_analyzer.analyze_response",
-                    model="gemini-2.0-flash",
+                    model="gemini-3-flash-preview",
                     input=prompt,
                     output=text,
                     usage={"input_tokens": usage.get("promptTokenCount"), "output_tokens": usage.get("candidatesTokenCount")},
