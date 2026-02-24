@@ -1,6 +1,6 @@
 """
 Social Content Analyzer Service.
-Uses Anthropic Claude Haiku to analyze social media post/video text content.
+Uses Gemini Flash + Mistral to analyze social media post/video text content.
 Extracts: theme, hook, tone, format, CTA, hashtags, engagement score, summary.
 """
 import asyncio
@@ -43,30 +43,20 @@ Criteres de score engagement_score :
 - Optimisation plateforme (25%) : adaptation au format et codes de la plateforme
 - CTA / incitation (20%) : clarte de l'appel a l'action"""
 
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
 
 
 class SocialContentAnalyzer:
-    """Analyze social media post content using Anthropic Claude Haiku."""
+    """Analyze social media post content using Gemini Flash + Mistral."""
 
     @property
-    def api_key(self) -> str:
-        """Read API key from env vars or database."""
-        key = (
-            os.getenv("ANTHROPIC_API_KEY", "")
-            or os.getenv("CLAUDE_KEY", "")
-            or settings.ANTHROPIC_API_KEY
-        )
-        if key:
-            return key
-        try:
-            from database import SessionLocal, SystemSetting
-            db = SessionLocal()
-            row = db.query(SystemSetting).filter(SystemSetting.key == "ANTHROPIC_API_KEY").first()
-            db.close()
-            return row.value if row else ""
-        except Exception:
-            return ""
+    def gemini_key(self) -> str:
+        return os.getenv("GEMINI_API_KEY", "") or settings.GEMINI_API_KEY
+
+    @property
+    def mistral_key(self) -> str:
+        return os.getenv("MISTRAL_API_KEY", "") or settings.MISTRAL_API_KEY
 
     async def analyze_content(
         self,
@@ -79,12 +69,9 @@ class SocialContentAnalyzer:
         comments: int = 0,
         shares: int = 0,
     ) -> Optional[dict]:
-        """Analyze a single social post's text content with Claude Haiku.
-
-        Returns parsed analysis dict or None on failure.
-        """
-        if not self.api_key:
-            logger.error("Cannot analyze: ANTHROPIC_API_KEY not set")
+        """Analyze a single social post with Gemini + Mistral (parallel), fuse results."""
+        if not self.gemini_key and not self.mistral_key:
+            logger.error("Cannot analyze: neither GEMINI_API_KEY nor MISTRAL_API_KEY set")
             return None
 
         text_content = f"{title} {description}".strip()
@@ -94,16 +81,12 @@ class SocialContentAnalyzer:
 
         # Load prompt from DB (fallback to hardcoded)
         db_prompt_text = ANALYSIS_PROMPT
-        db_model_id = "claude-haiku-4-5-20251001"
-        db_max_tokens = 512
         try:
             from database import SessionLocal, PromptTemplate
             _db = SessionLocal()
             row = _db.query(PromptTemplate).filter(PromptTemplate.key == "social_content").first()
             if row:
                 db_prompt_text = row.prompt_text
-                db_model_id = row.model_id or db_model_id
-                db_max_tokens = row.max_tokens or db_max_tokens
             _db.close()
         except Exception:
             pass
@@ -119,66 +102,149 @@ class SocialContentAnalyzer:
             shares=shares,
         )
 
+        # Run Gemini + Mistral in parallel
+        gemini_task = self._call_gemini(prompt)
+        mistral_task = self._call_mistral(prompt)
+
+        results = await asyncio.gather(gemini_task, mistral_task, return_exceptions=True)
+
+        gemini_result = results[0] if not isinstance(results[0], Exception) else None
+        mistral_result = results[1] if not isinstance(results[1], Exception) else None
+
+        if isinstance(results[0], Exception):
+            logger.warning(f"Gemini error for social content: {results[0]}")
+        if isinstance(results[1], Exception):
+            logger.warning(f"Mistral error for social content: {results[1]}")
+
+        return self._fuse_results(gemini_result, mistral_result)
+
+    async def _call_gemini(self, prompt: str, model: str = "gemini-2.0-flash") -> Optional[dict]:
+        if not self.gemini_key:
+            return None
+        url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": 1024,
+                "temperature": 0.3,
+                "responseMimeType": "application/json",
+            },
+        }
+        return await self._call_api("Gemini", url, payload, is_gemini=True)
+
+    async def _call_mistral(self, prompt: str, model: str = "mistral-small-latest") -> Optional[dict]:
+        if not self.mistral_key:
+            return None
+        headers = {
+            "Authorization": f"Bearer {self.mistral_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1024,
+            "temperature": 0.3,
+            "response_format": {"type": "json_object"},
+        }
+        return await self._call_api("Mistral", MISTRAL_API_URL, payload, is_gemini=False, headers=headers)
+
+    async def _call_api(
+        self,
+        label: str,
+        url: str,
+        payload: dict,
+        is_gemini: bool = True,
+        headers: dict | None = None,
+    ) -> Optional[dict]:
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.post(
-                        CLAUDE_API_URL,
-                        headers={
-                            "x-api-key": self.api_key,
-                            "anthropic-version": "2023-06-01",
-                            "content-type": "application/json",
-                        },
-                        json={
-                            "model": db_model_id,
-                            "max_tokens": db_max_tokens,
-                            "messages": [
-                                {
-                                    "role": "user",
-                                    "content": prompt,
-                                }
-                            ],
-                        },
-                    )
+                    resp = await client.post(url, json=payload, headers=headers)
 
-                if response.status_code == 429:
+                if resp.status_code == 429:
                     wait = 10 * (attempt + 1)
-                    logger.warning(f"Claude rate limit (429), waiting {wait}s (attempt {attempt + 1}/{max_retries})")
+                    logger.warning(f"{label} rate limit (429), waiting {wait}s")
                     await asyncio.sleep(wait)
                     continue
 
-                if response.status_code != 200:
-                    logger.error(f"Claude API error {response.status_code}: {response.text[:300]}")
+                if resp.status_code not in (200,):
+                    logger.error(f"{label} API error {resp.status_code}: {resp.text[:300]}")
                     return None
 
-                result = response.json()
-                text_response = result.get("content", [{}])[0].get("text", "")
+                body = resp.json()
+                if is_gemini:
+                    candidates = body.get("candidates", [])
+                    if not candidates:
+                        logger.error(f"{label}: no candidates in response")
+                        return None
+                    text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                else:
+                    text = body.get("choices", [{}])[0].get("message", {}).get("content", "")
 
                 from core.langfuse_client import trace_generation
-                usage = result.get("usage", {})
+                usage = body.get("usage", body.get("usageMetadata", {}))
                 trace_generation(
-                    name="social_content_analyzer",
-                    model=db_model_id,
-                    input=prompt,
-                    output=text_response,
-                    usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+                    name=f"social_content_{label.lower()}",
+                    model=payload.get("model", "gemini-2.0-flash"),
+                    input=payload.get("contents", [{}])[0].get("parts", [{}])[0].get("text", "")
+                        if is_gemini else payload.get("messages", [{}])[0].get("content", ""),
+                    output=text,
+                    usage={"input_tokens": usage.get("input_tokens", usage.get("promptTokenCount")),
+                           "output_tokens": usage.get("output_tokens", usage.get("candidatesTokenCount"))},
                 )
 
-                return self._parse_analysis(text_response)
+                return self._parse_analysis(text)
 
             except httpx.TimeoutException:
-                logger.error("Claude API timeout for social content analysis")
+                logger.error(f"{label} API timeout for social content analysis")
                 return None
             except Exception as e:
-                logger.error(f"Claude API error: {e}")
+                logger.error(f"{label} API error: {e}")
                 return None
 
-        logger.error("Claude: max retries reached for social content analysis")
+        logger.error(f"{label}: max retries reached for social content analysis")
         return None
 
+    def _fuse_results(self, gemini: Optional[dict], mistral: Optional[dict]) -> Optional[dict]:
+        """Fuse Gemini + Mistral results. Gemini wins on disagreement."""
+        if gemini and not mistral:
+            return gemini
+        if mistral and not gemini:
+            return mistral
+        if not gemini and not mistral:
+            return None
+
+        fused = dict(gemini)
+
+        # Numeric score: average
+        g_score = gemini.get("engagement_score", 0)
+        m_score = mistral.get("engagement_score", 0)
+        if g_score and m_score:
+            fused["engagement_score"] = round((g_score + m_score) / 2)
+
+        # Merge hashtags
+        g_tags = set(gemini.get("hashtags", []))
+        m_tags = set(mistral.get("hashtags", []))
+        fused["hashtags"] = list(g_tags | m_tags)[:10]
+
+        # Merge virality factors
+        g_vf = set(gemini.get("virality_factors", []))
+        m_vf = set(mistral.get("virality_factors", []))
+        fused["virality_factors"] = list(g_vf | m_vf)[:5]
+
+        # Use longer summary
+        if len(mistral.get("summary", "")) > len(gemini.get("summary", "")):
+            fused["summary"] = mistral["summary"]
+
+        # Use longer hook
+        if len(mistral.get("hook", "")) > len(gemini.get("hook", "")):
+            fused["hook"] = mistral["hook"]
+
+        return fused
+
     def _parse_analysis(self, text: str) -> Optional[dict]:
-        """Parse Claude's JSON response into a validated dict."""
+        """Parse JSON response into a validated dict."""
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]
