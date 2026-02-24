@@ -125,6 +125,11 @@ class TestPromptParsing:
         assert hasattr(self.analyzer, "analyze_text_only")
         assert callable(self.analyzer.analyze_text_only)
 
+    def test_gemini_key_property(self):
+        """CreativeAnalyzer has gemini_key and mistral_key properties."""
+        assert hasattr(self.analyzer, "gemini_key")
+        assert hasattr(self.analyzer, "mistral_key")
+
     def test_parse_missing_new_fields_defaults(self):
         raw = json.dumps({
             "concept": "lifestyle",
@@ -152,6 +157,58 @@ class TestPromptParsing:
         assert result["price_visible"] is False
         assert result["price_value"] == ""
         assert result["seasonal_event"] == ""
+
+
+# ── Fusion logic tests ────────────────────────────────────────
+
+class TestTextFusion:
+    """Test double-analysis fusion logic."""
+
+    def setup_method(self):
+        self.analyzer = CreativeAnalyzer()
+
+    def test_fuse_both_agree(self):
+        """When both models agree, result matches."""
+        g = {"concept": "promo", "tone": "urgence", "score": 80, "tags": ["soldes"], "hook": "Prix bas", "summary": "Promo", "product_category": "Épicerie", "product_subcategory": "", "ad_objective": "conversion", "promo_type": "prix-barré", "creative_format": "texte", "seasonal_event": "soldes", "layout": "texte-dominant", "cta_style": "texte"}
+        m = {"concept": "promo", "tone": "urgence", "score": 82, "tags": ["prix"], "hook": "Prix bas", "summary": "Promo simple", "product_category": "Épicerie", "product_subcategory": "", "ad_objective": "conversion", "promo_type": "prix-barré", "creative_format": "texte", "seasonal_event": "soldes", "layout": "texte-dominant", "cta_style": "texte"}
+        fused = self.analyzer._fuse_text_results(g, m, "test-001")
+        assert fused["concept"] == "promo"
+        assert fused["score"] == 81  # average
+        assert "soldes" in fused["tags"]
+        assert "prix" in fused["tags"]
+
+    def test_fuse_disagreement_gemini_wins(self):
+        """On categorical disagreement, Gemini (first arg) wins."""
+        g = {"concept": "promo", "tone": "urgence", "score": 75, "tags": [], "hook": "", "summary": "", "product_category": "Épicerie", "product_subcategory": "", "ad_objective": "conversion", "promo_type": "prix-barré", "creative_format": "texte", "seasonal_event": "soldes", "layout": "texte-dominant", "cta_style": "texte"}
+        m = {"concept": "branding", "tone": "aspiration", "score": 70, "tags": [], "hook": "", "summary": "", "product_category": "Boissons", "product_subcategory": "", "ad_objective": "notoriété", "promo_type": "aucune", "creative_format": "texte", "seasonal_event": "aucun", "layout": "texte-dominant", "cta_style": "aucun"}
+        fused = self.analyzer._fuse_text_results(g, m, "test-002")
+        assert fused["concept"] == "promo"  # Gemini wins
+        assert fused["tone"] == "urgence"  # Gemini wins
+        assert fused["score"] == 72  # round((75+70)/2)
+
+    def test_fuse_gemini_only(self):
+        """When Mistral fails, Gemini result is returned."""
+        g = {"concept": "promo", "score": 80, "tags": []}
+        fused = self.analyzer._fuse_text_results(g, None, "test-003")
+        assert fused["concept"] == "promo"
+
+    def test_fuse_mistral_only(self):
+        """When Gemini fails, Mistral result is returned."""
+        m = {"concept": "branding", "score": 70, "tags": []}
+        fused = self.analyzer._fuse_text_results(None, m, "test-004")
+        assert fused["concept"] == "branding"
+
+    def test_fuse_both_fail(self):
+        """When both fail, returns None."""
+        assert self.analyzer._fuse_text_results(None, None, "test-005") is None
+
+    def test_fuse_longer_summary_wins(self):
+        """Longer summary is preferred regardless of source."""
+        g = {"concept": "promo", "tone": "urgence", "score": 80, "tags": [], "hook": "Court", "summary": "Court", "product_category": "", "product_subcategory": "", "ad_objective": "", "promo_type": "", "creative_format": "", "seasonal_event": "", "layout": "", "cta_style": ""}
+        m = {"concept": "promo", "tone": "urgence", "score": 80, "tags": [], "hook": "Un hook beaucoup plus long et détaillé", "summary": "Un résumé beaucoup plus long et détaillé avec des insights", "product_category": "", "product_subcategory": "", "ad_objective": "", "promo_type": "", "creative_format": "", "seasonal_event": "", "layout": "", "cta_style": ""}
+        fused = self.analyzer._fuse_text_results(g, m, "test-006")
+        assert "détaillé" in fused["summary"]
+        assert "détaillé" in fused["hook"]
 
 
 # ── Video + text-only analysis tests ─────────────────────────
