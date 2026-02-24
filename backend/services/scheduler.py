@@ -533,8 +533,8 @@ class DataCollectionScheduler:
 
             SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
             BATCH_SIZE = 50
-            MAX_BATCHES = 50  # Up to 2500 ads per run
-            MAX_TIME = 3600  # 1 hour max
+            MAX_BATCHES = 500  # No artificial cap — process all unanalyzed ads
+            MAX_TIME = 14400  # 4 hours max
 
             # Auto-reset previous failures (score=0) for retry
             failed = db.query(Ad).filter(
@@ -573,9 +573,11 @@ class DataCollectionScheduler:
                 for ad in candidates:
                     fmt = (ad.display_format or "").upper()
                     url = ad.creative_url or ""
-                    if fmt == "VIDEO":
+                    has_text = ad.ad_text and len(ad.ad_text.strip()) >= 10
+                    # Skip VIDEO only if no ad text to analyze
+                    if fmt == "VIDEO" and not has_text:
                         continue
-                    if any(p in url for p in SKIP_URL_PATTERNS):
+                    if any(p in url for p in SKIP_URL_PATTERNS) and not has_text:
                         ad.creative_analyzed_at = datetime.utcnow()
                         ad.creative_score = 0
                         ad.creative_summary = "URL non analysable (réseau publicitaire)"
@@ -594,15 +596,29 @@ class DataCollectionScheduler:
 
                     try:
                         platform = "tiktok" if ad.platform == "tiktok" else "google" if ad.platform == "google" else "meta"
-                        result = await asyncio.wait_for(
-                            creative_analyzer.analyze_creative(
-                                creative_url=ad.creative_url,
-                                ad_text=ad.ad_text or "",
-                                platform=platform,
-                                ad_id=ad.ad_id or "",
-                            ),
-                            timeout=60,
+                        has_image = ad.creative_url and not any(
+                            p in (ad.creative_url or "") for p in SKIP_URL_PATTERNS
                         )
+                        has_text = ad.ad_text and len(ad.ad_text.strip()) >= 10
+                        if not has_image and has_text:
+                            result = await asyncio.wait_for(
+                                creative_analyzer.analyze_text_only(
+                                    ad_text=ad.ad_text,
+                                    platform=platform,
+                                    ad_id=ad.ad_id or "",
+                                ),
+                                timeout=45,
+                            )
+                        else:
+                            result = await asyncio.wait_for(
+                                creative_analyzer.analyze_creative(
+                                    creative_url=ad.creative_url,
+                                    ad_text=ad.ad_text or "",
+                                    platform=platform,
+                                    ad_id=ad.ad_id or "",
+                                ),
+                                timeout=60,
+                            )
 
                         if result:
                             ad.creative_analysis = json.dumps(result, ensure_ascii=False)

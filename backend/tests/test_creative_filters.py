@@ -97,6 +97,11 @@ class TestPromptParsing:
         assert result["price_value"] == "4,99€"
         assert result["seasonal_event"] == "soldes"
 
+    def test_text_only_analysis_method_exists(self):
+        """CreativeAnalyzer has analyze_text_only method for Google Ads."""
+        assert hasattr(self.analyzer, "analyze_text_only")
+        assert callable(self.analyzer.analyze_text_only)
+
     def test_parse_missing_new_fields_defaults(self):
         raw = json.dumps({
             "concept": "lifestyle",
@@ -124,6 +129,45 @@ class TestPromptParsing:
         assert result["price_visible"] is False
         assert result["price_value"] == ""
         assert result["seasonal_event"] == ""
+
+
+# ── Video + text-only analysis tests ─────────────────────────
+
+def test_analyze_all_includes_video_with_text(client, db, test_competitor, adv_headers):
+    """Video ads with text should NOT be skipped."""
+    ad = Ad(
+        competitor_id=test_competitor.id,
+        ad_id="google-video-001",
+        platform="google",
+        display_format="VIDEO",
+        ad_text="Profitez de -50% sur tout le rayon bricolage chez Leroy Merlin",
+        is_active=True,
+    )
+    db.add(ad)
+    db.commit()
+
+    # The ad should be included in candidates (not skipped)
+    unanalyzed = db.query(Ad).filter(
+        Ad.creative_analyzed_at.is_(None),
+        Ad.ad_text.isnot(None),
+    ).all()
+    assert any(a.ad_id == "google-video-001" for a in unanalyzed)
+
+
+def test_analyze_all_skips_video_without_text(client, db, test_competitor, adv_headers):
+    """Video ads without text should be skipped."""
+    ad = Ad(
+        competitor_id=test_competitor.id,
+        ad_id="meta-video-001",
+        platform="facebook",
+        display_format="VIDEO",
+        ad_text="",
+        creative_url="https://video.fbcdn.net/v/something",
+        is_active=True,
+    )
+    db.add(ad)
+    db.commit()
+    # This ad has no text and is VIDEO — should be skippable
 
 
 # ── Insights endpoint filter tests ───────────────────────────

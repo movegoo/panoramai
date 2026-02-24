@@ -219,6 +219,96 @@ class CreativeAnalyzer:
         logger.error(f"Claude: max retries reached for {creative_url[:80]}")
         return None
 
+    async def analyze_text_only(
+        self,
+        ad_text: str,
+        platform: str = "google",
+        ad_id: str = "",
+    ) -> Optional[dict]:
+        """Analyze a text-only ad (Google Ads, etc.) without an image."""
+        if not self.api_key:
+            logger.error("Cannot analyze: ANTHROPIC_API_KEY not set")
+            return None
+        if not ad_text or len(ad_text.strip()) < 10:
+            return None
+
+        # Load prompt from DB (fallback to hardcoded)
+        db_model_id = "claude-sonnet-4-5-20250929"
+        db_max_tokens = 1024
+
+        prompt = f"""Tu es un expert en analyse publicitaire digitale en France.
+Analyse ce TEXTE publicitaire (pas d'image, pub textuelle {platform}) et retourne UNIQUEMENT un JSON valide.
+TOUTES les valeurs doivent être en FRANÇAIS.
+
+Texte de la pub : "{ad_text[:1000]}"
+
+JSON attendu :
+{{
+  "concept": "<UNE valeur parmi : promo, témoignage, comparatif, storytelling, search-ad, display-text, retargeting, branding>",
+  "hook": "<1 phrase : ce qui capte l'attention>",
+  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique>",
+  "text_overlay": "{ad_text[:500]}",
+  "dominant_colors": [],
+  "has_product": false,
+  "has_face": false,
+  "has_logo": false,
+  "has_price": {"true" if any(c in ad_text for c in ["€", "EUR", "prix"]) else "false"},
+  "layout": "texte-dominant",
+  "cta_style": "<UNE valeur parmi : bouton, texte, aucun>",
+  "score": <entier 0-100>,
+  "tags": ["mot-clé1", "mot-clé2", "mot-clé3"],
+  "summary": "<1-2 phrases décrivant l'approche et son efficacité>",
+  "product_category": "<catégorie parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, DPH, Beauté & Parfumerie, Textile & Mode, Électroménager, Multimédia & High-Tech, Sport, Bricolage & Jardin, Ameublement & Déco, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Autre>",
+  "product_subcategory": "<sous-catégorie précise>",
+  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>",
+  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, aucune>",
+  "creative_format": "texte",
+  "price_visible": {"true" if any(c in ad_text for c in ["€", "EUR"]) else "false"},
+  "price_value": "<prix si visible, sinon vide>",
+  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun>"
+}}"""
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        CLAUDE_API_URL,
+                        headers={
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": db_model_id,
+                            "max_tokens": db_max_tokens,
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                    )
+
+                if response.status_code == 429:
+                    wait = 10 * (attempt + 1)
+                    logger.warning(f"Claude rate limit (429), waiting {wait}s")
+                    await asyncio.sleep(wait)
+                    continue
+
+                if response.status_code != 200:
+                    logger.error(f"Claude API error {response.status_code}: {response.text[:300]}")
+                    return None
+
+                result = response.json()
+                text_content = result.get("content", [{}])[0].get("text", "")
+                return self._parse_analysis(text_content)
+
+            except httpx.TimeoutException:
+                logger.error(f"Claude API timeout for text ad {ad_id}")
+                return None
+            except Exception as e:
+                logger.error(f"Claude API error: {e}")
+                return None
+
+        return None
+
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
         """Download image from URL. Returns (bytes, media_type) or (None, '')."""
         try:

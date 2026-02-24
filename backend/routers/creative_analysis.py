@@ -98,9 +98,11 @@ async def analyze_all_creatives(
     for ad in candidates:
         fmt = (ad.display_format or "").upper()
         url = ad.creative_url or ""
-        if fmt == "VIDEO":
+        has_text = ad.ad_text and len(ad.ad_text.strip()) >= 10
+        # Skip VIDEO only if no ad text to analyze
+        if fmt == "VIDEO" and not has_text:
             continue
-        if any(p in url for p in SKIP_URL_PATTERNS):
+        if any(p in url for p in SKIP_URL_PATTERNS) and not has_text:
             # Mark as analyzed with score=0 so we don't retry
             ad.creative_analyzed_at = datetime.utcnow()
             ad.creative_score = 0
@@ -121,7 +123,7 @@ async def analyze_all_creatives(
     analyzed = 0
     errors = 0
     error_details = []
-    MAX_TIME = 90  # Max 90 seconds per batch
+    MAX_TIME = 300  # 5 minutes per batch (was 90s)
     start_time = asyncio.get_event_loop().time()
     timed_out = False
 
@@ -132,15 +134,30 @@ async def analyze_all_creatives(
             break
 
         try:
-            result = await asyncio.wait_for(
-                creative_analyzer.analyze_creative(
-                    creative_url=ad.creative_url,
-                    ad_text=ad.ad_text or "",
-                    platform=_normalize_platform(ad.platform),
-                    ad_id=ad.ad_id or "",
-                ),
-                timeout=60,
+            # Text-only analysis for ads without images (Google Ads, etc.)
+            fmt = (ad.display_format or "").upper()
+            has_image = ad.creative_url and not any(
+                p in (ad.creative_url or "") for p in ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
             )
+            if not has_image and ad.ad_text and len(ad.ad_text.strip()) >= 10:
+                result = await asyncio.wait_for(
+                    creative_analyzer.analyze_text_only(
+                        ad_text=ad.ad_text,
+                        platform=_normalize_platform(ad.platform),
+                        ad_id=ad.ad_id or "",
+                    ),
+                    timeout=45,
+                )
+            else:
+                result = await asyncio.wait_for(
+                    creative_analyzer.analyze_creative(
+                        creative_url=ad.creative_url,
+                        ad_text=ad.ad_text or "",
+                        platform=_normalize_platform(ad.platform),
+                        ad_id=ad.ad_id or "",
+                    ),
+                    timeout=60,
+                )
 
             if result:
                 ad.creative_analysis = json.dumps(result, ensure_ascii=False)
