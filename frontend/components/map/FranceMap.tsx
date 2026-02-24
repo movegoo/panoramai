@@ -254,6 +254,8 @@ export default function FranceMap() {
     if (mapInstanceRef.current) return;
 
     const L = (await import("leaflet")).default;
+    // MarkerCluster plugin for clustering thousands of store markers
+    await import("leaflet.markercluster");
 
     // @ts-ignore
     delete L.Icon.Default.prototype._getIconUrl;
@@ -870,10 +872,18 @@ export default function FranceMap() {
   const runGmbEnrichment = async (map: any, L: any, force = false) => {
     setGmbEnriching(true);
     try {
-      const res = await fetch(`${API_BASE}/geo/stores/enrich-gmb-demo?force=${force}`, {
+      // Try real GMB enrichment first, fallback to demo if not configured
+      let res = await fetch(`${API_BASE}/geo/stores/enrich-gmb?force=${force}&max_per_run=50`, {
         method: "POST",
         headers: authHeaders(),
       });
+      if (res.status === 503) {
+        // GMB APIs not configured, fallback to demo
+        res = await fetch(`${API_BASE}/geo/stores/enrich-gmb-demo?force=${force}`, {
+          method: "POST",
+          headers: authHeaders(),
+        });
+      }
       if (!res.ok) throw new Error("Enrichissement échoué");
       // Reload to get updated ratings
       const res2 = await fetch(`${API_BASE}/geo/competitor-stores?include_stores=true`, { headers: authHeaders() });
@@ -910,15 +920,35 @@ export default function FranceMap() {
     const oldLayer = layerGroupsRef.current.get("competitor_stores");
     if (oldLayer) map.removeLayer(oldLayer);
 
-    const bounds = map.getBounds();
-    const layerGroup = L.layerGroup();
     const zoom = map.getZoom();
     // Scale marker size based on zoom
     const size = zoom >= 12 ? 48 : zoom >= 10 ? 40 : zoom >= 8 ? 32 : 24;
     const borderWidth = zoom >= 10 ? 4 : 3;
 
+    // Use MarkerClusterGroup for performance with thousands of points
+    const clusterGroup = (L as any).markerClusterGroup({
+      maxClusterRadius: zoom >= 10 ? 30 : zoom >= 8 ? 50 : 80,
+      disableClusteringAtZoom: 13,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      chunkedLoading: true,
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount();
+        const clusterSize = count > 100 ? 44 : count > 30 ? 36 : 28;
+        const bg = count > 100 ? "#7c3aed" : count > 30 ? "#2563eb" : "#0891b2";
+        return L.divIcon({
+          className: "",
+          html: `<div style="width:${clusterSize}px;height:${clusterSize}px;border-radius:50%;background:${bg};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${clusterSize > 36 ? 13 : 11}px;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid rgba(255,255,255,0.8);">${count}</div>`,
+          iconSize: [clusterSize, clusterSize],
+          iconAnchor: [clusterSize / 2, clusterSize / 2],
+        });
+      },
+    });
+
     groups.forEach((group) => {
       group.stores.forEach((store) => {
+        if (!store.latitude || !store.longitude) return;
+
         // Stroke color based on GMB rating (green=good, red=bad), fallback to brand color
         const rating = store.google_rating;
         const strokeColor = rating != null
@@ -927,8 +957,6 @@ export default function FranceMap() {
             : rating >= 3.0 ? "#ea580c" // orange-600
             : "#dc2626"                  // red-600
           : group.color;
-        if (!store.latitude || !store.longitude) return;
-        if (!bounds.contains([store.latitude, store.longitude])) return;
 
         let popupHtml =
           `<b>${store.name || store.brand_name}</b><br>` +
@@ -943,7 +971,6 @@ export default function FranceMap() {
         }
 
         if (group.logo_url) {
-          // Logo marker with colored stroke
           const icon = L.divIcon({
             className: "",
             html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:${borderWidth}px solid ${strokeColor};background:#fff;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;"><img src="${group.logo_url}" style="width:${size - borderWidth * 2}px;height:${size - borderWidth * 2}px;border-radius:50%;object-fit:contain;" onerror="this.parentElement.innerHTML='<span style=\\'font-size:${Math.round(size * 0.4)}px;font-weight:700;color:${strokeColor}\\'>${group.competitor_name.charAt(0)}</span>'" /></div>`,
@@ -951,10 +978,9 @@ export default function FranceMap() {
             iconAnchor: [size / 2, size / 2],
           });
           L.marker([store.latitude, store.longitude], { icon })
-            .addTo(layerGroup)
+            .addTo(clusterGroup)
             .bindPopup(popupHtml);
         } else {
-          // Fallback: initial letter with colored stroke
           const icon = L.divIcon({
             className: "",
             html: `<div style="width:${size}px;height:${size}px;border-radius:50%;border:${borderWidth}px solid ${strokeColor};background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25);"><span style="font-size:${Math.round(size * 0.4)}px;font-weight:700;color:${strokeColor};line-height:1;">${group.competitor_name.charAt(0)}</span></div>`,
@@ -962,14 +988,14 @@ export default function FranceMap() {
             iconAnchor: [size / 2, size / 2],
           });
           L.marker([store.latitude, store.longitude], { icon })
-            .addTo(layerGroup)
+            .addTo(clusterGroup)
             .bindPopup(popupHtml);
         }
       });
     });
 
-    layerGroup.addTo(map);
-    layerGroupsRef.current.set("competitor_stores", layerGroup);
+    clusterGroup.addTo(map);
+    layerGroupsRef.current.set("competitor_stores", clusterGroup);
   };
 
   // =========================================================================

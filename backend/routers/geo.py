@@ -11,10 +11,13 @@ import csv
 import io
 import json
 
+import asyncio
+import logging
 import random
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User, UserAdvertiser, AdvertiserCompetitor
 from core.auth import get_current_user, get_optional_user
 from core.permissions import parse_advertiser_header
+from services.gmb_service import gmb_service
 from services.geodata import (
     geodata_service,
     haversine_distance,
@@ -912,18 +915,25 @@ BIG_CITIES = {"paris", "marseille", "lyon", "toulouse", "nice", "nantes", "stras
 MEDIUM_CITIES = {"le mans", "aix-en-provence", "clermont-ferrand", "brest", "tours", "amiens", "limoges", "perpignan", "metz", "besançon", "orléans", "rouen", "mulhouse", "caen", "nancy", "argenteuil", "saint-denis", "montreuil", "avignon", "dunkerque", "poitiers", "pau", "calais", "la rochelle", "colmar", "lorient", "troyes", "bayonne"}
 
 
-@router.post("/stores/enrich-gmb-demo")
-async def enrich_gmb_demo(
+@router.post("/stores/enrich-gmb")
+async def enrich_gmb(
     force: bool = False,
+    max_per_run: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """
-    Enrichit les store_locations avec des données Google My Business de démo.
-    Génère des ratings réalistes par enseigne et des nombres d'avis proportionnels à la taille de la ville.
-    Passer force=true pour régénérer toutes les notes (rafraîchir).
+    Enrichit les store_locations avec des données Google My Business réelles.
+    Utilise SearchAPI Google Maps (primaire) + Google Places API (fallback).
+    - force=true : ré-enrichit tous les magasins (même ceux déjà enrichis)
+    - max_per_run : limite le nombre de requêtes API par exécution (défaut 50)
     """
+    logger = logging.getLogger(__name__)
+
+    if not gmb_service.is_configured:
+        raise HTTPException(status_code=503, detail="GMB service not configured (no SearchAPI or Google Places key)")
+
     # Filter stores by user's competitors
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
@@ -957,18 +967,126 @@ async def enrich_gmb_demo(
         ).count()
         return {"message": f"Tous les magasins sont déjà enrichis ({already})", "enriched": 0, "already_enriched": already}
 
+    # Limit to max_per_run to preserve SearchAPI quota
+    stores_to_process = stores[:max_per_run]
+    total_pending = len(stores)
+
     now = datetime.utcnow()
     enriched_count = 0
-    by_competitor: Dict[str, Dict] = {}
+    errors_count = 0
+    by_competitor: dict[str, dict] = {}
+
+    for store in stores_to_process:
+        comp_name = comp_map.get(store.competitor_id, "inconnu")
+
+        result = await gmb_service.enrich_store(
+            store_name=store.name or "",
+            brand_name=comp_name,
+            city=store.city or "",
+            latitude=store.latitude,
+            longitude=store.longitude,
+        )
+
+        if result.get("success"):
+            store.google_rating = result.get("rating")
+            store.google_reviews_count = result.get("reviews_count")
+            store.google_place_id = result.get("place_id")
+            store.rating_fetched_at = now
+            enriched_count += 1
+
+            # Track per-competitor stats
+            if comp_name not in by_competitor:
+                by_competitor[comp_name] = {"enriched": 0, "errors": 0, "ratings_sum": 0.0}
+            by_competitor[comp_name]["enriched"] += 1
+            if result.get("rating"):
+                by_competitor[comp_name]["ratings_sum"] += result["rating"]
+        else:
+            errors_count += 1
+            if comp_name not in by_competitor:
+                by_competitor[comp_name] = {"enriched": 0, "errors": 0, "ratings_sum": 0.0}
+            by_competitor[comp_name]["errors"] += 1
+            logger.warning(f"GMB enrichment failed for {comp_name} - {store.city}: {result.get('error')}")
+
+        # Rate limit between API calls
+        await asyncio.sleep(1.1)
+
+    db.commit()
+
+    summary = [
+        {
+            "competitor": name,
+            "enriched": stats["enriched"],
+            "errors": stats["errors"],
+            "avg_rating": round(stats["ratings_sum"] / stats["enriched"], 2) if stats["enriched"] > 0 else None,
+        }
+        for name, stats in by_competitor.items()
+    ]
+
+    remaining = total_pending - len(stores_to_process)
+
+    return {
+        "message": f"{enriched_count} magasins enrichis via GMB réel ({errors_count} erreurs)",
+        "enriched": enriched_count,
+        "errors": errors_count,
+        "remaining": remaining,
+        "api_calls_used": len(stores_to_process),
+        "by_competitor": summary,
+    }
+
+
+@router.post("/stores/enrich-gmb-demo")
+async def enrich_gmb_demo(
+    force: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Fallback : enrichit les store_locations avec des données GMB de démo (ratings simulés).
+    Utilisé quand aucune API GMB n'est configurée ou pour tester sans consommer de quota.
+    """
+    # Filter stores by user's competitors
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    if user:
+        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
+    if x_advertiser_id:
+        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+    competitors_list = user_comp_query.all()
+    comp_map = {c.id: c.name for c in competitors_list}
+    comp_ids = list(comp_map.keys())
+
+    if not comp_ids:
+        return {"message": "Aucun concurrent trouvé", "enriched": 0}
+
+    base_filter = [
+        StoreLocation.competitor_id.in_(comp_ids),
+        StoreLocation.source == "BANCO",
+    ]
+    if not force:
+        base_filter.append(StoreLocation.google_rating.is_(None))
+
+    stores = db.query(StoreLocation).filter(*base_filter).all()
+
+    if not stores:
+        already = db.query(StoreLocation).filter(
+            StoreLocation.competitor_id.in_(comp_ids),
+            StoreLocation.source == "BANCO",
+            StoreLocation.google_rating.isnot(None),
+        ).count()
+        return {"message": f"Tous les magasins sont déjà enrichis ({already})", "enriched": 0, "already_enriched": already}
+
+    now = datetime.utcnow()
+    enriched_count = 0
+    by_competitor: dict[str, dict] = {}
 
     for store in stores:
         comp_name = comp_map.get(store.competitor_id, "inconnu")
         center = ENSEIGNE_RATING_CENTERS.get(comp_name.lower(), 4.0)
 
-        # Normal distribution centered on enseigne average, clipped to [2.5, 5.0]
         rating = round(min(5.0, max(2.5, random.gauss(center, 0.35))), 1)
 
-        # Review count based on city size
         city_lower = (store.city or "").lower().strip()
         if city_lower in BIG_CITIES:
             reviews = random.randint(400, 2500)
@@ -983,7 +1101,6 @@ async def enrich_gmb_demo(
         store.rating_fetched_at = now
         enriched_count += 1
 
-        # Track per-competitor stats
         key = comp_name
         if key not in by_competitor:
             by_competitor[key] = {"enriched": 0, "ratings_sum": 0.0}
