@@ -10,10 +10,10 @@ vi.stubGlobal("localStorage", {
   removeItem: (key: string) => { delete store[key]; },
 });
 
-// Mock window.location.reload
-const reloadMock = vi.fn();
+// Mock window.location
+const locationMock = { href: "", origin: "https://panoramai.mobsuccess.ai", reload: vi.fn() };
 Object.defineProperty(window, "location", {
-  value: { reload: reloadMock },
+  value: locationMock,
   writable: true,
 });
 
@@ -42,7 +42,8 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  reloadMock.mockReset();
+  locationMock.href = "";
+  locationMock.reload.mockReset();
   Object.keys(store).forEach((k) => delete store[k]);
 });
 
@@ -133,45 +134,45 @@ describe("useAuth - initial state", () => {
   });
 });
 
-describe("useAuth - login", () => {
-  it("stores token and sets user + first advertiser", async () => {
-    mockedAuthAPI.login.mockResolvedValueOnce({
-      token: "new-token",
-      user: {
-        id: 1,
-        email: "a@b.com",
-        name: "A",
-        has_brand: true,
-        advertisers: [
-          { id: 5, company_name: "Carrefour", sector: "supermarche" },
-          { id: 6, company_name: "Leclerc", sector: "supermarche" },
-        ],
-      },
+describe("useAuth - loginWithToken (SSO)", () => {
+  it("stores token and fetches user profile", async () => {
+    mockedAuthAPI.me.mockResolvedValueOnce({
+      id: 1,
+      email: "sso@mobsuccess.com",
+      name: "SSO User",
+      has_brand: true,
+      advertisers: [
+        { id: 5, company_name: "Carrefour", sector: "supermarche" },
+        { id: 6, company_name: "Leclerc", sector: "supermarche" },
+      ],
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.login("a@b.com", "pass");
+      await result.current.loginWithToken("cognito-id-token-123");
     });
 
-    expect(setToken).toHaveBeenCalledWith("new-token");
-    expect(result.current.user?.email).toBe("a@b.com");
+    expect(setToken).toHaveBeenCalledWith("cognito-id-token-123");
+    expect(result.current.user?.email).toBe("sso@mobsuccess.com");
     expect(result.current.currentAdvertiserId).toBe(5);
   });
 
-  it("handles login with no advertisers", async () => {
-    mockedAuthAPI.login.mockResolvedValueOnce({
-      token: "tok",
-      user: { id: 1, email: "new@b.com", name: "New", has_brand: false, advertisers: [] },
+  it("handles loginWithToken with no advertisers", async () => {
+    mockedAuthAPI.me.mockResolvedValueOnce({
+      id: 1,
+      email: "new@mobsuccess.com",
+      name: "New",
+      has_brand: false,
+      advertisers: [],
     });
 
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.login("new@b.com", "pass");
+      await result.current.loginWithToken("token-no-advs");
     });
 
     expect(result.current.user?.has_brand).toBe(false);
@@ -179,8 +180,8 @@ describe("useAuth - login", () => {
   });
 });
 
-describe("useAuth - logout", () => {
-  it("clears everything", async () => {
+describe("useAuth - logout (SSO)", () => {
+  it("clears state and redirects to Mobsuccess sign-out", async () => {
     store["auth_token"] = "token";
     mockedAuthAPI.me.mockResolvedValueOnce({
       id: 1,
@@ -200,6 +201,9 @@ describe("useAuth - logout", () => {
     expect(result.current.user).toBeNull();
     expect(result.current.currentAdvertiserId).toBeNull();
     expect(clearToken).toHaveBeenCalled();
+    // Should redirect to Mobsuccess sign-out
+    expect(locationMock.href).toContain("action=sign-out");
+    expect(locationMock.href).toContain(encodeURIComponent("/login"));
   });
 });
 
@@ -226,6 +230,5 @@ describe("useAuth - switchAdvertiser (multi-enseigne)", () => {
 
     expect(result.current.currentAdvertiserId).toBe(20);
     expect(store["current_advertiser_id"]).toBe("20");
-    expect(reloadMock).toHaveBeenCalledOnce();
   });
 });

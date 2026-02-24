@@ -12,12 +12,13 @@ import {
 } from "./api";
 import { invalidateAllCache } from "./use-api";
 
+const MS_REMOTE_AUTH_URL = (process.env.NEXT_PUBLIC_MS_REMOTE_AUTH_URL || "https://app.mobsuccess.com/auth").trim();
+
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   currentAdvertiserId: number | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name?: string) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
   switchAdvertiser: (id: number) => void;
@@ -72,21 +73,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("auth:expired", handleExpired);
   }, []);
 
-  async function login(email: string, password: string) {
-    const res = await authAPI.login(email, password);
-    setToken(res.token);
-    setUser(res.user);
-    const advs = res.user.advertisers || [];
-    if (advs.length > 0) {
-      setCurrentAdvertiserId(advs[0].id);
-      setCurrentAdvId(advs[0].id);
-    }
-  }
-
-  async function register(email: string, password: string, name?: string) {
-    const res = await authAPI.register(email, password, name);
-    setToken(res.token);
-    setUser(res.user);
+  async function loginWithToken(token: string) {
+    setToken(token);
+    await refresh();
   }
 
   function logout() {
@@ -94,6 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearCurrentAdvertiserId();
     setUser(null);
     setCurrentAdvId(null);
+    const returnUrl = `${window.location.origin}/login`;
+    window.location.href = `${MS_REMOTE_AUTH_URL}?action=sign-out&to=${encodeURIComponent(returnUrl)}`;
   }
 
   function switchAdvertiser(id: number) {
@@ -104,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, currentAdvertiserId, login, register, logout, refresh, switchAdvertiser }}>
+    <AuthContext.Provider value={{ user, loading, currentAdvertiserId, loginWithToken, logout, refresh, switchAdvertiser }}>
       {children}
     </AuthContext.Provider>
   );

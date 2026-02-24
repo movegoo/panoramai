@@ -384,6 +384,23 @@ export interface WatchOverview {
   critical_alerts: number;
 }
 
+// Mobsuccess SSO
+const MS_API_ENDPOINT = (process.env.NEXT_PUBLIC_MS_API_ENDPOINT || "https://app.mobsuccess.com").trim();
+
+export async function exchangeMobsuccessAuth(userId: string, authId: string): Promise<string> {
+  const url = `${MS_API_ENDPOINT}/webservices/rest/getauthid-auth?userId=${encodeURIComponent(userId)}&authId=${encodeURIComponent(authId)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Erreur d'authentification Mobsuccess (${res.status})`);
+  }
+  const data = await res.json();
+  const token = data?.cognito_id_token;
+  if (!token) {
+    throw new Error("Token Cognito manquant dans la réponse Mobsuccess");
+  }
+  return token;
+}
+
 // Auth token management
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
