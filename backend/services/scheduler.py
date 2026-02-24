@@ -559,11 +559,14 @@ class DataCollectionScheduler:
                     logger.info(f"Creative analysis: time limit reached after {total_analyzed} ads")
                     break
 
-                # Fetch next batch of unanalyzed ads
+                # Fetch next batch of unanalyzed ads (images OR text-only)
+                from sqlalchemy import or_, func as sa_func
                 candidates = db.query(Ad).filter(
                     Ad.creative_analyzed_at.is_(None),
-                    Ad.creative_url.isnot(None),
-                    Ad.creative_url != "",
+                    or_(
+                        (Ad.creative_url.isnot(None)) & (Ad.creative_url != ""),
+                        (Ad.ad_text.isnot(None)) & (sa_func.length(Ad.ad_text) >= 10),
+                    ),
                 ).limit(BATCH_SIZE * 3).all()
 
                 if not candidates:

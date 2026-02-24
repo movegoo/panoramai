@@ -82,10 +82,15 @@ async def analyze_all_creatives(
             ad.creative_analysis = None
         db.commit()
 
+    from sqlalchemy import or_
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
         Ad.creative_analyzed_at.is_(None),
-        Ad.creative_url.isnot(None),
-        Ad.creative_url != "",
+        or_(
+            # Has an image URL
+            (Ad.creative_url.isnot(None)) & (Ad.creative_url != ""),
+            # OR has text content (Google Ads, etc.)
+            (Ad.ad_text.isnot(None)) & (func.length(Ad.ad_text) >= 10),
+        ),
     )
 
     if user:
