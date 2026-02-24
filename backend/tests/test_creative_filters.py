@@ -58,6 +58,29 @@ def test_ad_new_columns_nullable(db, test_competitor):
 
 # ── Prompt parsing tests ─────────────────────────────────────
 
+class TestMediaTypeDetection:
+    """Test magic byte detection for image MIME types."""
+
+    def test_detect_png(self):
+        png_header = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100
+        assert CreativeAnalyzer._detect_media_type(png_header) == "image/png"
+
+    def test_detect_jpeg(self):
+        jpeg_header = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+        assert CreativeAnalyzer._detect_media_type(jpeg_header) == "image/jpeg"
+
+    def test_detect_webp(self):
+        webp_header = b'RIFF\x00\x00\x00\x00WEBP' + b'\x00' * 100
+        assert CreativeAnalyzer._detect_media_type(webp_header) == "image/webp"
+
+    def test_detect_gif(self):
+        gif_header = b'GIF89a' + b'\x00' * 100
+        assert CreativeAnalyzer._detect_media_type(gif_header) == "image/gif"
+
+    def test_detect_unknown(self):
+        assert CreativeAnalyzer._detect_media_type(b'\x00\x00\x00') == ""
+
+
 class TestPromptParsing:
     """Test that CreativeAnalyzer._parse_analysis handles new fields."""
 

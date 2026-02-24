@@ -319,22 +319,17 @@ JSON attendu :
                 logger.error(f"Image download HTTP {response.status_code}: {url[:100]}")
                 return None, ""
 
-            content_type = response.headers.get("content-type", "")
-            if not content_type.startswith("image/"):
-                if ".png" in url.lower():
-                    content_type = "image/png"
-                elif ".webp" in url.lower():
-                    content_type = "image/webp"
-                elif ".gif" in url.lower():
-                    content_type = "image/gif"
-                else:
-                    content_type = "image/jpeg"
-
-            media_type = content_type.split(";")[0].strip()
-            if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
-                media_type = "image/jpeg"
-
+            # Detect actual media type from file magic bytes (not HTTP headers)
+            # fbcdn often returns Content-Type: image/jpeg for PNG images
             data = response.content
+            media_type = self._detect_media_type(data)
+            if not media_type:
+                # Fallback to HTTP header
+                content_type = response.headers.get("content-type", "")
+                media_type = content_type.split(";")[0].strip()
+                if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+                    media_type = "image/jpeg"
+
             if len(data) > MAX_IMAGE_SIZE:
                 logger.error(f"Image too large ({len(data)} bytes): {url[:80]}")
                 return None, ""
@@ -352,6 +347,19 @@ JSON attendu :
         except Exception as e:
             logger.error(f"Image download exception ({type(e).__name__}): {e} - {url[:100]}")
             return None, ""
+
+    @staticmethod
+    def _detect_media_type(data: bytes) -> str:
+        """Detect image media type from magic bytes."""
+        if data[:8] == b'\x89PNG\r\n\x1a\n':
+            return "image/png"
+        if data[:2] == b'\xff\xd8':
+            return "image/jpeg"
+        if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            return "image/webp"
+        if data[:6] in (b'GIF87a', b'GIF89a'):
+            return "image/gif"
+        return ""
 
     async def _fetch_fresh_image(self, ad_id: str) -> tuple[Optional[bytes], str]:
         """Fetch a fresh image URL from ScrapeCreators or SearchAPI and download it."""
