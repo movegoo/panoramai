@@ -159,7 +159,7 @@ class CreativeAnalyzer:
 
         return await self._call_gemini_vision(
             b64_image, media_type, prompt,
-            model="gemini-2.5-flash-preview-05-20",
+            model="gemini-2.5-flash",
             ad_id=ad_id,
         )
 
@@ -202,7 +202,7 @@ class CreativeAnalyzer:
         b64_image: str,
         media_type: str,
         prompt: str,
-        model: str = "gemini-2.5-flash-preview-05-20",
+        model: str = "gemini-2.5-flash",
         ad_id: str = "",
     ) -> Optional[dict]:
         url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
