@@ -36,6 +36,9 @@ class Settings:
     # Mistral API (for GEO tracking - Le Chat)
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
 
+    # Meta Ad Library API (official, free)
+    META_AD_LIBRARY_TOKEN: str = os.getenv("META_AD_LIBRARY_TOKEN", "")
+
     # SearchAPI.io (complementary Meta Ad Library enrichment)
     SEARCHAPI_KEY: str = os.getenv("SEARCHAPI_KEY", "")
 

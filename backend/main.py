@@ -25,6 +25,7 @@ from routers import facebook, playstore, appstore, aso, instagram, tiktok, youtu
 from routers import google_trends_news
 from routers import moby
 from routers import mcp_keys
+from routers import meta_ads
 from services.scheduler import scheduler
 
 # Logging
@@ -528,6 +529,7 @@ app.include_router(ads_overview.router, prefix="/api/ads", tags=["Ads Overview"]
 app.include_router(freshness.router, prefix="/api/freshness", tags=["Fraîcheur des données"])
 app.include_router(moby.router, prefix="/api/moby", tags=["Moby AI Assistant"])
 app.include_router(mcp_keys.router, prefix="/api/mcp", tags=["MCP Integration"])
+app.include_router(meta_ads.router, prefix="/api/meta-ads", tags=["Meta Ad Library"])
 
 # Mount MCP SSE server (non-fatal if competitive-mcp not available)
 try:
