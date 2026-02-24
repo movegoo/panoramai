@@ -215,7 +215,7 @@ class CreativeAnalyzer:
             }],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 4096,
                 "responseMimeType": "application/json",
             },
         }
@@ -235,7 +235,7 @@ class CreativeAnalyzer:
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 1024,
+                "maxOutputTokens": 4096,
                 "responseMimeType": "application/json",
             },
         }
@@ -525,8 +525,22 @@ class CreativeAnalyzer:
                     logger.error(f"Failed to parse analysis JSON: {text[:200]}")
                     return None
             else:
-                logger.error(f"No JSON found in response: {text[:200]}")
-                return None
+                # Try to fix truncated JSON by closing brackets
+                if start >= 0:
+                    truncated = text[start:]
+                    # Count unmatched braces/brackets and close them
+                    open_braces = truncated.count("{") - truncated.count("}")
+                    open_brackets = truncated.count("[") - truncated.count("]")
+                    fixed = truncated + "]" * open_brackets + "}" * open_braces
+                    try:
+                        data = json.loads(fixed)
+                        logger.warning(f"Fixed truncated JSON (added {open_braces}}} {open_brackets}])")
+                    except json.JSONDecodeError:
+                        logger.error(f"No JSON found in response: {text[:300]}")
+                        return None
+                else:
+                    logger.error(f"No JSON found in response: {text[:300]}")
+                    return None
 
         # Validate and clamp score
         score = data.get("score", 0)
