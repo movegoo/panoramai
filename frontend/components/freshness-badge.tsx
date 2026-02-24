@@ -71,7 +71,7 @@ export function FreshnessBar({
     { key: "appstore", label: "App Store" },
     { key: "ads_meta", label: "Ads Meta" },
     { key: "ads_google", label: "Ads Google" },
-    { key: "ads_snapchat", label: "Ads Snap" },
+    // { key: "ads_snapchat", label: "Ads Snap" }, // Snapchat masqué
   ];
 
   // Find the overall latest timestamp

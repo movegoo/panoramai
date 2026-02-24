@@ -129,10 +129,7 @@ const METRIC_CATEGORIES = [
       { key: "yt_subscribers", label: "Abonnes YouTube", icon: <Youtube className="h-3.5 w-3.5" />, source: "youtube", field: "subscribers", format: "number" },
       { key: "yt_views", label: "Vues YouTube", icon: <Eye className="h-3.5 w-3.5" />, source: "youtube", field: "total_views", format: "number" },
       { key: "yt_engagement", label: "Engagement YouTube", icon: <Heart className="h-3.5 w-3.5" />, source: "youtube", field: "engagement_rate", format: "percent" },
-      { key: "snap_subscribers", label: "Abonnes Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "subscribers", format: "number" },
-      { key: "snap_engagement", label: "Engagement Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "engagement_rate", format: "percent" },
-      { key: "snap_ads", label: "Pubs Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "ads_count", format: "number" },
-      { key: "snap_impressions", label: "Impressions Snapchat", icon: <SnapIcon className="h-3.5 w-3.5" />, source: "snapchat", field: "impressions", format: "number" },
+      // Snapchat masqué — pas assez de données pour l'instant
     ],
   },
   {

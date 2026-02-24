@@ -1644,7 +1644,7 @@ export default function AdsPage() {
       const ttAds = ttAdsRes.status === "fulfilled" ? ttAdsRes.value : [];
       const gAds = gAdsRes.status === "fulfilled" ? gAdsRes.value : [];
       const snapAds = snapAdsRes.status === "fulfilled" ? snapAdsRes.value : [];
-      const ads = deduplicateAds([...fbAds, ...ttAds, ...gAds, ...snapAds]);
+      const ads = deduplicateAds([...fbAds, ...ttAds, ...gAds]); // Snapchat masqué
       const comps = compRes.status === "fulfilled" ? compRes.value : [];
       setAllAds(ads);
       if (compRes.status === "fulfilled") setCompetitors(comps);
@@ -1688,11 +1688,11 @@ export default function AdsPage() {
       const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
         facebookAPI.getAllAds(), tiktokAPI.getAllAds(), googleAdsAPI.getAllAds(), snapchatAPI.getAllAds(),
       ]);
+      // Snapchat masqué — pas assez de données
       setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
-        ...(snapAds.status === "fulfilled" ? snapAds.value : []),
       ]));
     } catch (err) {
       console.error(err);
@@ -1710,7 +1710,7 @@ export default function AdsPage() {
         try { await facebookAPI.fetchAds(c.id); } catch {}
         try { await tiktokAPI.fetchAds(c.id); } catch {}
         try { await googleAdsAPI.fetchAds(c.id); } catch {}
-        try { await snapchatAPI.fetchAds(c.id); } catch {}
+        // Snapchat masqué
       }
       // Enrich with EU transparency data (multiple rounds, 25 ads at a time)
       for (let round = 0; round < 5; round++) {
@@ -1719,17 +1719,15 @@ export default function AdsPage() {
           if (r.enriched === 0) break;
         } catch { break; }
       }
-      const [fbAds, ttAds, gAds, snapAds] = await Promise.allSettled([
+      const [fbAds, ttAds, gAds] = await Promise.allSettled([
         facebookAPI.getAllAds(),
         tiktokAPI.getAllAds(),
         googleAdsAPI.getAllAds(),
-        snapchatAPI.getAllAds(),
       ]);
       setAllAds(deduplicateAds([
         ...(fbAds.status === "fulfilled" ? fbAds.value : []),
         ...(ttAds.status === "fulfilled" ? ttAds.value : []),
         ...(gAds.status === "fulfilled" ? gAds.value : []),
-        ...(snapAds.status === "fulfilled" ? snapAds.value : []),
       ]));
     } catch (err) {
       console.error(err);

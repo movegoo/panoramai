@@ -791,7 +791,8 @@ export default function DashboardPage() {
               { key: "instagram", ranking: igRanking, icon: <Instagram className="h-4 w-4" />, label: "Instagram", accent: "pink", unit: "followers", isRating: false },
               { key: "tiktok", ranking: ttRanking, icon: <Music className="h-4 w-4" />, label: "TikTok", accent: "cyan", unit: "followers", isRating: false },
               { key: "youtube", ranking: ytRanking, icon: <Youtube className="h-4 w-4" />, label: "YouTube", accent: "red", unit: "abonnés", isRating: false },
-              { key: "snapchat", ranking: snapRanking, icon: <SnapchatIcon className="h-4 w-4" />, label: "Snapchat", accent: "yellow", unit: "pubs", isRating: false },
+              // Snapchat masqué — pas assez de données pour l'instant
+              // { key: "snapchat", ranking: snapRanking, icon: <SnapchatIcon className="h-4 w-4" />, label: "Snapchat", accent: "yellow", unit: "pubs", isRating: false },
               { key: "playstore", ranking: psRanking, icon: <Smartphone className="h-4 w-4" />, label: "Play Store", accent: "emerald", unit: "note", isRating: true },
               { key: "appstore", ranking: asRanking, icon: <AppleIcon className="h-4 w-4" />, label: "App Store", accent: "blue", unit: "note", isRating: true },
             ].filter(p => p.ranking.length > 0).map((platform) => {
@@ -1299,15 +1300,7 @@ export default function DashboardPage() {
                     ) : <div className="text-xs text-muted-foreground">&mdash;</div>}
                   </div>
 
-                  <div className={`rounded-xl px-3 py-2.5 ${snap && snap.ads_count > 0 ? "bg-yellow-50/70" : "bg-muted/30"}`}>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <SnapchatIcon className="h-3.5 w-3.5 text-yellow-500" />
-                      <span className="text-[10px] text-yellow-600 font-semibold uppercase">Snap</span>
-                    </div>
-                    {snap && snap.ads_count > 0 ? (
-                      <div className="text-sm font-bold tabular-nums">{snap.ads_count} <span className="text-[10px] font-normal text-muted-foreground">pubs</span></div>
-                    ) : <div className="text-xs text-muted-foreground">&mdash;</div>}
-                  </div>
+                  {/* Snapchat masqué — pas assez de données */}
 
                   <div className={`rounded-xl px-3 py-2.5 ${ps?.rating ? "bg-emerald-50/70" : "bg-muted/30"}`}>
                     <div className="flex items-center gap-1.5 mb-1">
@@ -1385,9 +1378,7 @@ export default function DashboardPage() {
                   <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Youtube className="h-3 w-3 text-red-500" />YT</span>
                   </th>
-                  <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    <span className="inline-flex items-center gap-1"><SnapchatIcon className="h-3 w-3 text-yellow-500" />Snap</span>
-                  </th>
+                  {/* Snapchat masqué — pas assez de données */}
                   <th className="text-right px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />Apps</span>
                   </th>
@@ -1442,9 +1433,7 @@ export default function DashboardPage() {
                       <td className="px-4 py-3 text-right tabular-nums">
                         {comp.youtube ? formatNumber(comp.youtube.subscribers) : <span className="text-muted-foreground">&mdash;</span>}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {comp.snapchat && comp.snapchat.ads_count > 0 ? comp.snapchat.ads_count : <span className="text-muted-foreground">&mdash;</span>}
-                      </td>
+                      {/* Snapchat masqué */}
                       <td className="px-4 py-3 text-right tabular-nums">
                         {comp.avg_app_rating ? comp.avg_app_rating.toFixed(1) : <span className="text-muted-foreground">&mdash;</span>}
                       </td>

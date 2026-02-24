@@ -47,6 +47,9 @@ import {
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "snapchat";
+
+// Snapchat masqué — pas assez de données pour l'instant
+const HIDDEN_PLATFORMS: Platform[] = ["snapchat"];
 type RankingView = "audience" | "engagement" | "growth" | "efficiency";
 
 const PLATFORM_CONFIG = {
@@ -592,7 +595,7 @@ export default function SocialPage() {
 
       {/* Platform selector */}
       <div className="flex items-center gap-1 p-1 rounded-full bg-card border border-border w-fit">
-        {(["instagram", "tiktok", "youtube", "snapchat"] as Platform[]).map((p) => {
+        {(["instagram", "tiktok", "youtube", "snapchat"] as Platform[]).filter(p => !HIDDEN_PLATFORMS.includes(p)).map((p) => {
           const pConfig = PLATFORM_CONFIG[p];
           const pData = p === "instagram" ? igComparison : p === "tiktok" ? ttComparison : p === "youtube" ? ytComparison : scComparison;
           const isActive = platform === p;
