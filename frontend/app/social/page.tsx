@@ -524,13 +524,12 @@ export default function SocialPage() {
             <ExportMenu
               variant="dark"
               filename="social_vue_ensemble"
-              data={crossPlatformData.map(c => ({ name: c.name, ig_followers: c.ig?.followers, tt_followers: c.tt?.followers, yt_subscribers: c.yt?.subscribers, snap_ads: c.sc?.ads_count || 0, total: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) }))}
+              data={crossPlatformData.map(c => ({ name: c.name, ig_followers: c.ig?.followers, tt_followers: c.tt?.followers, yt_subscribers: c.yt?.subscribers, total: (c.ig?.followers || 0) + (c.tt?.followers || 0) + (c.yt?.subscribers || 0) }))}
               columns={[
                 { key: "name", label: "Concurrent" },
                 { key: "ig_followers", label: "Instagram" },
                 { key: "tt_followers", label: "TikTok" },
                 { key: "yt_subscribers", label: "YouTube" },
-                { key: "snap_ads", label: "Snap Ads" },
                 { key: "total", label: "Audience totale" },
               ]}
             />
@@ -544,7 +543,6 @@ export default function SocialPage() {
                   <th className="text-right pb-3 font-semibold">Instagram</th>
                   <th className="text-right pb-3 font-semibold">TikTok</th>
                   <th className="text-right pb-3 font-semibold">YouTube</th>
-                  <th className="text-right pb-3 font-semibold">Snap Ads</th>
                   <th className="text-right pb-3 font-semibold">Audience totale</th>
                   <th className="text-right pb-3 font-semibold">Tendance 7j</th>
                 </tr>
@@ -575,9 +573,6 @@ export default function SocialPage() {
                     </td>
                     <td className="py-2.5 text-right text-sm tabular-nums">
                       {c.yt ? <span className="text-red-300">{formatNumber(c.yt.subscribers)}</span> : <span className="text-white/20">&mdash;</span>}
-                    </td>
-                    <td className="py-2.5 text-right text-sm tabular-nums">
-                      {c.sc?.subscribers ? <span className="text-yellow-300">{formatNumber(c.sc.subscribers)}</span> : c.sc && c.sc.ads_count > 0 ? <span className="text-yellow-300">{c.sc.ads_count} pubs</span> : <span className="text-white/20">&mdash;</span>}
                     </td>
                     <td className="py-2.5 text-right">
                       <span className="text-sm font-bold tabular-nums">{formatNumber(c.totalReach)}</span>
@@ -965,7 +960,7 @@ export default function SocialPage() {
             { key: "instagram", label: "Instagram", icon: <Instagram className="h-3 w-3" /> },
             { key: "tiktok", label: "TikTok", icon: <Music className="h-3 w-3" /> },
             { key: "youtube", label: "YouTube", icon: <Youtube className="h-3 w-3" /> },
-            { key: "snapchat", label: "Snapchat", icon: <Megaphone className="h-3 w-3" /> },
+            // Snapchat masqué
           ] as { key: string | null; label: string; icon: React.ReactNode }[]).map((p) => {
             const isActive = contentPlatform === p.key;
             return (

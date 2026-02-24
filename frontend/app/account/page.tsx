@@ -194,19 +194,7 @@ const CHANNELS = [
     formatDisplay: (v: string) => v.startsWith("UC") ? v.slice(0, 12) + "..." : v,
     profileUrl: (v: string) => v.startsWith("UC") ? `https://youtube.com/channel/${v}` : `https://youtube.com/${v}`,
   },
-  {
-    key: "snapchat_entity_name",
-    label: "Snapchat",
-    icon: Hash,
-    color: "text-yellow-500",
-    bg: "bg-yellow-50",
-    border: "border-yellow-200",
-    placeholder: "Nom de l'entite sur Snapchat Ads",
-    hint: "Nom d'annonceur Snapchat",
-    parse: (v: string) => v.trim(),
-    formatDisplay: (v: string) => v,
-    profileUrl: (v: string) => `https://adsgallery.snap.com/`,
-  },
+  // Snapchat masqué — pas assez de données pour l'instant
   {
     key: "playstore_app_id",
     label: "Google Play",
@@ -1671,15 +1659,9 @@ export default function AccountPage() {
                               </a>
                             </div>
                           )}
-                          {comp.snapchat_entity_name && (
-                            <div className="flex items-center gap-2 text-xs">
-                              <span className="text-yellow-500 shrink-0 text-sm">👻</span>
-                              <span className="font-mono text-muted-foreground">{comp.snapchat_entity_name}</span>
-                            </div>
-                          )}
+                          {/* Snapchat masqué */}
                           {!comp.website && !comp.instagram_username && !comp.tiktok_username &&
-                           !comp.youtube_channel_id && !comp.playstore_app_id && !comp.appstore_app_id &&
-                           !comp.snapchat_entity_name && (
+                           !comp.youtube_channel_id && !comp.playstore_app_id && !comp.appstore_app_id && (
                             <p className="text-xs text-muted-foreground col-span-2">Aucun identifiant pre-configure</p>
                           )}
                         </div>

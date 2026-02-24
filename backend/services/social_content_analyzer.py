@@ -1,9 +1,11 @@
 """
-Social Content Analyzer Service.
-Uses Gemini Flash + Mistral to analyze social media post/video text content.
+Social Content Analyzer Service — Multi-model strategy.
+- Thumbnails/images: Gemini 2.5 Flash (vision)
+- Text: Gemini 2.0 Flash + Mistral Small (parallel with fusion)
 Extracts: theme, hook, tone, format, CTA, hashtags, engagement score, summary.
 """
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -34,7 +36,9 @@ JSON attendu :
   "mentions": ["@mention1"],
   "virality_factors": ["facteur1", "facteur2"],
   "engagement_score": <entier 0-100>,
-  "summary": "<1-2 phrases decrivant la strategie du contenu et son efficacite>"
+  "summary": "<1-2 phrases decrivant la strategie du contenu et son efficacite>",
+  "visual_elements": "<description du visuel : couleurs dominantes, presence de texte, produit, visage, logo>",
+  "thumbnail_quality": "<UNE valeur parmi : excellent, bon, moyen, faible>"
 }}
 
 Criteres de score engagement_score :
@@ -46,9 +50,11 @@ Criteres de score engagement_score :
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
 
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
 
 class SocialContentAnalyzer:
-    """Analyze social media post content using Gemini Flash + Mistral."""
+    """Analyze social media post content using Gemini Flash (vision + text) + Mistral."""
 
     @property
     def gemini_key(self) -> str:
@@ -68,15 +74,16 @@ class SocialContentAnalyzer:
         likes: int = 0,
         comments: int = 0,
         shares: int = 0,
+        thumbnail_url: str = "",
     ) -> Optional[dict]:
-        """Analyze a single social post with Gemini + Mistral (parallel), fuse results."""
+        """Analyze a social post with vision (if thumbnail) + text (Gemini + Mistral)."""
         if not self.gemini_key and not self.mistral_key:
             logger.error("Cannot analyze: neither GEMINI_API_KEY nor MISTRAL_API_KEY set")
             return None
 
         text_content = f"{title} {description}".strip()
-        if not text_content:
-            logger.warning("No text content to analyze")
+        if not text_content and not thumbnail_url:
+            logger.warning("No text content or thumbnail to analyze")
             return None
 
         # Load prompt from DB (fallback to hardcoded)
@@ -102,11 +109,23 @@ class SocialContentAnalyzer:
             shares=shares,
         )
 
-        # Run Gemini + Mistral in parallel
-        gemini_task = self._call_gemini(prompt)
-        mistral_task = self._call_mistral(prompt)
+        # Strategy: if thumbnail available, use Gemini Vision + Mistral text in parallel
+        # If no thumbnail, use Gemini text + Mistral text in parallel
+        tasks = []
 
-        results = await asyncio.gather(gemini_task, mistral_task, return_exceptions=True)
+        if thumbnail_url and self.gemini_key:
+            tasks.append(self._call_gemini_vision(prompt, thumbnail_url))
+        elif self.gemini_key:
+            tasks.append(self._call_gemini_text(prompt))
+        else:
+            tasks.append(asyncio.coroutine(lambda: None)() if False else self._noop())
+
+        if self.mistral_key:
+            tasks.append(self._call_mistral(prompt))
+        else:
+            tasks.append(self._noop())
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         gemini_result = results[0] if not isinstance(results[0], Exception) else None
         mistral_result = results[1] if not isinstance(results[1], Exception) else None
@@ -118,7 +137,42 @@ class SocialContentAnalyzer:
 
         return self._fuse_results(gemini_result, mistral_result)
 
-    async def _call_gemini(self, prompt: str, model: str = "gemini-2.0-flash") -> Optional[dict]:
+    @staticmethod
+    async def _noop() -> None:
+        return None
+
+    # ── Gemini Vision (thumbnail) ────────────────────────────────────
+
+    async def _call_gemini_vision(
+        self, prompt: str, thumbnail_url: str, model: str = "gemini-2.5-flash",
+    ) -> Optional[dict]:
+        """Download thumbnail + send to Gemini Vision."""
+        image_data, media_type = await self._download_image(thumbnail_url)
+        if not image_data:
+            logger.warning(f"Thumbnail download failed, falling back to text: {thumbnail_url[:80]}")
+            return await self._call_gemini_text(prompt)
+
+        b64_image = base64.standard_b64encode(image_data).decode("utf-8")
+
+        url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"inline_data": {"mime_type": media_type, "data": b64_image}},
+                    {"text": prompt},
+                ],
+            }],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1024,
+                "responseMimeType": "application/json",
+            },
+        }
+        return await self._call_api("Gemini-Vision", url, payload, is_gemini=True)
+
+    # ── Gemini Text ──────────────────────────────────────────────────
+
+    async def _call_gemini_text(self, prompt: str, model: str = "gemini-2.0-flash") -> Optional[dict]:
         if not self.gemini_key:
             return None
         url = GEMINI_API_URL.format(model=model) + f"?key={self.gemini_key}"
@@ -130,7 +184,9 @@ class SocialContentAnalyzer:
                 "responseMimeType": "application/json",
             },
         }
-        return await self._call_api("Gemini", url, payload, is_gemini=True)
+        return await self._call_api("Gemini-Text", url, payload, is_gemini=True)
+
+    # ── Mistral Text ─────────────────────────────────────────────────
 
     async def _call_mistral(self, prompt: str, model: str = "mistral-small-latest") -> Optional[dict]:
         if not self.mistral_key:
@@ -147,6 +203,8 @@ class SocialContentAnalyzer:
             "response_format": {"type": "json_object"},
         }
         return await self._call_api("Mistral", MISTRAL_API_URL, payload, is_gemini=False, headers=headers)
+
+    # ── Unified API caller ───────────────────────────────────────────
 
     async def _call_api(
         self,
@@ -187,8 +245,7 @@ class SocialContentAnalyzer:
                 trace_generation(
                     name=f"social_content_{label.lower()}",
                     model=payload.get("model", "gemini-2.0-flash"),
-                    input=payload.get("contents", [{}])[0].get("parts", [{}])[0].get("text", "")
-                        if is_gemini else payload.get("messages", [{}])[0].get("content", ""),
+                    input=prompt if isinstance((prompt := self._extract_prompt(payload, is_gemini)), str) else "",
                     output=text,
                     usage={"input_tokens": usage.get("input_tokens", usage.get("promptTokenCount")),
                            "output_tokens": usage.get("output_tokens", usage.get("candidatesTokenCount"))},
@@ -205,6 +262,67 @@ class SocialContentAnalyzer:
 
         logger.error(f"{label}: max retries reached for social content analysis")
         return None
+
+    @staticmethod
+    def _extract_prompt(payload: dict, is_gemini: bool) -> str:
+        if is_gemini:
+            parts = payload.get("contents", [{}])[0].get("parts", [])
+            for p in parts:
+                if "text" in p:
+                    return p["text"]
+            return ""
+        return payload.get("messages", [{}])[0].get("content", "")
+
+    # ── Image download ───────────────────────────────────────────────
+
+    async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
+        """Download image from URL. Returns (bytes, media_type) or (None, '')."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                response = await client.get(url)
+
+            if response.status_code != 200:
+                logger.error(f"Image download HTTP {response.status_code}: {url[:100]}")
+                return None, ""
+
+            data = response.content
+            media_type = self._detect_media_type(data)
+            if not media_type:
+                content_type = response.headers.get("content-type", "")
+                media_type = content_type.split(";")[0].strip()
+                if media_type not in ("image/jpeg", "image/png", "image/gif", "image/webp"):
+                    media_type = "image/jpeg"
+
+            if len(data) > MAX_IMAGE_SIZE:
+                logger.warning(f"Image too large ({len(data)} bytes), skipping vision: {url[:80]}")
+                return None, ""
+
+            if len(data) < 500:
+                logger.warning(f"Image too small ({len(data)} bytes), skipping vision: {url[:80]}")
+                return None, ""
+
+            return data, media_type
+
+        except httpx.TimeoutException:
+            logger.warning(f"Image download TIMEOUT: {url[:100]}")
+            return None, ""
+        except Exception as e:
+            logger.warning(f"Image download error ({type(e).__name__}): {url[:100]}")
+            return None, ""
+
+    @staticmethod
+    def _detect_media_type(data: bytes) -> str:
+        if data[:8] == b'\x89PNG\r\n\x1a\n':
+            return "image/png"
+        if data[:2] == b'\xff\xd8':
+            return "image/jpeg"
+        if data[:4] == b'GIF8':
+            return "image/gif"
+        if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+            return "image/webp"
+        return ""
+
+    # ── Fusion ───────────────────────────────────────────────────────
 
     def _fuse_results(self, gemini: Optional[dict], mistral: Optional[dict]) -> Optional[dict]:
         """Fuse Gemini + Mistral results. Gemini wins on disagreement."""
@@ -243,6 +361,8 @@ class SocialContentAnalyzer:
 
         return fused
 
+    # ── JSON parsing ─────────────────────────────────────────────────
+
     def _parse_analysis(self, text: str) -> Optional[dict]:
         """Parse JSON response into a validated dict."""
         text = text.strip()
@@ -280,7 +400,8 @@ class SocialContentAnalyzer:
                 data[key] = []
 
         # Ensure strings
-        for key in ("theme", "hook", "tone", "format", "cta", "summary"):
+        for key in ("theme", "hook", "tone", "format", "cta", "summary",
+                     "visual_elements", "thumbnail_quality"):
             if key not in data or not isinstance(data[key], str):
                 data[key] = ""
 

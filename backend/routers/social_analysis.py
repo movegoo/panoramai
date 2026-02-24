@@ -284,8 +284,9 @@ async def analyze_all_content(
                     likes=post.likes or 0,
                     comments=post.comments or 0,
                     shares=post.shares or 0,
+                    thumbnail_url=post.thumbnail_url or "",
                 ),
-                timeout=30,
+                timeout=45,
             )
 
             if result:

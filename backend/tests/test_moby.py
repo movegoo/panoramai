@@ -100,9 +100,9 @@ class TestEnsureLimit:
 
 @pytest.mark.asyncio
 async def test_process_question_no_api_key():
-    """Returns error message when no API key configured."""
+    """Returns error message when no API keys configured."""
     service = MobyService()
-    with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "")):
+    with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: False)):
         result = await service.process_question("test")
     assert "Cle API" in result["answer"]
     assert result["sql"] is None
@@ -119,7 +119,7 @@ async def test_process_question_sql_never_exposed():
             mock_exec.return_value = ([{"name": "Carrefour"}], 1)
             with patch.object(service, "synthesize_answer", new_callable=AsyncMock) as mock_synth:
                 mock_synth.return_value = "**Carrefour** est le leader."
-                with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "test-key")):
+                with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: True)):
                     result = await service.process_question("Qui est le leader ?")
 
     assert result["sql"] is None  # SQL must NEVER be exposed
@@ -134,9 +134,9 @@ async def test_process_question_no_sql_needed():
 
     with patch.object(service, "generate_sql", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = None  # No SQL needed
-        with patch.object(service, "_call_claude", new_callable=AsyncMock) as mock_call:
+        with patch.object(service, "_call_llm", new_callable=AsyncMock) as mock_call:
             mock_call.return_value = "Bonjour ! Je suis Moby, votre assistant."
-            with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "test-key")):
+            with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: True)):
                 result = await service.process_question("Bonjour")
 
     assert "Moby" in result["answer"]
@@ -150,7 +150,7 @@ async def test_process_question_unsafe_sql():
 
     with patch.object(service, "generate_sql", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = "SELECT * FROM users"  # Blocked table
-        with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "test-key")):
+        with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: True)):
             result = await service.process_question("Show me users")
 
     assert result["sql"] is None  # Don't expose the SQL
@@ -166,7 +166,7 @@ async def test_process_question_empty_results():
         mock_gen.return_value = "SELECT name FROM competitors WHERE name = 'Inexistant'"
         with patch.object(service, "execute_sql") as mock_exec:
             mock_exec.return_value = ([], 0)
-            with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "test-key")):
+            with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: True)):
                 result = await service.process_question("Trouve Inexistant")
 
     assert "Aucune donnee" in result["answer"]
@@ -183,7 +183,7 @@ async def test_synthesize_answer_called_with_data():
         with patch.object(service, "execute_sql", return_value=(rows, 2)):
             with patch.object(service, "synthesize_answer", new_callable=AsyncMock) as mock_synth:
                 mock_synth.return_value = "Carrefour domine avec 500K followers."
-                with patch.object(type(service), "api_key", new_callable=lambda: property(lambda self: "test-key")):
+                with patch.object(type(service), "has_keys", new_callable=lambda: property(lambda self: True)):
                     result = await service.process_question("Compare Instagram")
 
     mock_synth.assert_called_once_with("Compare Instagram", rows, 2)

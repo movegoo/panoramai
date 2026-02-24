@@ -1,8 +1,9 @@
 """
 Moby AI Assistant Service.
-Translates natural language questions into SQL queries using Claude Haiku,
+Translates natural language questions into SQL queries using Gemini + Mistral,
 executes them safely, and returns business-friendly answers.
 """
+import asyncio
 import json
 import logging
 import os
@@ -15,8 +16,8 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
-CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"
 
 # Tables that Moby is NOT allowed to query
 BLOCKED_TABLES = {"users", "system_settings", "prompt_templates", "user_advertisers"}
@@ -69,25 +70,19 @@ REGLES :
 
 
 class MobyService:
-    """Service for Moby AI assistant."""
+    """Service for Moby AI assistant — powered by Gemini + Mistral."""
 
     @property
-    def api_key(self) -> str:
-        key = (
-            os.getenv("ANTHROPIC_API_KEY", "")
-            or os.getenv("CLAUDE_KEY", "")
-            or getattr(settings, "ANTHROPIC_API_KEY", "")
-        )
-        if key:
-            return key
-        try:
-            from database import SessionLocal, SystemSetting
-            db = SessionLocal()
-            row = db.query(SystemSetting).filter(SystemSetting.key == "anthropic_api_key").first()
-            db.close()
-            return row.value if row else ""
-        except Exception:
-            return ""
+    def gemini_key(self) -> str:
+        return os.getenv("GEMINI_API_KEY", "") or settings.GEMINI_API_KEY
+
+    @property
+    def mistral_key(self) -> str:
+        return os.getenv("MISTRAL_API_KEY", "") or settings.MISTRAL_API_KEY
+
+    @property
+    def has_keys(self) -> bool:
+        return bool(self.gemini_key or self.mistral_key)
 
     def sanitize_sql(self, sql: str) -> tuple[bool, str]:
         """Validate SQL query. Returns (is_safe, error_message)."""
@@ -119,37 +114,113 @@ class MobyService:
             sql += f" LIMIT {max_limit}"
         return sql
 
-    async def _call_claude(
+    async def _call_gemini(
         self,
         system: str,
         messages: list[dict],
         max_tokens: int = 1024,
     ) -> str:
-        """Low-level Claude API call. Returns raw text content."""
-        headers = {
-            "x-api-key": self.api_key,
-            "content-type": "application/json",
-            "anthropic-version": "2023-06-01",
-        }
+        """Gemini API call. Returns raw text content."""
+        if not self.gemini_key:
+            return ""
+        # Build prompt: system + messages
+        parts = [{"text": f"[Instructions système]\n{system}"}]
+        for msg in messages:
+            role_label = "Utilisateur" if msg["role"] == "user" else "Assistant"
+            parts.append({"text": f"[{role_label}]\n{msg['content']}"})
+
+        url = GEMINI_API_URL.format(model="gemini-2.0-flash") + f"?key={self.gemini_key}"
         payload = {
-            "model": CLAUDE_MODEL,
-            "max_tokens": max_tokens,
-            "system": system,
-            "messages": messages,
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": 0.2,
+            },
         }
 
         async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(CLAUDE_API_URL, headers=headers, json=payload)
+            response = await client.post(url, json=payload)
             response.raise_for_status()
-            data = response.json()
-            return data.get("content", [{}])[0].get("text", "")
+            body = response.json()
+            candidates = body.get("candidates", [])
+            if not candidates:
+                return ""
+            return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+
+    async def _call_mistral(
+        self,
+        system: str,
+        messages: list[dict],
+        max_tokens: int = 1024,
+    ) -> str:
+        """Mistral API call. Returns raw text content."""
+        if not self.mistral_key:
+            return ""
+        api_messages = [{"role": "system", "content": system}]
+        api_messages.extend(messages)
+
+        headers = {
+            "Authorization": f"Bearer {self.mistral_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "mistral-small-latest",
+            "messages": api_messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.2,
+        }
+
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(MISTRAL_API_URL, headers=headers, json=payload)
+            response.raise_for_status()
+            body = response.json()
+            return body.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+    async def _call_llm(
+        self,
+        system: str,
+        messages: list[dict],
+        max_tokens: int = 1024,
+    ) -> str:
+        """Call Gemini (primary) with Mistral fallback."""
+        # Try Gemini first
+        if self.gemini_key:
+            try:
+                result = await self._call_gemini(system, messages, max_tokens)
+                if result:
+                    return result
+            except Exception as e:
+                logger.warning(f"Moby Gemini error, trying Mistral: {e}")
+
+        # Fallback to Mistral
+        if self.mistral_key:
+            try:
+                result = await self._call_mistral(system, messages, max_tokens)
+                if result:
+                    return result
+            except Exception as e:
+                logger.error(f"Moby Mistral error: {e}")
+
+        return ""
 
     async def generate_sql(
         self,
         question: str,
         history: list[dict] | None = None,
     ) -> str | None:
-        """Step 1: Ask Claude to generate SQL from the question."""
+        """Step 1: Generate SQL from the question."""
+        # Load prompt from DB if available
+        db_prompt = SQL_SYSTEM_PROMPT
+        try:
+            from database import SessionLocal, PromptTemplate
+            _db = SessionLocal()
+            row = _db.query(PromptTemplate).filter(PromptTemplate.key == "moby_sql").first()
+            if row:
+                db_prompt = row.prompt_text
+            _db.close()
+        except Exception:
+            pass
+
         messages = []
         if history:
             for msg in history[-6:]:
@@ -157,7 +228,7 @@ class MobyService:
         messages.append({"role": "user", "content": question})
 
         try:
-            content = await self._call_claude(SQL_SYSTEM_PROMPT, messages, max_tokens=512)
+            content = await self._call_llm(db_prompt, messages, max_tokens=512)
             if not content:
                 return None
             json_match = re.search(r"\{.*\}", content, re.DOTALL)
@@ -175,7 +246,19 @@ class MobyService:
         rows: list[dict],
         row_count: int,
     ) -> str:
-        """Step 2: Ask Claude to synthesize a business answer from the data."""
+        """Step 2: Synthesize a business answer from the data."""
+        # Load prompt from DB if available
+        db_prompt = ANSWER_SYSTEM_PROMPT
+        try:
+            from database import SessionLocal, PromptTemplate
+            _db = SessionLocal()
+            row = _db.query(PromptTemplate).filter(PromptTemplate.key == "moby_answer").first()
+            if row:
+                db_prompt = row.prompt_text
+            _db.close()
+        except Exception:
+            pass
+
         # Truncate data for the prompt (max ~3000 chars)
         data_str = json.dumps(rows[:30], ensure_ascii=False, default=str)
         if len(data_str) > 3000:
@@ -189,8 +272,8 @@ Donnees ({row_count} resultats) :
 Reponds a la question de l'utilisateur en analysant ces donnees. Sois strategique et actionnable."""
 
         try:
-            content = await self._call_claude(
-                ANSWER_SYSTEM_PROMPT,
+            content = await self._call_llm(
+                db_prompt,
                 [{"role": "user", "content": user_prompt}],
                 max_tokens=1024,
             )
@@ -221,9 +304,9 @@ Reponds a la question de l'utilisateur en analysant ces donnees. Sois strategiqu
         history: list[dict] | None = None,
     ) -> dict:
         """Full pipeline: question -> SQL -> execute -> synthesize answer."""
-        if not self.api_key:
+        if not self.has_keys:
             return {
-                "answer": "Cle API Anthropic non configuree. Contactez l'administrateur.",
+                "answer": "Cle API non configuree (Gemini/Mistral). Contactez l'administrateur.",
                 "sql": None,
                 "row_count": 0,
                 "error": None,
@@ -235,7 +318,7 @@ Reponds a la question de l'utilisateur en analysant ces donnees. Sois strategiqu
         # No SQL = direct conversational answer
         if not sql:
             try:
-                content = await self._call_claude(
+                content = await self._call_llm(
                     ANSWER_SYSTEM_PROMPT,
                     [{"role": "user", "content": question}],
                     max_tokens=512,

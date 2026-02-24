@@ -557,8 +557,8 @@ class GeoAnalyzer:
             return ""
 
     async def _analyze_response(self, query: str, answer: str, brand_names: list[str]) -> dict | None:
-        """Use Claude Haiku to extract structured brand mentions from a raw AI answer."""
-        if not answer or not settings.ANTHROPIC_API_KEY:
+        """Use Gemini Flash to extract structured brand mentions from a raw AI answer."""
+        if not answer or not settings.GEMINI_API_KEY:
             return None
         prompt = ANALYSIS_PROMPT.format(
             query=query,
@@ -566,32 +566,34 @@ class GeoAnalyzer:
             answer=answer,
         )
         try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": settings.ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
+                    url,
                     json={
-                        "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": 1000,
-                        "messages": [{"role": "user", "content": prompt}],
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "maxOutputTokens": 1000,
+                            "temperature": 0.1,
+                            "responseMimeType": "application/json",
+                        },
                     },
                 )
                 resp.raise_for_status()
                 resp_data = resp.json()
-                text = resp_data["content"][0]["text"]
+                candidates = resp_data.get("candidates", [])
+                if not candidates:
+                    return None
+                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
                 from core.langfuse_client import trace_generation
-                usage = resp_data.get("usage", {})
+                usage = resp_data.get("usageMetadata", {})
                 trace_generation(
                     name="geo_analyzer.analyze_response",
-                    model="claude-haiku-4-5-20251001",
+                    model="gemini-2.0-flash",
                     input=prompt,
                     output=text,
-                    usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+                    usage={"input_tokens": usage.get("promptTokenCount"), "output_tokens": usage.get("candidatesTokenCount")},
                 )
 
                 # Strip possible markdown code fences

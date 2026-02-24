@@ -259,49 +259,57 @@ def _seed_prompt_templates():
     """Seed default AI prompt templates if not already in DB (by key)."""
     from services.creative_analyzer import ANALYSIS_PROMPT as CREATIVE_PROMPT
     from services.social_content_analyzer import ANALYSIS_PROMPT as SOCIAL_PROMPT
-    from services.moby_ai import ANSWER_SYSTEM_PROMPT as MOBY_PROMPT
+    from services.moby_ai import SQL_SYSTEM_PROMPT as MOBY_SQL_PROMPT
+    from services.moby_ai import ANSWER_SYSTEM_PROMPT as MOBY_ANSWER_PROMPT
 
     defaults = [
         {
             "key": "creative_analysis",
             "label": "Analyse creative publicitaire",
             "prompt_text": CREATIVE_PROMPT,
-            "model_id": "claude-sonnet-4-5-20250929",
+            "model_id": "gemini-2.5-flash",
             "max_tokens": 1024,
         },
         {
             "key": "social_content",
             "label": "Analyse contenu social media",
             "prompt_text": SOCIAL_PROMPT,
-            "model_id": "claude-haiku-4-5-20251001",
-            "max_tokens": 512,
+            "model_id": "gemini-2.5-flash",
+            "max_tokens": 1024,
         },
         {
             "key": "aso_analysis",
             "label": "Diagnostic ASO (App Store Optimization)",
             "prompt_text": ASO_ANALYSIS_PROMPT,
-            "model_id": "claude-haiku-4-5-20251001",
+            "model_id": "gemini-2.0-flash",
             "max_tokens": 1024,
         },
         {
             "key": "seo_analysis",
             "label": "Diagnostic SEO (positionnement Google)",
             "prompt_text": SEO_ANALYSIS_PROMPT,
-            "model_id": "claude-haiku-4-5-20251001",
+            "model_id": "gemini-2.0-flash",
             "max_tokens": 1024,
         },
         {
             "key": "geo_analysis",
             "label": "Diagnostic GEO (visibilite IA)",
             "prompt_text": GEO_ANALYSIS_PROMPT,
-            "model_id": "claude-haiku-4-5-20251001",
+            "model_id": "gemini-2.0-flash",
             "max_tokens": 1024,
         },
         {
-            "key": "moby_assistant",
-            "label": "Moby - Assistant IA conversationnel",
-            "prompt_text": MOBY_PROMPT,
-            "model_id": "claude-haiku-4-5-20251001",
+            "key": "moby_sql",
+            "label": "Moby - Generation SQL",
+            "prompt_text": MOBY_SQL_PROMPT,
+            "model_id": "gemini-2.0-flash",
+            "max_tokens": 512,
+        },
+        {
+            "key": "moby_answer",
+            "label": "Moby - Synthese business",
+            "prompt_text": MOBY_ANSWER_PROMPT,
+            "model_id": "gemini-2.0-flash",
             "max_tokens": 1024,
         },
     ]
