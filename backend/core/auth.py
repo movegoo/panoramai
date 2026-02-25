@@ -57,13 +57,16 @@ def _validate_mobsuccess_token(token: str, db: Session) -> User:
             headers={"Authorization": f"Bearer {token}"},
             timeout=10.0,
         )
+        logger.info(f"Lambda Authorizer response: status={response.status_code}")
         response.raise_for_status()
         data = response.json()
-    except Exception:
-        logger.debug("Mobsuccess Lambda call failed", exc_info=True)
+        logger.info(f"Lambda Authorizer data: isAuthorized={data.get('isAuthorized')}, context keys={list(data.get('context', {}).keys())}")
+    except Exception as e:
+        logger.warning(f"Mobsuccess Lambda call failed: {e}", exc_info=True)
         raise HTTPException(status_code=401, detail="Authentification requise")
 
     if not data.get("isAuthorized"):
+        logger.warning(f"Lambda returned isAuthorized=False: {data}")
         raise HTTPException(status_code=401, detail="Authentification requise")
 
     ctx = data.get("context", {})
@@ -121,13 +124,16 @@ def get_current_user(
         user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
         if user:
             return user
+        logger.debug(f"JWT valid but user {user_id} not found")
     except Exception:
         pass
 
     # Try 2: Mobsuccess Lambda
     if settings.MS_AUTH_ENABLED and settings.MS_LAMBDA_AUTHORIZER_URL:
+        logger.info(f"Trying Mobsuccess Lambda auth (token starts with {token[:20]}...)")
         return _validate_mobsuccess_token(token, db)
 
+    logger.warning(f"Auth failed: MS_AUTH_ENABLED={settings.MS_AUTH_ENABLED}, MS_LAMBDA_URL={'set' if settings.MS_LAMBDA_AUTHORIZER_URL else 'empty'}")
     raise HTTPException(status_code=401, detail="Authentification requise")
 
 
