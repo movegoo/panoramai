@@ -394,6 +394,14 @@ export async function exchangeMobsuccessAuth(userId: string, authId: string): Pr
     throw new Error(`Erreur d'authentification Mobsuccess (${res.status})`);
   }
   const data = await res.json();
+  // Log all token fields for debug
+  console.log("[SSO] getauthid-auth response keys:", Object.keys(data));
+  console.log("[SSO] cognito_id_token:", data.cognito_id_token?.substring(0, 30) || "MISSING");
+  console.log("[SSO] cognito_authorization:", data.cognito_authorization?.substring(0, 30) || "MISSING");
+  console.log("[SSO] cognito_access_token:", data.cognito_access_token?.substring(0, 30) || "MISSING");
+
+  // Send all tokens to backend for Lambda debug (backend will try each one)
+  // Primary: cognito_id_token (standard per vibely-stack fetch.ts)
   const token = data?.cognito_id_token;
   if (!token) {
     throw new Error("Token Cognito manquant dans la réponse Mobsuccess");
