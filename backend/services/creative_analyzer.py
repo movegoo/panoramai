@@ -78,7 +78,7 @@ Texte de la pub : "{ad_text}"
 
 JSON attendu :
 {{
-  "concept": "<UNE valeur parmi : promo, témoignage, comparatif, storytelling, search-ad, display-text, retargeting, branding, vidéo-ad, app-promotion, shopping, remarketing, lead-gen>",
+  "concept": "<UNE valeur parmi : photo-produit, mise-en-scène, ugc, promo, témoignage, avant-après, tutoriel, saisonnier, événement, comparatif, storytelling, influenceur, recette, catalogue, jeu-concours, engagement-RSE, vidéo-teaser, démonstration, avis-client, branding>",
   "hook": "<1 phrase : ce qui capte l'attention en premier>",
   "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique, provocation, nostalgie, exclusivité>",
   "text_overlay": "<le texte intégral de la pub, verbatim>",
