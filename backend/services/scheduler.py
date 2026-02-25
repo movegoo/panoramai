@@ -608,8 +608,11 @@ class DataCollectionScheduler:
 
                     try:
                         platform = "tiktok" if ad.platform == "tiktok" else "google" if ad.platform == "google" else "meta"
-                        has_image = ad.creative_url and not any(
-                            p in (ad.creative_url or "") for p in SKIP_URL_PATTERNS
+                        url = ad.creative_url or ""
+                        # Facebook snapshot URLs are not real images — treat as text-only
+                        is_snapshot = "facebook.com/ads/archive/render_ad" in url
+                        has_image = url and not is_snapshot and not any(
+                            p in url for p in SKIP_URL_PATTERNS
                         )
                         has_text = ad.ad_text and len(ad.ad_text.strip()) >= 10
                         if not has_image and has_text:
