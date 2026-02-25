@@ -606,7 +606,7 @@ async def data_depth():
             SELECT 'instagram_data' as tbl, count(*) as rows, min(recorded_at)::date::text as oldest, max(recorded_at)::date::text as newest FROM instagram_data
             UNION ALL SELECT 'tiktok_data', count(*), min(recorded_at)::date::text, max(recorded_at)::date::text FROM tiktok_data
             UNION ALL SELECT 'youtube_data', count(*), min(recorded_at)::date::text, max(recorded_at)::date::text FROM youtube_data
-            UNION ALL SELECT 'ads', count(*), min(first_seen)::date::text, max(first_seen)::date::text FROM ads
+            UNION ALL SELECT 'ads', count(*), min(created_at)::date::text, max(created_at)::date::text FROM ads
             UNION ALL SELECT 'store_locations', count(*), null, null FROM store_locations
             ORDER BY 1
         """)).fetchall()
