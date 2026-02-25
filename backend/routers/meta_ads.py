@@ -82,6 +82,113 @@ class FetchPagesRequest(BaseModel):
     country: str = "FR"
 
 
+class BulkImportRequest(BaseModel):
+    competitor_name: str
+    ads: list[dict]
+
+
+@router.post("/import-bulk")
+async def import_bulk_ads(
+    req: BulkImportRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Import pre-fetched Meta ads directly into DB (no API call).
+    Used for bulk imports of child page ads.
+    """
+    competitor = db.query(Competitor).filter(
+        Competitor.name.ilike(f"%{req.competitor_name}%"),
+        Competitor.is_active == True,
+    ).first()
+
+    if not competitor:
+        raise HTTPException(status_code=404, detail=f"Competitor '{req.competitor_name}' not found")
+
+    new_count = 0
+    updated_count = 0
+
+    for ad in req.ads:
+        ad_id = str(ad.get("id", ""))
+        if not ad_id:
+            continue
+
+        existing = db.query(Ad).filter(Ad.ad_id == ad_id).first()
+
+        platforms = ad.get("publisher_platforms", [])
+        if not isinstance(platforms, list):
+            platforms = [platforms] if platforms else []
+        platforms_upper = [p.upper() for p in platforms]
+
+        platform = "facebook"
+        for p in platforms_upper:
+            if "INSTAGRAM" in p.upper():
+                platform = "instagram"
+                break
+
+        bodies = ad.get("ad_creative_bodies", [])
+        ad_text = bodies[0] if bodies else ""
+        titles = ad.get("ad_creative_link_titles", [])
+        title_val = titles[0] if titles else ""
+
+        start_date = None
+        if ad.get("ad_delivery_start_time"):
+            try:
+                start_date = datetime.fromisoformat(ad["ad_delivery_start_time"])
+            except (ValueError, TypeError):
+                pass
+
+        page_id = ad.get("page_id", "")
+        page_name = ad.get("page_name", "")
+        reach = ad.get("eu_total_reach")
+        target_locs = ad.get("target_locations", [])
+        targeted_countries = list({loc.get("country") for loc in target_locs if loc.get("country")}) if target_locs else ["FR"]
+
+        fields = dict(
+            competitor_id=competitor.id,
+            platform=platform,
+            ad_text=ad_text[:5000] if ad_text else None,
+            title=title_val or None,
+            start_date=start_date,
+            is_active=True,
+            publisher_platforms=json.dumps(platforms_upper) if platforms_upper else None,
+            page_id=page_id,
+            page_name=page_name,
+            targeted_countries=json.dumps(targeted_countries),
+            ad_library_url=ad.get("ad_snapshot_url"),
+            creative_url=ad.get("ad_snapshot_url"),
+        )
+
+        if existing:
+            for k, v in fields.items():
+                if v is not None:
+                    setattr(existing, k, v)
+            updated_count += 1
+        else:
+            new_ad = Ad(ad_id=ad_id, **fields)
+            db.add(new_ad)
+            new_count += 1
+
+    db.commit()
+
+    # Store child page IDs on competitor
+    child_pids = list({ad.get("page_id") for ad in req.ads if ad.get("page_id")})
+    if child_pids and competitor.child_page_ids:
+        existing_pids = json.loads(competitor.child_page_ids) if competitor.child_page_ids else []
+        all_pids = list(set(existing_pids + child_pids))
+        competitor.child_page_ids = json.dumps(all_pids)
+    elif child_pids:
+        competitor.child_page_ids = json.dumps(child_pids)
+    db.commit()
+
+    return {
+        "competitor": competitor.name,
+        "competitor_id": competitor.id,
+        "new": new_count,
+        "updated": updated_count,
+        "child_pages_stored": len(child_pids),
+    }
+
+
 @router.post("/fetch-and-store")
 async def fetch_and_store_ads(
     req: FetchPagesRequest,
