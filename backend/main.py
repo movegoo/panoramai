@@ -595,6 +595,27 @@ async def health_check():
     return result
 
 
+@app.get("/api/health/data-depth")
+async def data_depth():
+    """Data depth diagnostic — no auth required."""
+    from sqlalchemy import text
+    from database import InstagramData, TikTokData, YouTubeData, Ad, StoreLocation
+    try:
+        db = SessionLocal()
+        rows = db.execute(text("""
+            SELECT 'instagram_data' as tbl, count(*) as rows, min(recorded_at)::date::text as oldest, max(recorded_at)::date::text as newest FROM instagram_data
+            UNION ALL SELECT 'tiktok_data', count(*), min(recorded_at)::date::text, max(recorded_at)::date::text FROM tiktok_data
+            UNION ALL SELECT 'youtube_data', count(*), min(recorded_at)::date::text, max(recorded_at)::date::text FROM youtube_data
+            UNION ALL SELECT 'ads', count(*), min(first_seen)::date::text, max(first_seen)::date::text FROM ads
+            UNION ALL SELECT 'store_locations', count(*), null, null FROM store_locations
+            ORDER BY 1
+        """)).fetchall()
+        db.close()
+        return {r[0]: {"rows": r[1], "oldest": r[2], "newest": r[3]} for r in rows}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/scheduler/status")
 async def get_scheduler_status():
     """Statut du scheduler de collecte automatique."""
