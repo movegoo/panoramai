@@ -86,6 +86,7 @@ class FetchPagesRequest(BaseModel):
 async def fetch_and_store_ads(
     req: FetchPagesRequest,
     db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
 ):
     """
     Fetch active ads from Meta API for given pages and store them in DB.
