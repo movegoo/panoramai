@@ -147,6 +147,16 @@ class Ad(Base):
     price_value = Column(String(20))
     seasonal_event = Column(String(50))    # noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun
 
+    # Extended creative intelligence (v2 — exhaustive analysis)
+    brand_visible = Column(String(200))         # Marque/enseigne visible sur la pub
+    target_audience = Column(String(200))       # Public cible probable
+    emotional_trigger = Column(String(100))     # Levier émotionnel principal
+    competitive_angle = Column(Text)            # Positionnement vs concurrence
+    media_type_detected = Column(String(50))    # image, vidéo-preview, carrousel, gif, texte-seul
+    copy_quality = Column(Integer)              # Note 1-10 qualité du texte
+    visual_quality = Column(Integer)            # Note 1-10 qualité visuelle
+    brand_consistency = Column(Integer)         # Note 1-10 cohérence marque
+
     competitor = relationship("Competitor", back_populates="ads")
 
 

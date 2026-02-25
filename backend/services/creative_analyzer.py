@@ -19,77 +19,104 @@ logger = logging.getLogger(__name__)
 
 # ── Shared prompt (works for both vision and text models) ────────────
 
-ANALYSIS_PROMPT = """Tu es un expert en analyse créative publicitaire et en grande distribution/retail en France.
-Analyse ce visuel publicitaire et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire, pas de ```).
-TOUTES les valeurs doivent être en FRANÇAIS.
+ANALYSIS_PROMPT = """Tu es un expert senior en analyse créative publicitaire, spécialisé en retail/grande distribution en France.
+Analyse ce visuel publicitaire EN PROFONDEUR et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de ```, pas de commentaire).
+TOUTES les valeurs doivent être en FRANÇAIS. Sois EXHAUSTIF et PRÉCIS.
 
 Contexte : plateforme={platform}, texte de la pub="{ad_text}"
 
 JSON attendu :
 {{
-  "concept": "<UNE valeur parmi : photo-produit, mise-en-scène, ugc, promo, témoignage, avant-après, tutoriel, saisonnier, événement, comparatif, storytelling, influenceur, recette, catalogue, jeu-concours, engagement-RSE>",
+  "concept": "<UNE valeur parmi : photo-produit, mise-en-scène, ugc, promo, témoignage, avant-après, tutoriel, saisonnier, événement, comparatif, storytelling, influenceur, recette, catalogue, jeu-concours, engagement-RSE, vidéo-teaser, démonstration, unboxing, avis-client>",
   "hook": "<1 phrase en français : ce qui capte l'attention en premier>",
-  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique>",
-  "text_overlay": "<tout le texte visible sur le visuel, verbatim, séparé par des |>",
+  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique, provocation, nostalgie, exclusivité>",
+  "text_overlay": "<TOUT le texte visible sur le visuel, verbatim, séparé par des |>",
   "dominant_colors": ["#HEX1", "#HEX2", "#HEX3"],
   "has_product": true ou false,
   "has_face": true ou false,
   "has_logo": true ou false,
   "has_price": true ou false,
-  "layout": "<UNE valeur parmi : image-unique, split, collage, plein-écran, texte-dominant, minimaliste, avant-après, grille-produits, hero, carrousel, vidéo-cover>",
-  "cta_style": "<UNE valeur parmi : bouton, texte, flèche, badge, aucun>",
+  "layout": "<UNE valeur parmi : image-unique, split, collage, plein-écran, texte-dominant, minimaliste, avant-après, grille-produits, hero, carrousel, vidéo-cover, story-format>",
+  "cta_style": "<UNE valeur parmi : bouton, texte, flèche, badge, swipe-up, lien, aucun>",
   "score": <entier 0-100>,
   "tags": ["mot-clé1", "mot-clé2", "mot-clé3", "mot-clé4", "mot-clé5"],
-  "summary": "<1-2 phrases en français décrivant l'approche créative et son efficacité probable>",
-  "product_category": "<UNE valeur parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, Boucherie & Volaille, Poissonnerie, Boulangerie, DPH, Beauté & Parfumerie, Hygiène, Entretien, Textile & Mode, Électroménager, Multimédia & High-Tech, Jouets & Loisirs, Sport, Bricolage & Jardin, Ameublement & Déco, Auto & Mobilité, Animalerie, Bio & Écologie, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Autre>",
-  "product_subcategory": "<sous-catégorie plus précise, en français, ex: Yaourts, Café, Bières, Lessive, Smartphones, Literie, Drive, Carte fidélité...>",
-  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>",
-  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, aucune>",
-  "creative_format": "<UNE valeur parmi : catalogue, produit-unique, multi-produits, ambiance, événement, recrutement>",
+  "summary": "<2-3 phrases en français : description détaillée de l'approche créative, forces, faiblesses, et efficacité probable>",
+  "product_category": "<UNE valeur parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, Boucherie & Volaille, Poissonnerie, Boulangerie, DPH, Beauté & Parfumerie, Hygiène, Entretien, Textile & Mode, Électroménager, Multimédia & High-Tech, Jouets & Loisirs, Sport, Bricolage & Jardin, Ameublement & Déco, Auto & Mobilité, Animalerie, Bio & Écologie, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Voyages & Tourisme, Banque & Assurance, Télécom, Restauration, Pharmacie & Santé, Optique, Luxe, Autre>",
+  "product_subcategory": "<sous-catégorie PRÉCISE, en français, ex: Yaourts bio, Café capsules, Bières artisanales, Lessive liquide, iPhone 16, Matelas mémoire de forme, Drive express, Carte fidélité premium...>",
+  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store, app-install, engagement, lead-generation>",
+  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, vente-flash, cashback, essai-gratuit, aucune>",
+  "creative_format": "<UNE valeur parmi : catalogue, produit-unique, multi-produits, ambiance, événement, recrutement, vidéo, carrousel, story, avant-après, infographie>",
   "price_visible": true ou false,
-  "price_value": "<le prix si visible, ex: 2,99€, sinon vide>",
-  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun>"
+  "price_value": "<le prix EXACT si visible, ex: 2,99€, sinon vide>",
+  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, fête-des-mères, fête-des-pères, halloween, nouvel-an, printemps, aucun>",
+  "brand_visible": "<nom de la marque/enseigne visible sur la pub, ou vide>",
+  "target_audience": "<public cible probable, ex: Familles avec enfants, Jeunes actifs 25-35, Seniors, Sportifs, Femmes 30-50...>",
+  "emotional_trigger": "<le levier émotionnel principal utilisé, ex: peur de manquer, sentiment d'appartenance, fierté, envie, curiosité, nostalgie, surprise>",
+  "competitive_angle": "<si la pub se positionne vs la concurrence, décrire comment, sinon vide>",
+  "media_type": "<image, vidéo-preview, carrousel, gif, texte-seul>",
+  "copy_quality": "<note 1-10 sur la qualité du texte publicitaire (accroche, clarté, persuasion)>",
+  "visual_quality": "<note 1-10 sur la qualité visuelle (composition, lumière, professionnalisme)>",
+  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque de l'enseigne>"
 }}
 
-Critères de score :
-- Impact visuel (30%) : contraste, composition, accroche
-- Clarté du message (25%) : compréhension immédiate de l'offre
-- Exécution professionnelle (25%) : qualité graphique, cohérence
-- Persuasion (20%) : incitation à l'action, urgence, désirabilité
+Critères de score global (0-100) :
+- Impact visuel (25%) : contraste, composition, accroche immédiate
+- Clarté du message (25%) : compréhension de l'offre en moins de 3 secondes
+- Exécution professionnelle (25%) : qualité graphique, cohérence marque, finition
+- Persuasion (25%) : incitation à l'action, urgence, désirabilité, différenciation
 
-IMPORTANT : Si la pub concerne plusieurs rayons (ex: catalogue général), utilise "Multi-rayons" comme product_category."""
+IMPORTANT :
+- Si la pub concerne plusieurs rayons (ex: catalogue général), utilise "Multi-rayons".
+- Si c'est une vidéo (preview/thumbnail), analyse le frame visible et indique "vidéo-preview" en media_type.
+- Sois GÉNÉREUX dans le summary : donne le maximum de contexte utile pour un analyste concurrentiel."""
 
-TEXT_ANALYSIS_PROMPT = """Tu es un expert en analyse publicitaire digitale en France.
-Analyse ce TEXTE publicitaire (pas d'image, pub textuelle {platform}) et retourne UNIQUEMENT un JSON valide.
-TOUTES les valeurs doivent être en FRANÇAIS.
+TEXT_ANALYSIS_PROMPT = """Tu es un expert senior en analyse publicitaire digitale en France, spécialisé en Google Ads (Search, Display, YouTube) et publicité textuelle.
+Analyse ce TEXTE publicitaire ({platform}) EN PROFONDEUR et retourne UNIQUEMENT un JSON valide.
+TOUTES les valeurs doivent être en FRANÇAIS. Sois EXHAUSTIF.
 
 Texte de la pub : "{ad_text}"
 
 JSON attendu :
 {{
-  "concept": "<UNE valeur parmi : promo, témoignage, comparatif, storytelling, search-ad, display-text, retargeting, branding>",
-  "hook": "<1 phrase : ce qui capte l'attention>",
-  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique>",
-  "text_overlay": "<le texte de la pub, verbatim>",
+  "concept": "<UNE valeur parmi : promo, témoignage, comparatif, storytelling, search-ad, display-text, retargeting, branding, vidéo-ad, app-promotion, shopping, remarketing, lead-gen>",
+  "hook": "<1 phrase : ce qui capte l'attention en premier>",
+  "tone": "<UNE valeur parmi : urgence, aspiration, humour, confiance, fomo, communauté, premium, bon-plan, pédagogique, émotion, ludique, audacieux, minimaliste, festif, familial, écologique, provocation, nostalgie, exclusivité>",
+  "text_overlay": "<le texte intégral de la pub, verbatim>",
   "dominant_colors": [],
   "has_product": false,
   "has_face": false,
   "has_logo": false,
   "has_price": true ou false,
   "layout": "texte-dominant",
-  "cta_style": "<UNE valeur parmi : bouton, texte, aucun>",
+  "cta_style": "<UNE valeur parmi : bouton, texte, lien, swipe-up, aucun>",
   "score": <entier 0-100>,
-  "tags": ["mot-clé1", "mot-clé2", "mot-clé3"],
-  "summary": "<1-2 phrases décrivant l'approche et son efficacité>",
-  "product_category": "<catégorie parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, DPH, Beauté & Parfumerie, Textile & Mode, Électroménager, Multimédia & High-Tech, Sport, Bricolage & Jardin, Ameublement & Déco, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Autre>",
-  "product_subcategory": "<sous-catégorie précise>",
-  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store>",
-  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, aucune>",
+  "tags": ["mot-clé1", "mot-clé2", "mot-clé3", "mot-clé4", "mot-clé5"],
+  "summary": "<2-3 phrases : analyse détaillée de la stratégie textuelle, forces, faiblesses, et efficacité probable pour le public cible>",
+  "product_category": "<catégorie parmi : Épicerie, Boissons, Frais, Surgelés, Fruits & Légumes, DPH, Beauté & Parfumerie, Textile & Mode, Électroménager, Multimédia & High-Tech, Sport, Bricolage & Jardin, Ameublement & Déco, Services, Fidélité & Programme, Marque Employeur, Corporate & RSE, Multi-rayons, Voyages & Tourisme, Banque & Assurance, Télécom, Restauration, Pharmacie & Santé, Optique, Luxe, Autre>",
+  "product_subcategory": "<sous-catégorie PRÉCISE, ex: Forfait mobile 5G, Crédit immobilier, Cuisine équipée, Pneus été...>",
+  "ad_objective": "<UNE valeur parmi : notoriété, trafic, conversion, fidélisation, recrutement, RSE, lancement-produit, promotion, saisonnier, drive-to-store, app-install, engagement, lead-generation>",
+  "promo_type": "<UNE valeur parmi : prix-barré, pourcentage, lot, offre-spéciale, carte-fidélité, code-promo, gratuit, vente-flash, cashback, essai-gratuit, aucune>",
   "creative_format": "texte",
   "price_visible": true ou false,
-  "price_value": "<prix si visible, sinon vide>",
-  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, aucun>"
-}}"""
+  "price_value": "<prix EXACT si visible, sinon vide>",
+  "seasonal_event": "<UNE valeur parmi : noël, rentrée, été, soldes, black-friday, saint-valentin, pâques, fête-des-mères, fête-des-pères, halloween, nouvel-an, printemps, aucun>",
+  "brand_visible": "<nom de la marque/enseigne mentionnée dans le texte, ou vide>",
+  "target_audience": "<public cible probable déduit du texte, ex: Propriétaires, Étudiants, Parents, Professionnels...>",
+  "emotional_trigger": "<levier émotionnel principal, ex: économie, peur de manquer, curiosité, fierté, confort, sécurité>",
+  "competitive_angle": "<si le texte se positionne vs la concurrence, décrire comment, sinon vide>",
+  "media_type": "texte-seul",
+  "copy_quality": "<note 1-10 sur la qualité rédactionnelle (accroche, clarté, persuasion, CTA)>",
+  "visual_quality": 0,
+  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque>"
+}}
+
+Critères de score (0-100) :
+- Accroche (30%) : le titre/hook capte-t-il l'attention immédiatement ?
+- Clarté (25%) : l'offre est-elle compréhensible en 3 secondes ?
+- Persuasion (25%) : le texte donne-t-il envie d'agir ?
+- Professionnalisme (20%) : orthographe, structure, cohérence
+
+IMPORTANT : Analyse aussi les extensions (sitelinks, callouts) si présentes dans le texte."""""
 
 # ── API endpoints ────────────────────────────────────────────────────
 

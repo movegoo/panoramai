@@ -96,19 +96,14 @@ async def analyze_all_creatives(
     if user:
         query = query.filter(Competitor.id.in_(comp_ids))
 
-    # Skip VIDEO format and non-image URLs (Google Ads syndication, etc.)
+    # Skip non-image URLs (Google Ads syndication only) — videos are now analyzed too
     SKIP_URL_PATTERNS = ["googlesyndication.com", "2mdn.net", "doubleclick.net"]
     ads_to_analyze = []
     candidates = query.limit(limit * 3).all()
     for ad in candidates:
-        fmt = (ad.display_format or "").upper()
         url = ad.creative_url or ""
         has_text = ad.ad_text and len(ad.ad_text.strip()) >= 10
-        # Skip VIDEO only if no ad text to analyze
-        if fmt == "VIDEO" and not has_text:
-            continue
         if any(p in url for p in SKIP_URL_PATTERNS) and not has_text:
-            # Mark as analyzed with score=0 so we don't retry
             ad.creative_analyzed_at = datetime.utcnow()
             ad.creative_score = 0
             ad.creative_summary = "URL non analysable (réseau publicitaire)"
@@ -191,6 +186,18 @@ async def analyze_all_creatives(
                 ad.price_visible = result.get("price_visible", False)
                 ad.price_value = result.get("price_value", "")[:20]
                 ad.seasonal_event = result.get("seasonal_event", "")[:50]
+                # Extended creative intelligence v2
+                ad.brand_visible = result.get("brand_visible", "")[:200]
+                ad.target_audience = result.get("target_audience", "")[:200]
+                ad.emotional_trigger = result.get("emotional_trigger", "")[:100]
+                ad.competitive_angle = result.get("competitive_angle", "")
+                ad.media_type_detected = result.get("media_type", "")[:50]
+                copy_q = result.get("copy_quality")
+                ad.copy_quality = int(copy_q) if copy_q and str(copy_q).isdigit() else None
+                visual_q = result.get("visual_quality")
+                ad.visual_quality = int(visual_q) if visual_q and str(visual_q).isdigit() else None
+                brand_c = result.get("brand_consistency")
+                ad.brand_consistency = int(brand_c) if brand_c and str(brand_c).isdigit() else None
                 ad.creative_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:
