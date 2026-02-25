@@ -28,6 +28,7 @@ export default function LoginPage() {
       setError("");
       try {
         const token = await exchangeMobsuccessAuth(userId!, authId!);
+        console.log("[SSO] Token received:", token.substring(0, 50) + "...", "length:", token.length);
         if (cancelled) return;
         await loginWithToken(token);
         if (cancelled) return;
