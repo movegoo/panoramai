@@ -6,6 +6,7 @@ with SearchAPI fallback for EU transparency payer data.
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -250,6 +251,87 @@ class MetaAdLibraryService:
             "platforms": platforms,
             "top_cities": top_cities,
         }
+
+    # ── Token refresh ────────────────────────────────────────────────
+
+    async def refresh_long_lived_token(self) -> dict:
+        """
+        Exchange the current long-lived token for a new one via Facebook's
+        token exchange endpoint. Updates the environment variable and AWS SSM.
+
+        Returns dict with 'success', 'expires_in', and optionally 'error'.
+        """
+        current_token = self.meta_token
+        app_id = settings.META_APP_ID
+        app_secret = settings.META_APP_SECRET
+
+        if not current_token:
+            logger.error("Meta token refresh: no current token available")
+            return {"success": False, "error": "No current META_AD_LIBRARY_TOKEN"}
+        if not app_id or not app_secret:
+            logger.error("Meta token refresh: META_APP_ID or META_APP_SECRET not configured")
+            return {"success": False, "error": "META_APP_ID or META_APP_SECRET missing"}
+
+        url = f"{GRAPH_API_BASE}/oauth/access_token"
+        params = {
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": current_token,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+
+            new_token = data.get("access_token")
+            expires_in = data.get("expires_in", 0)
+
+            if not new_token:
+                logger.error(f"Meta token refresh: no access_token in response: {data}")
+                return {"success": False, "error": "No access_token in response"}
+
+            # Update environment variable so the running process uses the new token
+            os.environ["META_AD_LIBRARY_TOKEN"] = new_token
+
+            # Update AWS SSM Parameter Store
+            await self._update_ssm_token(new_token)
+
+            expiry_days = expires_in // 86400
+            expiry_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            logger.info(
+                f"Meta token refreshed successfully. "
+                f"New token expires in {expiry_days} days (~{expires_in}s). "
+                f"Refreshed at {expiry_date}"
+            )
+
+            return {"success": True, "expires_in": expires_in, "expires_days": expiry_days}
+
+        except httpx.HTTPStatusError as e:
+            error_body = e.response.text if e.response else str(e)
+            logger.error(f"Meta token refresh HTTP error: {e.response.status_code} - {error_body}")
+            return {"success": False, "error": f"HTTP {e.response.status_code}: {error_body}"}
+        except Exception as e:
+            logger.error(f"Meta token refresh failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def _update_ssm_token(self, new_token: str) -> None:
+        """Update the META_AD_LIBRARY_TOKEN in AWS SSM Parameter Store."""
+        try:
+            import boto3
+            ssm = boto3.client("ssm", region_name="eu-central-1")
+            ssm.put_parameter(
+                Name="/panoramai/prod/META_AD_LIBRARY_TOKEN",
+                Value=new_token,
+                Type="SecureString",
+                Overwrite=True,
+            )
+            logger.info("Meta token updated in AWS SSM Parameter Store")
+        except Exception as e:
+            logger.error(f"Failed to update Meta token in SSM: {e}")
+            raise
 
     # ── SearchAPI fallbacks ──────────────────────────────────────────
 

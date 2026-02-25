@@ -60,6 +60,15 @@ class DataCollectionScheduler:
             replace_existing=True
         )
 
+        # Monthly Meta token refresh (1st of each month at 4 AM)
+        self.scheduler.add_job(
+            self.monthly_meta_token_refresh,
+            CronTrigger(day=1, hour=4, minute=0),
+            id="monthly_meta_token_refresh",
+            name="Monthly Meta Token Refresh",
+            replace_existing=True
+        )
+
     async def start(self):
         """Start the scheduler."""
         if settings.SCHEDULER_ENABLED:
@@ -680,6 +689,22 @@ class DataCollectionScheduler:
             logger.info("Weekly market data refresh completed")
         except Exception as e:
             logger.error(f"Weekly market refresh failed: {e}")
+
+    async def monthly_meta_token_refresh(self):
+        """Refresh the Meta Ad Library long-lived token before it expires."""
+        logger.info(f"Starting monthly Meta token refresh at {datetime.utcnow()}")
+        try:
+            from services.meta_ad_library import meta_ad_library
+            result = await meta_ad_library.refresh_long_lived_token()
+            if result["success"]:
+                logger.info(
+                    f"Meta token refresh succeeded. "
+                    f"New token expires in {result.get('expires_days', '?')} days"
+                )
+            else:
+                logger.error(f"Meta token refresh failed: {result.get('error')}")
+        except Exception as e:
+            logger.error(f"Meta token refresh job failed: {e}")
 
     def get_status(self) -> dict:
         """Get scheduler status and next run times."""

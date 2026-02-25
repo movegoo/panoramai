@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import "./win98.css";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { AuthProvider } from "@/lib/auth";
 import { SWRProvider } from "@/lib/swr-provider";
 import { AppShell } from "./app-shell";
