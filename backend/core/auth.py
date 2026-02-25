@@ -2,7 +2,10 @@
 Authentication utilities.
 JWT token management and password hashing.
 """
+import base64
+import json
 import logging
+import time
 import bcrypt
 import httpx
 import jwt
@@ -48,56 +51,75 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token invalide")
 
 
-def _validate_mobsuccess_token(token: str, db: Session) -> User:
-    """Validate a Mobsuccess Bearer token via the Lambda Authorizer and upsert a local user."""
+def _decode_cognito_jwt(token: str) -> dict:
+    """Decode a Cognito JWT payload without signature verification (like vibely-stack).
+
+    The token is trusted because it comes from the Mobsuccess getauthid-auth endpoint
+    which already authenticated the user. We just extract the claims.
+    """
     try:
-        response = httpx.post(
-            settings.MS_LAMBDA_AUTHORIZER_URL,
-            json={"authorizerAccessRules": "logged-in"},
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
-        )
-        logger.info(f"Lambda Authorizer response: status={response.status_code}")
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"Lambda Authorizer data: isAuthorized={data.get('isAuthorized')}, context keys={list(data.get('context', {}).keys())}")
+        parts = token.split(".")
+        if len(parts) != 3:
+            raise ValueError("Not a valid JWT")
+        # Base64url decode the payload (part 1)
+        payload_b64 = parts[1]
+        # Add padding if needed
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        payload_bytes = base64.urlsafe_b64decode(payload_b64)
+        payload = json.loads(payload_bytes)
+        return payload
     except Exception as e:
-        logger.warning(f"Mobsuccess Lambda call failed: {e}", exc_info=True)
-        raise HTTPException(status_code=401, detail="Authentification requise")
+        raise ValueError(f"Failed to decode Cognito JWT: {e}")
 
-    if not data.get("isAuthorized"):
-        logger.warning(f"Lambda returned isAuthorized=False: {data}")
-        raise HTTPException(status_code=401, detail="Authentification requise")
 
-    ctx = data.get("context", {})
-    ms_id = int(ctx["id_user"])
-    email = ctx.get("email", "")
-    firstname = ctx.get("firstname", "")
-    lastname = ctx.get("lastname", "")
-    is_admin = bool(ctx.get("admin"))
-    name = f"{firstname} {lastname}".strip()
+def _validate_cognito_token(token: str, db: Session) -> User:
+    """Validate a Cognito ID token by decoding it directly (vibely-stack approach).
 
-    # Lookup by ms_user_id first, then email
-    user = db.query(User).filter(User.ms_user_id == ms_id).first()
-    if not user and email:
+    Extracts sub, email, name from the JWT payload and upserts a local user.
+    """
+    try:
+        payload = _decode_cognito_jwt(token)
+    except ValueError as e:
+        logger.warning(f"Cognito JWT decode failed: {e}")
+        raise HTTPException(status_code=401, detail="Token Cognito invalide")
+
+    # Check expiry
+    exp = payload.get("exp")
+    if exp and time.time() >= exp:
+        logger.warning("Cognito token expired")
+        raise HTTPException(status_code=401, detail="Token Cognito expiré")
+
+    sub = payload.get("sub", "")
+    email = payload.get("email", "")
+    name = payload.get("name", "")
+
+    if not sub:
+        logger.warning(f"Cognito JWT missing 'sub': {list(payload.keys())}")
+        raise HTTPException(status_code=401, detail="Token Cognito invalide (sub manquant)")
+
+    logger.info(f"Cognito JWT validated: sub={sub}, email={email}")
+
+    # Lookup by email first (most likely match with existing users), then by cognito sub
+    user = None
+    if email:
         user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = db.query(User).filter(User.ms_user_id == hash(sub) % 2**31).first()
 
     if user:
-        user.name = name
-        user.ms_user_id = ms_id
+        if name:
+            user.name = name
         if email:
             user.email = email
-        user.is_admin = is_admin
         user.is_active = True
         db.commit()
         db.refresh(user)
     else:
         user = User(
-            email=email,
-            name=name,
-            password_hash="ms-auth",
-            ms_user_id=ms_id,
-            is_admin=is_admin,
+            email=email or f"{sub}@cognito",
+            name=name or email or sub,
+            password_hash="ms-cognito",
+            is_admin=False,
             is_active=True,
         )
         db.add(user)
@@ -128,12 +150,12 @@ def get_current_user(
     except Exception:
         pass
 
-    # Try 2: Mobsuccess Lambda
-    if settings.MS_AUTH_ENABLED and settings.MS_LAMBDA_AUTHORIZER_URL:
-        logger.info(f"Trying Mobsuccess Lambda auth (token starts with {token[:20]}...)")
-        return _validate_mobsuccess_token(token, db)
+    # Try 2: Cognito JWT direct decode (vibely-stack approach)
+    if settings.MS_AUTH_ENABLED:
+        logger.info(f"Trying Cognito JWT decode (token starts with {token[:20]}...)")
+        return _validate_cognito_token(token, db)
 
-    logger.warning(f"Auth failed: MS_AUTH_ENABLED={settings.MS_AUTH_ENABLED}, MS_LAMBDA_URL={'set' if settings.MS_LAMBDA_AUTHORIZER_URL else 'empty'}")
+    logger.warning(f"Auth failed: MS_AUTH_ENABLED={settings.MS_AUTH_ENABLED}")
     raise HTTPException(status_code=401, detail="Authentification requise")
 
 

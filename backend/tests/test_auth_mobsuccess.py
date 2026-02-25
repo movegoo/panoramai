@@ -1,20 +1,41 @@
-"""Tests for Mobsuccess Lambda Authorizer integration in core/auth.py."""
+"""Tests for Mobsuccess Cognito JWT auth integration in core/auth.py."""
+import base64
+import json
 import time
 from unittest.mock import patch, MagicMock
 
 import jwt
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from core.config import settings
 from core.auth import (
     get_current_user,
-    _validate_mobsuccess_token,
+    _decode_cognito_jwt,
+    _validate_cognito_token,
     create_access_token,
 )
 from database import Base, User
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_cognito_jwt(payload: dict, header: dict | None = None) -> str:
+    """Build a fake Cognito JWT (3-part base64url, no real signature)."""
+    header = header or {"alg": "RS256", "typ": "JWT", "kid": "DhUAkad"}
+    def b64url(data: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
+    return f"{b64url(header)}.{b64url(payload)}.fake-signature"
+
+
+def _make_credentials(token: str):
+    creds = MagicMock()
+    creds.credentials = token
+    return creds
 
 
 # ---------------------------------------------------------------------------
@@ -23,7 +44,6 @@ from database import Base, User
 
 @pytest.fixture
 def db_session():
-    """In-memory SQLite session for testing."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
@@ -32,84 +52,55 @@ def db_session():
 
 
 @pytest.fixture
-def ms_lambda_response():
-    """Standard successful Mobsuccess Lambda response."""
+def cognito_payload():
     return {
-        "isAuthorized": True,
-        "context": {
-            "id_user": 12345,
-            "admin": True,
-            "firstname": "Jean",
-            "lastname": "Dupont",
-            "email": "jean@mobsuccess.com",
-            "ms_rights": {"some": "rights"},
-        },
+        "sub": "abc-123-def-456",
+        "email": "chloe@mobsuccess.com",
+        "name": "Chloé Dupont",
+        "exp": int(time.time()) + 3600,
+        "iat": int(time.time()),
+        "iss": "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_xxx",
+        "token_use": "id",
     }
 
 
-def _make_credentials(token: str):
-    """Build a mock HTTPAuthorizationCredentials."""
-    creds = MagicMock()
-    creds.credentials = token
-    return creds
+# ---------------------------------------------------------------------------
+# Tests: _decode_cognito_jwt
+# ---------------------------------------------------------------------------
+
+class TestDecodeCognitoJwt:
+    def test_decode_valid_jwt(self, cognito_payload):
+        token = _make_cognito_jwt(cognito_payload)
+        decoded = _decode_cognito_jwt(token)
+        assert decoded["sub"] == "abc-123-def-456"
+        assert decoded["email"] == "chloe@mobsuccess.com"
+
+    def test_decode_invalid_token(self):
+        with pytest.raises(ValueError, match="Not a valid JWT"):
+            _decode_cognito_jwt("not-a-jwt")
+
+    def test_decode_two_parts(self):
+        with pytest.raises(ValueError, match="Not a valid JWT"):
+            _decode_cognito_jwt("part1.part2")
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Tests: _validate_cognito_token
 # ---------------------------------------------------------------------------
 
+class TestValidateCognitoToken:
+    def test_creates_user(self, db_session, cognito_payload):
+        token = _make_cognito_jwt(cognito_payload)
+        user = _validate_cognito_token(token, db_session)
 
-class TestMobsuccessValidToken:
-    @patch("core.auth.httpx.post")
-    def test_creates_user(self, mock_post, db_session, ms_lambda_response):
-        """A valid Mobsuccess token should create a new local user."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = ms_lambda_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
+        assert user.email == "chloe@mobsuccess.com"
+        assert user.name == "Chloé Dupont"
+        assert user.is_active is True
+        assert db_session.query(User).filter(User.email == "chloe@mobsuccess.com").count() == 1
 
-        user = _validate_mobsuccess_token("ms-token-abc", db_session)
-
-        assert user.email == "jean@mobsuccess.com"
-        assert user.name == "Jean Dupont"
-        assert user.ms_user_id == 12345
-        assert user.is_admin is True
-        assert user.password_hash == "ms-auth"
-
-        # Verify persisted
-        assert db_session.query(User).filter(User.ms_user_id == 12345).count() == 1
-
-    @patch("core.auth.httpx.post")
-    def test_updates_existing_user(self, mock_post, db_session, ms_lambda_response):
-        """If a user with the same ms_user_id exists, update their info."""
+    def test_updates_existing_user_by_email(self, db_session, cognito_payload):
         existing = User(
-            email="old@mobsuccess.com",
-            name="Old Name",
-            password_hash="ms-auth",
-            ms_user_id=12345,
-            is_admin=False,
-            is_active=True,
-        )
-        db_session.add(existing)
-        db_session.commit()
-
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = ms_lambda_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
-
-        user = _validate_mobsuccess_token("ms-token-abc", db_session)
-
-        assert user.id == existing.id
-        assert user.email == "jean@mobsuccess.com"
-        assert user.name == "Jean Dupont"
-        assert user.is_admin is True
-
-    @patch("core.auth.httpx.post")
-    def test_matches_by_email_fallback(self, mock_post, db_session, ms_lambda_response):
-        """If no ms_user_id match, fall back to email matching."""
-        existing = User(
-            email="jean@mobsuccess.com",
+            email="chloe@mobsuccess.com",
             name="Old Name",
             password_hash="some-hash",
             is_active=True,
@@ -117,44 +108,42 @@ class TestMobsuccessValidToken:
         db_session.add(existing)
         db_session.commit()
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = ms_lambda_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
-
-        user = _validate_mobsuccess_token("ms-token-abc", db_session)
+        token = _make_cognito_jwt(cognito_payload)
+        user = _validate_cognito_token(token, db_session)
 
         assert user.id == existing.id
-        assert user.ms_user_id == 12345
-        assert user.name == "Jean Dupont"
+        assert user.name == "Chloé Dupont"
+        assert user.email == "chloe@mobsuccess.com"
 
-
-class TestMobsuccessUnauthorized:
-    @patch("core.auth.httpx.post")
-    def test_unauthorized_returns_401(self, mock_post, db_session):
-        """isAuthorized=false should raise 401."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {"isAuthorized": False, "context": {}}
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
+    def test_expired_token_raises_401(self, db_session, cognito_payload):
+        cognito_payload["exp"] = int(time.time()) - 100
+        token = _make_cognito_jwt(cognito_payload)
 
         with pytest.raises(HTTPException) as exc_info:
-            _validate_mobsuccess_token("bad-token", db_session)
+            _validate_cognito_token(token, db_session)
         assert exc_info.value.status_code == 401
+        assert "expiré" in exc_info.value.detail
 
-    @patch("core.auth.httpx.post")
-    def test_lambda_error_returns_401(self, mock_post, db_session):
-        """Lambda HTTP error (500, timeout) should raise 401."""
-        mock_post.side_effect = Exception("Connection timeout")
+    def test_missing_sub_raises_401(self, db_session, cognito_payload):
+        del cognito_payload["sub"]
+        token = _make_cognito_jwt(cognito_payload)
 
         with pytest.raises(HTTPException) as exc_info:
-            _validate_mobsuccess_token("bad-token", db_session)
+            _validate_cognito_token(token, db_session)
         assert exc_info.value.status_code == 401
 
+    def test_invalid_token_raises_401(self, db_session):
+        with pytest.raises(HTTPException) as exc_info:
+            _validate_cognito_token("not-a-jwt", db_session)
+        assert exc_info.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Tests: get_current_user fallback chain
+# ---------------------------------------------------------------------------
 
 class TestGetCurrentUserFallback:
     def test_jwt_local_still_works(self, db_session):
-        """A valid local JWT should work regardless of MS_AUTH_ENABLED."""
         user = User(
             email="local@test.com",
             name="Local User",
@@ -167,34 +156,25 @@ class TestGetCurrentUserFallback:
         token = create_access_token(user.id)
         creds = _make_credentials(token)
 
-        with patch("core.auth.get_db", return_value=iter([db_session])):
-            result = get_current_user(credentials=creds, db=db_session)
+        result = get_current_user(credentials=creds, db=db_session)
         assert result.id == user.id
 
     @patch("core.auth.settings")
-    @patch("core.auth.httpx.post")
-    def test_fallback_jwt_then_mobsuccess(self, mock_post, mock_settings, db_session, ms_lambda_response):
-        """Invalid JWT + valid Mobsuccess token → user from Lambda."""
+    def test_fallback_jwt_then_cognito(self, mock_settings, db_session, cognito_payload):
+        """Invalid local JWT + valid Cognito token → user from Cognito."""
         mock_settings.MS_AUTH_ENABLED = True
-        mock_settings.MS_LAMBDA_AUTHORIZER_URL = "https://lambda.example.com/"
         mock_settings.JWT_SECRET = settings.JWT_SECRET
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = ms_lambda_response
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
-
-        creds = _make_credentials("not-a-jwt-token")
+        cognito_token = _make_cognito_jwt(cognito_payload)
+        creds = _make_credentials(cognito_token)
 
         result = get_current_user(credentials=creds, db=db_session)
-        assert result.ms_user_id == 12345
-        assert result.email == "jean@mobsuccess.com"
+        assert result.email == "chloe@mobsuccess.com"
+        assert result.name == "Chloé Dupont"
 
     @patch("core.auth.settings")
     def test_mobsuccess_disabled_only_jwt(self, mock_settings, db_session):
-        """MS_AUTH_ENABLED=false → Mobsuccess token should 401."""
         mock_settings.MS_AUTH_ENABLED = False
-        mock_settings.MS_LAMBDA_AUTHORIZER_URL = ""
         mock_settings.JWT_SECRET = settings.JWT_SECRET
 
         creds = _make_credentials("not-a-jwt-token")
