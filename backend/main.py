@@ -616,44 +616,6 @@ async def data_depth():
         return {"error": str(e)}
 
 
-@app.get("/api/health/advertisers")
-async def list_advertisers_for_user(user_id: int = 15):
-    """List advertisers linked to a user — no auth (temporary admin)."""
-    from database import UserAdvertiser
-    db = SessionLocal()
-    try:
-        links = db.query(UserAdvertiser, Advertiser).join(
-            Advertiser, UserAdvertiser.advertiser_id == Advertiser.id
-        ).filter(UserAdvertiser.user_id == user_id).all()
-        return [
-            {
-                "link_id": ua.id,
-                "advertiser_id": adv.id,
-                "company_name": adv.company_name,
-                "sector": adv.sector,
-                "created_at": str(adv.created_at) if adv.created_at else None,
-            }
-            for ua, adv in links
-        ]
-    finally:
-        db.close()
-
-
-@app.delete("/api/health/advertisers/{link_id}")
-async def remove_advertiser_link(link_id: int):
-    """Remove a UserAdvertiser link — no auth (temporary admin)."""
-    from database import UserAdvertiser
-    db = SessionLocal()
-    try:
-        link = db.query(UserAdvertiser).filter(UserAdvertiser.id == link_id).first()
-        if not link:
-            return {"error": "Link not found"}
-        db.delete(link)
-        db.commit()
-        return {"deleted": link_id}
-    finally:
-        db.close()
-
 
 @app.get("/api/scheduler/status")
 async def get_scheduler_status():
