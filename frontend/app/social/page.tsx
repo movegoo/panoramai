@@ -408,7 +408,7 @@ export default function SocialPage() {
           if (c.ig?.follower_growth_7d != null) growths.push(c.ig.follower_growth_7d);
           if (c.tt?.follower_growth_7d != null) growths.push(c.tt.follower_growth_7d);
           if (c.yt?.subscriber_growth_7d != null) growths.push(c.yt.subscriber_growth_7d);
-          return growths.length > 0 ? growths.reduce((a, b) => a + b, 0) / growths.length : 0;
+          return growths.length > 0 ? growths.reduce((a, b) => a + b, 0) / growths.length : undefined;
         })(),
         platformCount: (c.ig ? 1 : 0) + (c.tt ? 1 : 0) + (c.yt ? 1 : 0) + (c.sc && c.sc.ads_count > 0 ? 1 : 0),
       }))

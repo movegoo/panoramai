@@ -176,9 +176,9 @@ async def compare_tiktok_accounts(
                 .first()
             )
 
-            follower_growth = 0
+            follower_growth = None
             if old_data and old_data.followers and old_data.followers > 0:
-                follower_growth = ((latest.followers - old_data.followers) / old_data.followers) * 100
+                follower_growth = round(((latest.followers - old_data.followers) / old_data.followers) * 100, 2)
 
             comparison.append({
                 "competitor_id": competitor.id,
@@ -189,7 +189,7 @@ async def compare_tiktok_accounts(
                 "likes": latest.likes,
                 "videos_count": latest.videos_count,
                 "engagement_rate": calculate_engagement_rate(latest),
-                "follower_growth_7d": round(follower_growth, 2),
+                "follower_growth_7d": follower_growth,
                 "recorded_at": latest.recorded_at.isoformat(),
             })
         elif getattr(competitor, "is_brand", False):

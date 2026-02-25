@@ -146,9 +146,9 @@ async def compare_youtube_channels(
                 .first()
             )
 
-            subscriber_growth = 0
+            subscriber_growth = None
             if old_data and old_data.subscribers and old_data.subscribers > 0:
-                subscriber_growth = ((latest.subscribers - old_data.subscribers) / old_data.subscribers) * 100
+                subscriber_growth = round(((latest.subscribers - old_data.subscribers) / old_data.subscribers) * 100, 2)
 
             comparison.append({
                 "competitor_id": competitor.id,
@@ -162,7 +162,7 @@ async def compare_youtube_channels(
                 "avg_likes": latest.avg_likes,
                 "avg_comments": latest.avg_comments,
                 "engagement_rate": latest.engagement_rate,
-                "subscriber_growth_7d": round(subscriber_growth, 2),
+                "subscriber_growth_7d": subscriber_growth,
                 "recorded_at": latest.recorded_at.isoformat(),
             })
         elif getattr(competitor, "is_brand", False):
