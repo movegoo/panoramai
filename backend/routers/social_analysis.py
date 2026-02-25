@@ -301,6 +301,14 @@ async def analyze_all_content(
                 post.content_engagement_score = result.get("engagement_score", 0)
                 post.content_virality_factors = json.dumps(result.get("virality_factors", []), ensure_ascii=False)
                 post.content_summary = result.get("summary", "")
+                # Extended social intelligence v2
+                topics = result.get("topics", [])
+                post.content_topics = json.dumps(topics, ensure_ascii=False) if topics else None
+                products = result.get("products_mentioned", [])
+                post.content_products = json.dumps(products, ensure_ascii=False) if products else None
+                post.content_target_audience = result.get("target_audience", "")[:200]
+                post.content_emotional_trigger = result.get("emotional_trigger", "")[:100]
+                post.content_brand_visible = result.get("brand_visible", "")[:200]
                 post.content_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:

@@ -17,8 +17,9 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_PROMPT = """Tu es un expert en strategie social media pour la grande distribution et le retail en France.
-Analyse ce contenu de post/video social media et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire, pas de ```).
+ANALYSIS_PROMPT = """Tu es un expert senior en strategie social media, specialise en grande distribution, retail et marques en France.
+Analyse ce contenu de post/video social media EN PROFONDEUR et retourne UNIQUEMENT un JSON valide (pas de markdown, pas de commentaire, pas de ```).
+Sois EXHAUSTIF et PRECIS dans ton analyse.
 
 Contexte : plateforme={platform}, concurrent="{competitor_name}"
 Titre : "{title}"
@@ -27,25 +28,32 @@ Engagement : {views} vues, {likes} likes, {comments} commentaires, {shares} part
 
 JSON attendu :
 {{
-  "theme": "<UNE valeur parmi : promo, recette, lifestyle, tuto, behind-scenes, event, concours, produit, actu, humour, collab, saison, fidelite, rse>",
+  "theme": "<UNE valeur parmi : promo, recette, lifestyle, tuto, behind-scenes, event, concours, produit, actu, humour, collab, saison, fidelite, rse, recrutement, innovation, comparatif, avis-client, unboxing>",
   "hook": "<1 phrase : ce qui capte l'attention dans les 1eres secondes/lignes>",
-  "tone": "<UNE valeur parmi : fun, informatif, promotionnel, inspirant, urgence, communautaire, premium, educatif, emotionnel, authentique>",
-  "format": "<UNE valeur parmi : short-form, long-form, carousel, reel, tutorial, unboxing, challenge, trend, interview>",
+  "tone": "<UNE valeur parmi : fun, informatif, promotionnel, inspirant, urgence, communautaire, premium, educatif, emotionnel, authentique, provocateur, nostalgique, ludique>",
+  "format": "<UNE valeur parmi : short-form, long-form, carousel, reel, tutorial, unboxing, challenge, trend, interview, story, live, timelapse>",
   "cta": "<appel a l'action identifie, ou 'none'>",
   "hashtags": ["hashtag1", "hashtag2"],
   "mentions": ["@mention1"],
   "virality_factors": ["facteur1", "facteur2"],
   "engagement_score": <entier 0-100>,
-  "summary": "<1-2 phrases decrivant la strategie du contenu et son efficacite>",
-  "visual_elements": "<description du visuel : couleurs dominantes, presence de texte, produit, visage, logo>",
-  "thumbnail_quality": "<UNE valeur parmi : excellent, bon, moyen, faible>"
+  "summary": "<2-3 phrases detaillees : strategie du contenu, forces, faiblesses, et efficacite pour la cible>",
+  "visual_elements": "<description detaillee du visuel : couleurs dominantes, composition, presence de texte, produit, visage, logo, decor>",
+  "thumbnail_quality": "<UNE valeur parmi : excellent, bon, moyen, faible>",
+  "topics": ["<liste de TOUS les sujets/themes abordes, ex: bricolage, renovation, peinture, decoration interieure...>"],
+  "products_mentioned": ["<liste de TOUS les produits/articles/services mentionnes ou visibles, ex: perceuse Bosch, peinture Dulux Valentine, parquet stratifie...>"],
+  "target_audience": "<public cible probable, ex: Bricoleurs debutants, Familles, Jeunes actifs 25-35...>",
+  "emotional_trigger": "<levier emotionnel principal utilise, ex: fierte, envie, curiosite, nostalgie, humour...>",
+  "brand_visible": "<marque/enseigne visible dans le contenu, ou vide>"
 }}
 
 Criteres de score engagement_score :
 - Hook / accroche (30%) : capacite a capter l'attention immediatement
-- Alignement audience (25%) : pertinence pour la cible grande distribution
-- Optimisation plateforme (25%) : adaptation au format et codes de la plateforme
-- CTA / incitation (20%) : clarte de l'appel a l'action"""
+- Alignement audience (25%) : pertinence pour la cible et le secteur
+- Optimisation plateforme (25%) : adaptation au format et codes de la plateforme ({platform})
+- CTA / incitation (20%) : clarte de l'appel a l'action
+
+IMPORTANT : Sois EXHAUSTIF dans topics et products_mentioned — liste TOUT ce qui est evoque ou visible, meme brievement."""
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions"

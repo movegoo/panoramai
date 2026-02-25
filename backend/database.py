@@ -464,6 +464,13 @@ class SocialPost(Base):
     content_summary = Column(Text)
     content_analyzed_at = Column(DateTime)
 
+    # Extended social intelligence v2
+    content_topics = Column(Text)           # JSON: ["bricolage", "rénovation", "peinture"]
+    content_products = Column(Text)         # JSON: ["perceuse Bosch", "peinture Dulux"]
+    content_target_audience = Column(String(200))
+    content_emotional_trigger = Column(String(100))
+    content_brand_visible = Column(String(200))
+
     competitor = relationship("Competitor", backref="social_posts")
 
 
@@ -700,6 +707,12 @@ def _run_migrations(engine):
             ("ads", "visual_quality", "INTEGER"),
             ("ads", "brand_consistency", "INTEGER"),
             ("ads", "products_detected", "TEXT"),
+            # Extended social intelligence v2
+            ("social_posts", "content_topics", "TEXT"),
+            ("social_posts", "content_products", "TEXT"),
+            ("social_posts", "content_target_audience", "VARCHAR(200)"),
+            ("social_posts", "content_emotional_trigger", "VARCHAR(100)"),
+            ("social_posts", "content_brand_visible", "VARCHAR(200)"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:
