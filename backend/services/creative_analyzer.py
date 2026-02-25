@@ -144,8 +144,8 @@ class CreativeAnalyzer:
         if not creative_url:
             return None
 
-        # Download image (with ScrapeCreators/SearchAPI fallback for fbcdn)
-        image_data, media_type = await self._get_image(creative_url, ad_id)
+        # Download image — tries Meta API (free), ScrapeCreators, SearchAPI
+        image_data, media_type, fresh_url = await self._get_image(creative_url, ad_id)
         if not image_data:
             logger.error(f"Image download failed for: {creative_url[:100]}")
             return None
@@ -157,11 +157,17 @@ class CreativeAnalyzer:
             ad_text=(ad_text or "")[:500],
         )
 
-        return await self._call_gemini_vision(
+        result = await self._call_gemini_vision(
             b64_image, media_type, prompt,
             model="gemini-3-flash-preview",
             ad_id=ad_id,
         )
+
+        # Attach fresh URL so caller can persist it in DB
+        if result and fresh_url:
+            result["_fresh_url"] = fresh_url
+
+        return result
 
     async def analyze_text_only(
         self,
@@ -387,21 +393,25 @@ class CreativeAnalyzer:
 
     # ── Image download helpers (unchanged) ───────────────────────────
 
-    async def _get_image(self, creative_url: str, ad_id: str) -> tuple[Optional[bytes], str]:
-        """Download image with ScrapeCreators/SearchAPI fallback."""
+    async def _get_image(self, creative_url: str, ad_id: str) -> tuple[Optional[bytes], str, str]:
+        """Download image with ScrapeCreators/SearchAPI fallback.
+        Returns (image_data, media_type, fresh_url) — fresh_url is set when
+        ScrapeCreators provided a new URL (caller should persist it in DB).
+        """
         image_data = None
         media_type = ""
+        fresh_url = ""
 
-        if ad_id and "fbcdn" in creative_url:
-            image_data, media_type = await self._fetch_fresh_image(ad_id)
+        # Always try ScrapeCreators first when we have an ad_id — gets a fresh
+        # fbcdn URL and avoids wasting time on broken render_ad / expired URLs.
+        if ad_id:
+            image_data, media_type, fresh_url = await self._fetch_fresh_image(ad_id)
 
+        # Fallback: try the stored URL directly
         if not image_data:
             image_data, media_type = await self._download_image(creative_url)
 
-        if not image_data and ad_id and "fbcdn" not in creative_url:
-            image_data, media_type = await self._fetch_fresh_image(ad_id)
-
-        return image_data, media_type
+        return image_data, media_type, fresh_url
 
     async def _download_image(self, url: str) -> tuple[Optional[bytes], str]:
         """Download image from URL. Returns (bytes, media_type) or (None, '')."""
@@ -452,8 +462,58 @@ class CreativeAnalyzer:
             return "image/gif"
         return ""
 
-    async def _fetch_fresh_image(self, ad_id: str) -> tuple[Optional[bytes], str]:
-        """Fetch a fresh image URL from ScrapeCreators or SearchAPI and download it."""
+    async def _fetch_fresh_image(self, ad_id: str) -> tuple[Optional[bytes], str, str]:
+        """Fetch a fresh image URL and download it.
+        Tries Meta Graph API (free) first, then ScrapeCreators, then SearchAPI.
+        Returns (image_data, media_type, fresh_url).
+        """
+        # 1) Meta Graph API — FREE: get ad_snapshot_url with valid access_token
+        try:
+            import os
+            meta_token = os.getenv("META_ACCESS_TOKEN", "")
+            if meta_token:
+                import httpx as _httpx
+                snapshot_url = (
+                    f"https://graph.facebook.com/v19.0/ads_archive"
+                    f"?access_token={meta_token}"
+                    f"&search_terms="
+                    f"&ad_type=ALL"
+                    f"&fields=ad_snapshot_url"
+                    f"&search_page_ids="
+                    f"&ad_reached_countries=FR"
+                    f"&limit=1"
+                )
+                # The ads_archive endpoint doesn't support lookup by ad_id directly,
+                # but ad_snapshot_url = render_ad URL with fresh token.
+                # Build the snapshot URL directly:
+                fresh_snapshot = f"https://www.facebook.com/ads/archive/render_ad/?id={ad_id}&access_token={meta_token}"
+                logger.info(f"Trying Meta snapshot URL for ad {ad_id}")
+                async with _httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                    resp = await client.get(fresh_snapshot)
+                if resp.status_code == 200:
+                    ct = resp.headers.get("content-type", "")
+                    # If it returns an image directly
+                    if ct.startswith("image/"):
+                        data = resp.content
+                        mt = self._detect_media_type(data) or ct.split(";")[0].strip()
+                        if len(data) >= 1000:
+                            logger.info(f"Meta snapshot returned image for ad {ad_id}: {len(data)} bytes")
+                            return data, mt, fresh_snapshot
+                    # If it returns HTML, try to extract the image src
+                    elif "text/html" in ct:
+                        html = resp.text
+                        import re
+                        img_match = re.search(r'<img[^>]+src="([^"]+fbcdn[^"]+)"', html)
+                        if img_match:
+                            img_url = img_match.group(1).replace("&amp;", "&")
+                            data, mt = await self._download_image(img_url)
+                            if data:
+                                logger.info(f"Meta snapshot HTML -> fbcdn image for ad {ad_id}")
+                                return data, mt, img_url
+        except Exception as e:
+            logger.warning(f"Meta snapshot fetch failed for {ad_id}: {e}")
+
+        # 2) ScrapeCreators — gets fbcdn URL from ad detail
         try:
             from services.scrapecreators import scrapecreators
             logger.info(f"Fetching fresh image URL from ScrapeCreators for ad {ad_id}")
@@ -471,13 +531,14 @@ class CreativeAnalyzer:
             if fresh_url:
                 data, mt = await self._download_image(fresh_url)
                 if data:
-                    logger.info(f"Fresh URL worked (ScrapeCreators) for ad {ad_id}")
-                    return data, mt
+                    logger.info(f"Fresh URL worked (ScrapeCreators) for ad {ad_id}: {fresh_url[:80]}")
+                    return data, mt, fresh_url
             else:
                 logger.warning(f"No image URL in ScrapeCreators response for ad {ad_id}")
         except Exception as e:
             logger.warning(f"ScrapeCreators fetch failed for {ad_id}: {e}")
 
+        # 3) SearchAPI fallback
         try:
             from services.searchapi import searchapi
             if searchapi.is_configured:
@@ -495,12 +556,12 @@ class CreativeAnalyzer:
                 if fresh_url:
                     data, mt = await self._download_image(fresh_url)
                     if data:
-                        logger.info(f"Fresh URL worked (SearchAPI) for ad {ad_id}")
-                        return data, mt
+                        logger.info(f"Fresh URL worked (SearchAPI) for ad {ad_id}: {fresh_url[:80]}")
+                        return data, mt, fresh_url
         except Exception as e:
             logger.warning(f"SearchAPI fetch failed for {ad_id}: {e}")
 
-        return None, ""
+        return None, "", ""
 
     # ── JSON parser (shared across all models) ───────────────────────
 

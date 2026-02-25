@@ -165,6 +165,10 @@ async def analyze_all_creatives(
                 )
 
             if result:
+                # Update creative_url if a fresh URL was fetched (Meta API / ScrapeCreators)
+                fresh_url = result.pop("_fresh_url", None)
+                if fresh_url:
+                    ad.creative_url = fresh_url
                 ad.creative_analysis = json.dumps(result, ensure_ascii=False)
                 ad.creative_concept = result.get("concept", "")[:100]
                 ad.creative_hook = result.get("hook", "")[:500]
