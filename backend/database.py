@@ -156,6 +156,7 @@ class Ad(Base):
     copy_quality = Column(Integer)              # Note 1-10 qualité du texte
     visual_quality = Column(Integer)            # Note 1-10 qualité visuelle
     brand_consistency = Column(Integer)         # Note 1-10 cohérence marque
+    products_detected = Column(Text)            # JSON: ["avocat", "saumon fumé", "Nutella 750g"]
 
     competitor = relationship("Competitor", back_populates="ads")
 
@@ -689,6 +690,16 @@ def _run_migrations(engine):
             ("users", "mcp_api_key", "VARCHAR(64)"),
             # Mobsuccess auth
             ("users", "ms_user_id", "INTEGER"),
+            # Extended creative intelligence v2
+            ("ads", "brand_visible", "VARCHAR(200)"),
+            ("ads", "target_audience", "VARCHAR(200)"),
+            ("ads", "emotional_trigger", "VARCHAR(100)"),
+            ("ads", "competitive_angle", "TEXT"),
+            ("ads", "media_type_detected", "VARCHAR(50)"),
+            ("ads", "copy_quality", "INTEGER"),
+            ("ads", "visual_quality", "INTEGER"),
+            ("ads", "brand_consistency", "INTEGER"),
+            ("ads", "products_detected", "TEXT"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

@@ -56,7 +56,8 @@ JSON attendu :
   "media_type": "<image, vidéo-preview, carrousel, gif, texte-seul>",
   "copy_quality": "<note 1-10 sur la qualité du texte publicitaire (accroche, clarté, persuasion)>",
   "visual_quality": "<note 1-10 sur la qualité visuelle (composition, lumière, professionnalisme)>",
-  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque de l'enseigne>"
+  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque de l'enseigne>",
+  "products_detected": ["<liste EXHAUSTIVE de TOUS les produits/articles visibles ou mentionnés, ex: avocat, saumon fumé, Nutella 750g, iPhone 16 Pro, perceuse Bosch, canapé d'angle gris...>"]
 }}
 
 Critères de score global (0-100) :
@@ -107,7 +108,8 @@ JSON attendu :
   "media_type": "texte-seul",
   "copy_quality": "<note 1-10 sur la qualité rédactionnelle (accroche, clarté, persuasion, CTA)>",
   "visual_quality": 0,
-  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque>"
+  "brand_consistency": "<note 1-10 sur la cohérence avec l'image de marque>",
+  "products_detected": ["<liste de TOUS les produits/services mentionnés dans le texte, ex: Forfait 5G 100Go, Crédit immobilier 1.9%, Canapé convertible...>"]
 }}
 
 Critères de score (0-100) :

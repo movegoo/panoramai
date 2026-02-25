@@ -198,6 +198,8 @@ async def analyze_all_creatives(
                 ad.visual_quality = int(visual_q) if visual_q and str(visual_q).isdigit() else None
                 brand_c = result.get("brand_consistency")
                 ad.brand_consistency = int(brand_c) if brand_c and str(brand_c).isdigit() else None
+                products = result.get("products_detected", [])
+                ad.products_detected = json.dumps(products, ensure_ascii=False) if products else None
                 ad.creative_analyzed_at = datetime.utcnow()
                 analyzed += 1
             else:
