@@ -692,3 +692,11 @@ async def trigger_manual_collection():
         return {"message": "Collecte terminée", "timestamp": datetime.utcnow().isoformat()}
     except Exception as e:
         return {"message": f"Erreur: {str(e)}", "error": True}
+
+
+@app.post("/api/scheduler/run-creative-analysis")
+async def trigger_creative_analysis():
+    """Déclenche l'analyse créative Gemini sur les pubs non analysées."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_creative_analysis())
+    return {"message": "Analyse créative lancée en background", "timestamp": datetime.utcnow().isoformat()}
