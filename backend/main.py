@@ -552,36 +552,6 @@ except Exception as e:
 # Root endpoints
 # =============================================================================
 
-@app.post("/api/_bootstrap/{user_id}")
-async def bootstrap_admin(user_id: int, secret: str):
-    """Temporary endpoint to bootstrap admin user. Will be removed after use."""
-    import os
-    if secret != os.getenv("JWT_SECRET", ""):
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        user.is_admin = True
-        db.commit()
-        from database import UserAdvertiser
-        all_advs = db.query(Advertiser).all()
-        linked = 0
-        for adv in all_advs:
-            existing = db.query(UserAdvertiser).filter(
-                UserAdvertiser.user_id == user_id,
-                UserAdvertiser.advertiser_id == adv.id
-            ).first()
-            if not existing:
-                db.add(UserAdvertiser(user_id=user_id, advertiser_id=adv.id, role="admin"))
-                linked += 1
-        db.commit()
-        return {"message": f"User {user.email} is now admin, linked to {linked} new advertisers (total {len(all_advs)})"}
-    finally:
-        db.close()
-
-
 @app.get("/")
 async def root():
     """Point d'entrée de l'API."""
