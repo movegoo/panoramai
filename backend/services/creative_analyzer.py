@@ -557,6 +557,13 @@ class CreativeAnalyzer:
                 fresh_url = images[0].get("original_image_url") or images[0].get("resized_image_url", "")
             if not fresh_url:
                 fresh_url = detail.get("original_image_url") or detail.get("resized_image_url", "")
+            # Also check videos for preview image
+            if not fresh_url:
+                videos = snapshot.get("videos", [])
+                for v in videos:
+                    fresh_url = v.get("video_preview_image_url", "")
+                    if fresh_url:
+                        break
             if fresh_url:
                 data, mt = await self._download_image(fresh_url)
                 if data:

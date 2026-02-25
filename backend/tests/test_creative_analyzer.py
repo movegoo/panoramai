@@ -312,6 +312,29 @@ class TestFetchFreshImage:
         assert url == ""
 
     @pytest.mark.asyncio
+    async def test_scrapecreators_video_preview_fallback(self):
+        """ScrapeCreators: when no cards/images, video_preview_image_url is used."""
+        analyzer = CreativeAnalyzer()
+
+        mock_sc = AsyncMock()
+        mock_sc.get_facebook_ad_detail_raw = AsyncMock(return_value={
+            "snapshot": {
+                "cards": [],
+                "images": [],
+                "videos": [{"video_preview_image_url": "https://fbcdn.net/video_thumb.jpg"}],
+            }
+        })
+
+        with patch.dict("os.environ", {"META_ACCESS_TOKEN": ""}, clear=False), \
+             patch("services.scrapecreators.scrapecreators", mock_sc), \
+             patch.object(analyzer, "_download_image", new_callable=AsyncMock,
+                          return_value=(FAKE_JPEG, "image/jpeg")):
+            data, mt, url = await analyzer._fetch_fresh_image("ad_video_only")
+
+        assert data == FAKE_JPEG
+        assert url == "https://fbcdn.net/video_thumb.jpg"
+
+    @pytest.mark.asyncio
     async def test_searchapi_skipped_when_not_configured(self):
         """When SearchAPI is not configured, it's skipped gracefully."""
         analyzer = CreativeAnalyzer()

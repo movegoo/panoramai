@@ -158,6 +158,18 @@ async def analyze_all_creatives(
                     ),
                     timeout=60,
                 )
+                # Fallback: if image analysis failed (broken URL, video-only, etc.)
+                # but the ad has text, do text-only analysis instead of marking as error
+                if result is None and ad.ad_text and len(ad.ad_text.strip()) >= 10:
+                    logger.info(f"Image analysis failed for {ad.ad_id}, falling back to text-only")
+                    result = await asyncio.wait_for(
+                        creative_analyzer.analyze_text_only(
+                            ad_text=ad.ad_text,
+                            platform=_normalize_platform(ad.platform),
+                            ad_id=ad.ad_id or "",
+                        ),
+                        timeout=45,
+                    )
 
             if result:
                 # Update creative_url if a fresh URL was fetched (Meta API / ScrapeCreators)
