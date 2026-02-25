@@ -325,12 +325,19 @@ def _seed_prompt_templates():
                 db.add(PromptTemplate(**d))
                 added += 1
             else:
-                # Update prompt text if it changed (e.g. new French version)
+                # Update prompt text and model_id if changed
                 row = existing[d["key"]]
+                changed = False
                 if row.prompt_text != d["prompt_text"]:
                     row.prompt_text = d["prompt_text"]
-                    row.model_id = d.get("model_id", row.model_id)
-                    row.max_tokens = d.get("max_tokens", row.max_tokens)
+                    changed = True
+                if row.model_id != d.get("model_id"):
+                    row.model_id = d["model_id"]
+                    changed = True
+                if row.max_tokens != d.get("max_tokens"):
+                    row.max_tokens = d["max_tokens"]
+                    changed = True
+                if changed:
                     updated += 1
         if added or updated:
             db.commit()

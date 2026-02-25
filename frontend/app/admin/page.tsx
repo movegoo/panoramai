@@ -870,9 +870,21 @@ export default function AdminPage() {
                               value={editModel}
                               onChange={(e) => setEditModel(e.target.value)}
                             >
-                              <option value="claude-opus-4-6">Opus 4.6</option>
-                              <option value="claude-sonnet-4-5-20250929">Sonnet 4.5</option>
-                              <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+                              <optgroup label="Google Gemini">
+                                <option value="gemini-3-flash-preview">Gemini 3 Flash (recommande)</option>
+                                <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                              </optgroup>
+                              <optgroup label="Mistral">
+                                <option value="mistral-small-latest">Mistral Small 3.2</option>
+                              </optgroup>
+                              <optgroup label="Anthropic Claude">
+                                <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+                              </optgroup>
                             </select>
                           </div>
                           <div>

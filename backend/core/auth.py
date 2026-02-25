@@ -97,20 +97,25 @@ def _validate_cognito_token(token: str, db: Session) -> User:
         logger.warning(f"Cognito JWT missing 'sub': {list(payload.keys())}")
         raise HTTPException(status_code=401, detail="Token Cognito invalide (sub manquant)")
 
-    logger.info(f"Cognito JWT validated: sub={sub}, email={email}")
+    # Stable numeric ID from cognito sub (deterministic)
+    cognito_ms_id = abs(hash(sub)) % 2**31
+
+    logger.info(f"Cognito JWT validated: sub={sub}, email={email}, cognito_ms_id={cognito_ms_id}")
 
     # Lookup by email first (most likely match with existing users), then by cognito sub
     user = None
     if email:
         user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = db.query(User).filter(User.ms_user_id == hash(sub) % 2**31).first()
+        user = db.query(User).filter(User.ms_user_id == cognito_ms_id).first()
 
     if user:
         if name:
             user.name = name
         if email:
             user.email = email
+        if not user.ms_user_id:
+            user.ms_user_id = cognito_ms_id
         user.is_active = True
         db.commit()
         db.refresh(user)
@@ -119,6 +124,7 @@ def _validate_cognito_token(token: str, db: Session) -> User:
             email=email or f"{sub}@cognito",
             name=name or email or sub,
             password_hash="ms-cognito",
+            ms_user_id=cognito_ms_id,
             is_admin=False,
             is_active=True,
         )
