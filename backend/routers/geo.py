@@ -560,7 +560,7 @@ async def get_all_competitor_stores(
     # Get the user's competitor IDs to filter store locations
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id).filter(Competitor.is_active == True)
+    user_comp_query = db.query(Competitor.id).filter(((Competitor.is_active == True) | (Competitor.is_active == None)) | (Competitor.is_active == None))
     # Exclude the brand itself from its own competitor list
     user_comp_query = user_comp_query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))
     if user:
@@ -723,7 +723,7 @@ async def get_catchment_zones(
     # 2. Load competitor stores (BANCO source)
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter((Competitor.is_active == True) | (Competitor.is_active == None))
     if user:
         user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
@@ -868,7 +868,7 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
     Utilise bulk_import: 1 seul téléchargement, 1 seul scan CSV."""
     from services.banco import banco_service
 
-    competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+    competitors = db.query(Competitor).filter(((Competitor.is_active == True) | (Competitor.is_active == None)) | (Competitor.is_active == None)).all()
     counts = await banco_service.bulk_import(competitors, db)
 
     results = [
@@ -939,7 +939,7 @@ async def enrich_gmb(
     # Filter stores by user's competitors
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter((Competitor.is_active == True) | (Competitor.is_active == None))
     if user:
         user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
@@ -1050,7 +1050,7 @@ async def enrich_gmb_demo(
     # Filter stores by user's competitors
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id, Competitor.name).filter(Competitor.is_active == True)
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter((Competitor.is_active == True) | (Competitor.is_active == None))
     if user:
         user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:
