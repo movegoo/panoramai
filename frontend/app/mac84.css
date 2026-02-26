@@ -1,0 +1,510 @@
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Macintosh 1984 Mode - Activated by reverse cheat code                   */
+/*  down down up up left right left right B A B A                           */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables override ── */
+.mac84 {
+  --background: 0 0% 95%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 0%;
+  --primary: 0 0% 0%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 95%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 0 0% 90%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 0%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 0% 0%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 0%;
+  --input: 0 0% 100%;
+  --ring: 0 0% 0%;
+  --radius: 0px;
+}
+
+/* ── Global resets ── */
+.mac84,
+.mac84 * {
+  border-radius: 0 !important;
+  font-family: "Chicago", "Geneva", "Monaco", "Courier New", monospace !important;
+  transition: none !important;
+  animation: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  -webkit-font-smoothing: none !important;
+  image-rendering: pixelated !important;
+}
+
+.mac84 code,
+.mac84 pre,
+.mac84 .font-mono {
+  font-family: "Monaco", "Courier New", Courier, monospace !important;
+}
+
+/* ── Base: Beige/cream background like original Mac ── */
+.mac84 {
+  background: #f2f0e6;
+}
+
+.mac84 body {
+  background: #f2f0e6 !important;
+}
+
+/* ── Kill all gradients ── */
+.mac84 [class*="bg-gradient-to-br"],
+.mac84 [class*="bg-gradient-to-r"],
+.mac84 [class*="bg-gradient-to-b"] {
+  background: #fff !important;
+}
+
+/* ── Cards = Mac windows with thick black borders ── */
+.mac84 [class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+.mac84 [class*="shadow"] {
+  box-shadow: 2px 2px 0 #000 !important;
+}
+
+.mac84 [class~="bg-card"],
+.mac84 [class*="bg-card"] {
+  background: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: 2px 2px 0 #000 !important;
+}
+
+/* ── Sidebar = Finder window ── */
+.mac84 aside {
+  background: #fff !important;
+  border-right: 2px solid #000 !important;
+  box-shadow: none !important;
+}
+
+/* Sidebar logo = Mac title bar with stripes */
+.mac84 aside > div:first-child {
+  background: #fff !important;
+  border-bottom: 2px solid #000 !important;
+  padding: 3px 6px !important;
+  position: relative;
+}
+
+.mac84 aside > div:first-child::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 20px;
+  right: 20px;
+  bottom: 2px;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 1px,
+    #000 1px,
+    #000 2px,
+    transparent 2px,
+    transparent 3px
+  );
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.mac84 aside > div:first-child * {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  background: transparent !important;
+  position: relative;
+  z-index: 1;
+}
+
+.mac84 aside > div:first-child .rounded-lg {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Nav items */
+.mac84 aside nav a {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px 8px !important;
+  font-size: 12px !important;
+}
+
+.mac84 aside nav a:hover {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.mac84 aside nav a:hover * {
+  color: #fff !important;
+}
+
+/* Active nav item - inverted (Mac selection style) */
+.mac84 aside nav a[class*="from-violet"],
+.mac84 aside nav a[class*="bg-violet"],
+.mac84 aside nav a[class*="bg-primary"] {
+  background: #000 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.mac84 aside nav a[class*="from-violet"] *,
+.mac84 aside nav a[class*="bg-violet"] *,
+.mac84 aside nav a[class*="bg-primary"] * {
+  color: #fff !important;
+}
+
+/* Sidebar section headers */
+.mac84 aside nav button span {
+  color: #000 !important;
+  font-weight: bold !important;
+  font-size: 12px !important;
+}
+
+.mac84 aside > div:last-child {
+  background: #fff !important;
+  border-top: 2px solid #000 !important;
+  box-shadow: none !important;
+}
+
+/* ── Breadcrumb = Mac menu bar style ── */
+.mac84 .border-b.bg-card\/80 {
+  background: #fff !important;
+  border-bottom: 2px solid #000 !important;
+  box-shadow: none !important;
+}
+
+/* ── Buttons = Classic Mac buttons (thick border, black outline) ── */
+.mac84 button,
+.mac84 [role="button"],
+.mac84 .btn,
+.mac84 input[type="submit"] {
+  background: #fff !important;
+  color: #000 !important;
+  border: 2px solid #000 !important;
+  box-shadow: 2px 2px 0 #000 !important;
+  padding: 3px 12px !important;
+  min-height: 22px;
+  font-size: 12px !important;
+  text-shadow: none !important;
+}
+
+.mac84 button:active,
+.mac84 [role="button"]:active {
+  background: #000 !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Primary buttons */
+.mac84 button[class*="bg-primary"],
+.mac84 button[class*="bg-violet"],
+.mac84 button[class*="bg-indigo"] {
+  background: #000 !important;
+  color: #fff !important;
+  border: 3px solid #000 !important;
+  box-shadow: none !important;
+}
+
+/* ── Inputs = Mac-style sunken fields ── */
+.mac84 input,
+.mac84 select,
+.mac84 textarea {
+  background: #fff !important;
+  color: #000 !important;
+  border: 2px solid #000 !important;
+  box-shadow: inset 1px 1px 0 #999 !important;
+  padding: 3px 4px !important;
+  font-size: 12px !important;
+  outline: none !important;
+}
+
+.mac84 input:focus,
+.mac84 select:focus {
+  outline: none !important;
+  box-shadow: inset 1px 1px 0 #999, 0 0 0 1px #000 !important;
+}
+
+/* ── Scrollbars = Classic Mac scrollbars ── */
+.mac84 ::-webkit-scrollbar {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.mac84 ::-webkit-scrollbar-track {
+  background: #f2f0e6 !important;
+  border-left: 1px solid #000 !important;
+}
+
+.mac84 ::-webkit-scrollbar-thumb {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+}
+
+.mac84 ::-webkit-scrollbar-button {
+  background: #fff;
+  display: block;
+  height: 16px;
+  width: 16px;
+  border: 1px solid #000;
+}
+
+/* ── Text styles — slightly larger, monospaced ── */
+.mac84 h1,
+.mac84 h2,
+.mac84 h3,
+.mac84 h4 {
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: #000 !important;
+}
+
+.mac84 h1 { font-size: 16px !important; }
+.mac84 h2 { font-size: 14px !important; }
+.mac84 h3 { font-size: 13px !important; }
+
+.mac84 p,
+.mac84 span,
+.mac84 label {
+  font-size: 12px;
+  letter-spacing: 0;
+  color: #000;
+}
+
+/* ── Links — underlined, no color ── */
+.mac84 a:not(aside a) {
+  color: #000 !important;
+  text-decoration: underline !important;
+}
+
+.mac84 a:not(aside a):hover {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+/* ── Tables — clean black grid ── */
+.mac84 table {
+  border-collapse: collapse !important;
+}
+
+.mac84 th {
+  background: #f2f0e6 !important;
+  border: 1px solid #000 !important;
+  font-size: 12px !important;
+  padding: 3px 8px !important;
+  font-weight: bold !important;
+  box-shadow: none !important;
+}
+
+.mac84 td {
+  border: 1px solid #000 !important;
+  font-size: 12px !important;
+  padding: 2px 6px !important;
+  background: #fff !important;
+}
+
+/* ── Progress bars — dithered fill ── */
+.mac84 [role="progressbar"],
+.mac84 [class*="h-2"][class*="rounded-full"] {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+/* Filled portion — crosshatch pattern (classic Mac) */
+.mac84 [role="progressbar"] > div,
+.mac84 [class*="h-2"][class*="rounded-full"] > div,
+.mac84 [class*="h-1.5"][class*="rounded-full"] > div,
+.mac84 [class*="h-4"][class*="rounded-full"] > div {
+  background: repeating-linear-gradient(
+    45deg,
+    #000 0px,
+    #000 2px,
+    #fff 2px,
+    #fff 4px
+  ) !important;
+  box-shadow: none !important;
+}
+
+/* ── Badges ── */
+.mac84 [class*="rounded-full"] {
+  border-radius: 0 !important;
+}
+
+/* ── All text colors → black or white ── */
+.mac84 [class*="text-violet"],
+.mac84 [class*="text-indigo"],
+.mac84 [class*="text-emerald"],
+.mac84 [class*="text-green"],
+.mac84 [class*="text-red"],
+.mac84 [class*="text-rose"],
+.mac84 [class*="text-orange"],
+.mac84 [class*="text-amber"],
+.mac84 [class*="text-blue"],
+.mac84 [class*="text-sky"],
+.mac84 [class*="text-cyan"] {
+  color: #000 !important;
+}
+
+/* ── Colored backgrounds → white or cream ── */
+.mac84 [class*="bg-violet-50"],
+.mac84 [class*="bg-violet-100"],
+.mac84 [class*="bg-indigo-50"],
+.mac84 [class*="bg-blue-50"],
+.mac84 [class*="bg-emerald-50"],
+.mac84 [class*="bg-green-50"],
+.mac84 [class*="bg-red-50"],
+.mac84 [class*="bg-orange-50"],
+.mac84 [class*="bg-amber-50"],
+.mac84 [class*="bg-slate-50"] {
+  background: #f2f0e6 !important;
+}
+
+.mac84 [class*="bg-violet-500"],
+.mac84 [class*="bg-violet-600"],
+.mac84 [class*="bg-indigo-500"],
+.mac84 [class*="bg-indigo-600"],
+.mac84 [class*="bg-emerald-500"],
+.mac84 [class*="bg-green-500"],
+.mac84 [class*="bg-red-500"] {
+  background: #000 !important;
+}
+
+/* ── Icons in gradient containers ── */
+.mac84 [class*="bg-gradient-to"] {
+  background: #fff !important;
+  border: 1px solid #000 !important;
+  box-shadow: none !important;
+}
+
+/* ── Loading animation → blinking ── */
+.mac84 .animate-spin {
+  animation: mac84-blink 1s steps(2) infinite !important;
+}
+
+@keyframes mac84-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+/* ── Tabs ── */
+.mac84 [role="tablist"] {
+  background: #f2f0e6 !important;
+  gap: 0 !important;
+}
+
+.mac84 [role="tab"] {
+  background: #f2f0e6 !important;
+  border: 1px solid #000 !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  padding: 3px 10px !important;
+}
+
+.mac84 [role="tab"][data-state="active"],
+.mac84 [role="tab"][aria-selected="true"] {
+  background: #fff !important;
+  border-bottom-color: #fff !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+/* ── Dropdowns ── */
+.mac84 [class*="z-50"][class*="border"] {
+  background: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.5) !important;
+}
+
+/* ── Charts ── */
+.mac84 .recharts-wrapper,
+.mac84 .recharts-surface {
+  background: #fff !important;
+}
+
+.mac84 .recharts-cartesian-grid line {
+  stroke: #ccc !important;
+}
+
+.mac84 .recharts-text {
+  font-family: "Chicago", "Geneva", "Monaco", monospace !important;
+  font-size: 10px !important;
+}
+
+/* ── Map ── */
+.mac84 .leaflet-container {
+  border: 2px solid #000 !important;
+  box-shadow: 2px 2px 0 #000 !important;
+}
+
+.mac84 .leaflet-control-zoom a {
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #000 !important;
+  border-radius: 0 !important;
+  font-family: "Chicago", "Geneva", monospace !important;
+  width: 22px !important;
+  height: 22px !important;
+  line-height: 22px !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+
+/* ── Main content ── */
+.mac84 main {
+  background: #f2f0e6 !important;
+}
+
+/* ── Hover = inverted (Mac style) ── */
+.mac84 a:hover,
+.mac84 button:hover {
+  cursor: pointer !important;
+}
+
+/* ── Separator lines ── */
+.mac84 hr,
+.mac84 [class*="border-b"] {
+  border-color: #000 !important;
+}
+
+/* ── Small colored dots — keep but make them squares ── */
+.mac84 .h-2.w-2,
+.mac84 .h-2\.5.w-2\.5,
+.mac84 .h-3.w-3 {
+  border-radius: 0 !important;
+}
+
+/* ── Rainbow accent bar on sidebar bottom ── */
+.mac84 aside > div:last-child::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #61BB46, #FDB827, #F5821F, #E03A3E, #963D97, #009DDC);
+  margin-bottom: 4px;
+}
+
+/* ── Checkbox ── */
+.mac84 input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 12px !important;
+  height: 12px !important;
+  background: #fff !important;
+  border: 2px solid #000 !important;
+  box-shadow: none !important;
+}
+
+.mac84 input[type="checkbox"]:checked {
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Cpath d='M1 4L3 6L7 2' stroke='black' stroke-width='2' fill='none'/%3E%3C/svg%3E") center no-repeat !important;
+}
+
+/* ── Tooltip / Toast ── */
+.mac84 [class*="animate-in"] {
+  animation: none !important;
+}

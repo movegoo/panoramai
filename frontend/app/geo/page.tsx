@@ -202,78 +202,121 @@ export default function GeoPage() {
         onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
       />
 
-      {/* GMB Scoring Section */}
+      {/* Map + KPI summary side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* France Map — takes 2/3 */}
+        <div className="lg:col-span-2">
+          <FranceMap />
+        </div>
+
+        {/* Compact KPIs sidebar — takes 1/3 */}
+        <div className="space-y-3">
+          {/* Store KPIs */}
+          {!loading && filteredStoreGroups.length > 0 && (
+            <>
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Store className="h-4 w-4 text-violet-500" />
+                  <span className="text-sm font-semibold text-foreground">Points de vente</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{totalStores.toLocaleString()}</p>
+                    <p className="text-[11px] text-muted-foreground">{filteredStoreGroups.length} enseignes</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-foreground">{leader?.competitor_name || "—"}</p>
+                    <p className="text-[11px] text-muted-foreground">{leader ? `${leader.total.toLocaleString()} (${(leader.total / totalStores * 100).toFixed(0)}%)` : "Leader"}</p>
+                  </div>
+                </div>
+                {brandGroup && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-violet-700">{brandName}</span>
+                      <span className="text-xs font-bold text-violet-700">{brandGroup.total.toLocaleString()} mag. — #{filteredStoreGroups.indexOf(brandGroup) + 1}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Compact store distribution */}
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <h3 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <BarChart3 className="h-3.5 w-3.5 text-violet-500" />
+                  Repartition
+                </h3>
+                <div className="space-y-1.5">
+                  {filteredStoreGroups.slice(0, 6).map((g, i) => {
+                    const isBrand = brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase();
+                    const pct = totalStores > 0 ? (g.total / totalStores * 100) : 0;
+                    return (
+                      <div key={g.competitor_id}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                            <span className={`text-[11px] truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
+                              {g.competitor_name}
+                            </span>
+                          </div>
+                          <span className={`text-[11px] font-semibold ${isBrand ? "text-violet-700" : "text-muted-foreground"}`}>{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : "bg-gray-400"}`}
+                            style={{ width: `${Math.max(pct, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredStoreGroups.length > 6 && (
+                    <p className="text-[10px] text-muted-foreground text-center pt-1">+{filteredStoreGroups.length - 6} autres</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* GMB summary */}
+          {!gmbLoading && gmbScoring && filteredGmbCompetitors.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-semibold text-foreground">Google My Business</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{gmbScoring.market_avg_score}<span className="text-sm font-normal text-muted-foreground">/100</span></p>
+                  <p className="text-[11px] text-muted-foreground">Score moyen</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                    <p className="text-2xl font-bold text-foreground">{gmbScoring.market_avg_rating.toFixed(1)}</p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{gmbScoring.total_reviews.toLocaleString()} avis</p>
+                </div>
+              </div>
+              {brandGmb && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-violet-700">{brandName}</span>
+                    <span className="text-xs font-bold text-violet-700">{brandGmb.avg_score ?? "—"}/100 — #{brandGmb.rank}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* GMB Detailed Scoring Section */}
       {!gmbLoading && gmbScoring && filteredGmbCompetitors.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
             <Star className="h-4.5 w-4.5 text-amber-500" />
-            Scoring Google My Business
+            Scoring Google My Business — Detail
           </h2>
-
-          {/* GMB KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 shadow-md shadow-amber-200/50">
-                  <Star className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Score GMB moyen</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">{gmbScoring.market_avg_score}/100</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Moyenne marche</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-md shadow-yellow-200/50">
-                  <Star className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Rating moyen</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">{gmbScoring.market_avg_rating.toFixed(1)}/5</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {gmbLeader ? `Leader: ${gmbLeader.competitor_name} (${gmbLeader.avg_rating?.toFixed(1) || "—"})` : ""}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-200/50">
-                  <MessageSquare className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Total avis</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">{gmbScoring.total_reviews.toLocaleString()}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{gmbScoring.total_stores.toLocaleString()} magasins</p>
-            </div>
-            {brandGmb ? (
-              <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-200/50">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">{brandName}</span>
-                </div>
-                <p className="text-lg font-bold text-violet-700">{brandGmb.avg_score ?? "—"}/100</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  #{brandGmb.rank} / {filteredGmbCompetitors.length} — Completude {brandGmb.completeness_pct}%
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-border bg-card p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-200/50">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">Completude</span>
-                </div>
-                <p className="text-lg font-bold text-foreground">
-                  {filteredGmbCompetitors.length > 0
-                    ? `${Math.round(filteredGmbCompetitors.reduce((s, c) => s + c.completeness_pct, 0) / filteredGmbCompetitors.length)}%`
-                    : "—"}
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Profils GMB complets</p>
-              </div>
-            )}
-          </div>
 
           {/* Competitor Ranking Table */}
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -459,62 +502,11 @@ export default function GeoPage() {
         </div>
       )}
 
-      {/* Competitive Intelligence Dashboard */}
+      {/* Detailed Store Distribution + Population Coverage */}
       {!loading && filteredStoreGroups.length > 0 && (
         <div className="space-y-4">
-          {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 shadow-md shadow-violet-200/50">
-                  <Store className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Total magasins</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">{totalStores.toLocaleString()}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{filteredStoreGroups.length} enseignes</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-200/50">
-                  <TrendingUp className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Leader</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">{leader?.competitor_name || "—"}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{leader ? `${leader.total.toLocaleString()} magasins (${(leader.total / totalStores * 100).toFixed(0)}%)` : ""}</p>
-            </div>
-            {brandGroup && (
-              <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-200/50">
-                    <Store className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">{brandName}</span>
-                </div>
-                <p className="text-lg font-bold text-violet-700">{brandGroup.total.toLocaleString()}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  #{filteredStoreGroups.indexOf(brandGroup) + 1} / {filteredStoreGroups.length} enseignes
-                </p>
-              </div>
-            )}
-            <div className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-sky-600 shadow-md shadow-sky-200/50">
-                  <BarChart3 className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">Concentration</span>
-              </div>
-              <p className="text-lg font-bold text-foreground">
-                {leader ? `${(leader.total / totalStores * 100).toFixed(0)}%` : "—"}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Part du leader</p>
-            </div>
-          </div>
-
-          {/* Store Distribution + Population Coverage side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Store Distribution */}
+            {/* Full Store Distribution */}
             <div className="rounded-2xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Store className="h-4 w-4 text-violet-500" />
@@ -653,8 +645,6 @@ export default function GeoPage() {
           )}
         </div>
       )}
-
-      <FranceMap />
     </div>
   );
 }

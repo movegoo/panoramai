@@ -59,6 +59,7 @@ import {
   HelpCircle,
   AlertTriangle,
   Info,
+  Check,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
@@ -1381,6 +1382,82 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function CompetitorPicker({ competitors, value, onChange }: { competitors: any[]; value: number | null; onChange: (id: number | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = competitors.find((c) => c.id === value);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 h-8 rounded-lg border bg-background px-2.5 text-xs hover:bg-muted/60 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+      >
+        {selected ? (
+          <>
+            {selected.logo_url ? (
+              <img src={selected.logo_url} alt="" className="h-5 w-5 rounded-full object-contain bg-white border border-border/50" />
+            ) : (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[9px] font-bold text-violet-700 border border-violet-200/50">
+                {selected.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <span className="font-medium max-w-[100px] truncate">{selected.name}</span>
+          </>
+        ) : (
+          <>
+            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">Tous les concurrents</span>
+          </>
+        )}
+        <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-56 max-h-[280px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg z-50 py-1">
+          <button
+            onClick={() => { onChange(null); setOpen(false); }}
+            className={`flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-muted/60 transition-colors text-xs ${value === null ? "bg-violet-50" : ""}`}
+          >
+            <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="font-medium flex-1">Tous les concurrents</span>
+            {value === null && <Check className="h-3.5 w-3.5 text-violet-600 shrink-0" />}
+          </button>
+          <div className="border-t border-border my-1" />
+          {competitors.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onChange(c.id); setOpen(false); }}
+              className={`flex items-center gap-2.5 w-full px-3 py-1.5 text-left hover:bg-muted/60 transition-colors text-xs ${value === c.id ? "bg-violet-50" : ""}`}
+            >
+              {c.logo_url ? (
+                <img src={c.logo_url} alt="" className="h-6 w-6 rounded-full object-contain bg-white border border-border/50 shrink-0" />
+              ) : (
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-indigo-100 text-[10px] font-bold text-violet-700 border border-violet-200/50 shrink-0">
+                  {c.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="font-medium flex-1 truncate">
+                {c.name}
+                {c.is_brand && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
+              </span>
+              {value === c.id && <Check className="h-3.5 w-3.5 text-violet-600 shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2951,16 +3028,11 @@ export default function AdsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              value={creativeCompetitorId ?? ""}
-              onChange={(e) => setCreativeCompetitorId(e.target.value ? Number(e.target.value) : null)}
-              className="h-8 rounded-lg border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
-            >
-              <option value="">Tous les concurrents</option>
-              {competitors.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}{c.is_brand ? " (vous)" : ""}</option>
-              ))}
-            </select>
+            <CompetitorPicker
+              competitors={competitors}
+              value={creativeCompetitorId}
+              onChange={setCreativeCompetitorId}
+            />
             <Button
               variant="outline"
               size="sm"

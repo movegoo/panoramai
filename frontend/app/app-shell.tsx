@@ -4,9 +4,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWin98Mode } from "@/lib/use-win98";
+import { useMac84Mode } from "@/lib/use-mac84";
 import { SidebarNav } from "./sidebar-nav";
 import { Breadcrumb } from "./breadcrumb";
 import { BSODScreen, Win98Taskbar } from "@/components/win98-overlay";
+import { MacBootScreen, Mac84MenuBar } from "@/components/mac84-overlay";
 import { Menu, X } from "lucide-react";
 import { MobyChatbot } from "@/components/moby-chatbot";
 
@@ -16,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { active: win98, showBSOD, toggle: toggleWin98 } = useWin98Mode();
+  const { active: mac84, showBoot, toggle: toggleMac84 } = useMac84Mode();
 
   const isLoginPage = pathname === "/login";
 
@@ -62,9 +65,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {showBSOD && <BSODScreen onDone={() => {}} />}
+      {showBoot && <MacBootScreen onDone={() => {}} />}
       <Win98Taskbar active={win98} onToggle={toggleWin98} />
+      <Mac84MenuBar active={mac84} onToggle={toggleMac84} />
 
-      <div className={`flex ${win98 ? "h-[calc(100vh-30px)]" : "h-screen"}`}>
+      <div className={`flex ${win98 ? "h-[calc(100vh-30px)]" : mac84 ? "h-[calc(100vh-24px)] mt-[24px]" : "h-screen"}`}>
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
