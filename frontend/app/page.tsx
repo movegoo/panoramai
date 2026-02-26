@@ -786,7 +786,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Platform leader cards - comparative ranking */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
               { key: "instagram", ranking: igRanking, icon: <Instagram className="h-4 w-4" />, label: "Instagram", accent: "pink", unit: "followers", isRating: false },
               { key: "tiktok", ranking: ttRanking, icon: <Music className="h-4 w-4" />, label: "TikTok", accent: "cyan", unit: "followers", isRating: false },
