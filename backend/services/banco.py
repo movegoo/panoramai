@@ -164,16 +164,16 @@ class BancoService:
 
         return StoreLocation(
             competitor_id=competitor_id,
-            name=(row.get("name") or row.get("brand", "")).strip(),
-            brand_name=(row.get("brand") or "").strip(),
-            category=(row.get("type") or "").strip(),
-            address=(row.get("address") or "").strip(),
-            postal_code=cp,
-            city=(row.get("com_nom") or "").strip(),
-            department=dept,
+            name=(row.get("name") or row.get("brand", "")).strip()[:255],
+            brand_name=(row.get("brand") or "").strip()[:255],
+            category=(row.get("type") or "").strip()[:100],
+            address=(row.get("address") or "").strip()[:500],
+            postal_code=cp[:10],
+            city=(row.get("com_nom") or "").strip()[:100],
+            department=dept[:10],
             latitude=lat_f,
             longitude=lon_f,
-            siret=(row.get("siret") or "").strip(),
+            siret=(row.get("siret") or "").strip()[:20],
             source="BANCO",
         )
 
