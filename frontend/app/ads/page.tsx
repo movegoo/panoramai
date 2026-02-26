@@ -16,6 +16,7 @@ import {
   FreshnessData,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
+import { useAuth } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/utils";
 import {
   RefreshCw,
@@ -1516,6 +1517,7 @@ function CompetitorComparison({ filteredAds, stats, competitors, brandName }: { 
 /* ─────────────── Page ─────────────── */
 
 export default function AdsPage() {
+  const { currentAdvertiserId } = useAuth();
   const [allAds, setAllAds] = useState<AdWithCompetitor[]>([]);
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1614,6 +1616,17 @@ export default function AdsPage() {
 
   // Auto-launch creative analysis when page loads and there are unanalyzed ads
   const autoAnalyzeLaunched = useRef(false);
+
+  // Reset local state when advertiser changes
+  useEffect(() => {
+    setAllAds([]);
+    setCompetitors([]);
+    setBrandName("");
+    setLoading(true);
+    setAnalyzeResult(null);
+    autoAnalyzeLaunched.current = false;
+  }, [currentAdvertiserId]);
+
   useEffect(() => {
     if (
       creativeInsights &&

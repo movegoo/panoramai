@@ -14,6 +14,7 @@ import {
   BrandProfileData,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
+import { useAuth } from "@/lib/auth";
 import { formatNumber, formatDate } from "@/lib/utils";
 import {
   RefreshCw,
@@ -123,6 +124,7 @@ function GrowthBadge({ value }: { value?: number | null }) {
 }
 
 export default function AppsPage() {
+  const { currentAdvertiserId } = useAuth();
   const [store, setStore] = useState<Store>("playstore");
   const [rankingView, setRankingView] = useState<RankingView>("rating");
   const [selectedCompetitor, setSelectedCompetitor] = useState<number | null>(null);
@@ -131,6 +133,14 @@ export default function AppsPage() {
   const [fetching, setFetching] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
+
+  // Reset local state when advertiser changes
+  useEffect(() => {
+    setSelectedCompetitor(null);
+    setAppData([]);
+    setTrends({});
+    setTrendsLoaded(false);
+  }, [currentAdvertiserId]);
 
   // SWR cached data
   const { data: swrComp } = useAPI<CompetitorListItem[]>("/competitors/?include_brand=true");

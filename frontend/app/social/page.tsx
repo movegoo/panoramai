@@ -16,6 +16,7 @@ import {
   SnapchatComparison,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
+import { useAuth } from "@/lib/auth";
 import { formatNumber } from "@/lib/utils";
 import {
   RefreshCw,
@@ -125,6 +126,7 @@ function GrowthBadge({ value }: { value?: number }) {
 const MEDAL = ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-700", "bg-orange-300 text-orange-800"];
 
 export default function SocialPage() {
+  const { currentAdvertiserId } = useAuth();
   const [platform, setPlatform] = useState<Platform>("instagram");
   const [rankingView, setRankingView] = useState<RankingView>("audience");
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
@@ -144,6 +146,21 @@ export default function SocialPage() {
   const [contentPlatform, setContentPlatform] = useState<string | null>(null); // null = overview (all)
   const autoCollectTriggered = useRef(false);
   const autoProfileTriggered = useRef(false);
+
+  // Reset local state when advertiser changes
+  useEffect(() => {
+    setCompetitors([]);
+    setIgComparison([]);
+    setTtComparison([]);
+    setYtComparison([]);
+    setScComparison([]);
+    setBrandName(null);
+    setContentInsights(null);
+    setLoading(true);
+    setInitialLoad(true);
+    autoCollectTriggered.current = false;
+    autoProfileTriggered.current = false;
+  }, [currentAdvertiserId]);
 
   // SWR-cached data fetches — survive page navigation
   const { data: swrComps } = useAPI<CompetitorListItem[]>("/competitors/?include_brand=true");
