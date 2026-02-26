@@ -14,6 +14,8 @@ import json
 import asyncio
 import logging
 import random
+
+logger = logging.getLogger(__name__)
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User, UserAdvertiser, AdvertiserCompetitor
 from core.auth import get_current_user, get_optional_user
 from core.permissions import parse_advertiser_header
