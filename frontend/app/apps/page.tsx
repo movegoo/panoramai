@@ -44,6 +44,7 @@ import {
   Info,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
+import { SmartFilter } from "@/components/smart-filter";
 
 type Store = "playstore" | "appstore";
 type RankingView = "rating" | "reviews" | "downloads";
@@ -133,6 +134,8 @@ export default function AppsPage() {
   const [fetching, setFetching] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [trendsLoaded, setTrendsLoaded] = useState(false);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   // Reset local state when advertiser changes
   useEffect(() => {
@@ -187,6 +190,13 @@ export default function AppsPage() {
     }
   }, [selectedCompetitor, store]);
 
+  useEffect(() => {
+    if (aiFilters?.store) {
+      const s = aiFilters.store.toLowerCase();
+      if (s === "playstore" || s === "appstore") setStore(s as Store);
+    }
+  }, [aiFilters]);
+
   const isBrand = (name: string) => brandName && name.toLowerCase() === brandName.toLowerCase();
 
   async function handleRefreshAll() {
@@ -238,6 +248,23 @@ export default function AppsPage() {
       .sort((a, b) => b.avgRating - a.avgRating);
   }, [psComparison, asComparison]);
 
+  const filteredCrossStore = useMemo(() => {
+    if (!aiFilters || !crossStoreData.length) return crossStoreData;
+    let result = [...crossStoreData];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      result = result.filter((c: any) => names.some((n: string) => c.name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.rating_min) {
+      result = result.filter((c: any) => c.avgRating >= aiFilters.rating_min);
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter((c: any) => c.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [crossStoreData, aiFilters]);
+
   const currentComparison = store === "playstore" ? psComparison : asComparison;
   const config = STORE_CONFIG[store];
 
@@ -261,7 +288,28 @@ export default function AppsPage() {
   }
 
   const sorted = [...currentComparison].sort((a, b) => getRankingValue(b) - getRankingValue(a));
-  const maxRankingVal = sorted.length > 0 ? getRankingValue(sorted[0]) || 1 : 1;
+
+  const filteredSorted = useMemo(() => {
+    if (!aiFilters) return sorted;
+    let result = [...sorted];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      result = result.filter((c: any) => names.some((n: string) => c.competitor_name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.rating_min) {
+      result = result.filter((c: any) => (c.rating || 0) >= aiFilters.rating_min);
+    }
+    if (aiFilters.rating_max) {
+      result = result.filter((c: any) => (c.rating || 0) <= aiFilters.rating_max);
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter((c: any) => c.competitor_name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [sorted, aiFilters]);
+
+  const maxRankingVal = filteredSorted.length > 0 ? getRankingValue(filteredSorted[0]) || 1 : 1;
 
   const latestData = appData[0];
   const selectedComp = competitors.find(c => c.id === selectedCompetitor);
@@ -328,8 +376,15 @@ export default function AppsPage() {
         </Button>
       </div>
 
+      <SmartFilter
+        page="apps"
+        placeholder="Filtrer les applications... (ex: note > 4 Leclerc, Play Store)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
+
       {/* Cross-Store Overview */}
-      {crossStoreData.length > 0 && (
+      {filteredCrossStore.length > 0 && (
         <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -362,9 +417,9 @@ export default function AppsPage() {
                 </tr>
               </thead>
               <tbody>
-                {crossStoreData.map((c, i) => {
-                  const csRc = getRankColor(i, crossStoreData.length);
-                  const rowHighlight = i === 0 ? "bg-emerald-500/15" : i === crossStoreData.length - 1 ? "bg-red-500/10" : "";
+                {filteredCrossStore.map((c, i) => {
+                  const csRc = getRankColor(i, filteredCrossStore.length);
+                  const rowHighlight = i === 0 ? "bg-emerald-500/15" : i === filteredCrossStore.length - 1 ? "bg-red-500/10" : "";
                   return (
                   <tr key={c.id} className={`border-t border-white/10 ${isBrand(c.name) ? "bg-violet-500/15" : rowHighlight}`}>
                     <td className="py-2.5 pr-2">
@@ -488,7 +543,7 @@ export default function AppsPage() {
 
           {/* Ranked Cards Grid */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map((c, i) => {
+            {filteredSorted.map((c, i) => {
               const primaryVal = getRankingValue(c);
               const pct = maxRankingVal > 0 ? (primaryVal / maxRankingVal) * 100 : 0;
               const brand = isBrand(c.competitor_name);
@@ -496,7 +551,7 @@ export default function AppsPage() {
               const trendData = trends[trendKey];
               const isSelected = selectedCompetitor === c.competitor_id;
 
-              const rc = getRankColor(i, sorted.length);
+              const rc = getRankColor(i, filteredSorted.length);
 
               return (
                 <button
@@ -537,7 +592,7 @@ export default function AppsPage() {
                   {rankingView !== "rating" && (
                     <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
                       <div className={`h-full rounded-full transition-all duration-700 ${
-                        i === 0 ? "bg-emerald-500" : i === sorted.length - 1 ? "bg-red-400" : "bg-amber-400"
+                        i === 0 ? "bg-emerald-500" : i === filteredSorted.length - 1 ? "bg-red-400" : "bg-amber-400"
                       }`}
                         style={{ width: `${pct}%` }} />
                     </div>
@@ -590,7 +645,7 @@ export default function AppsPage() {
               </div>
               <ExportMenu
                 filename={`apps_${store}_details`}
-                data={sorted.map(c => ({ name: c.app_name || c.competitor_name, rating: c.rating, reviews: c.reviews_count, downloads: c.downloads, version: c.version }))}
+                data={filteredSorted.map(c => ({ name: c.app_name || c.competitor_name, rating: c.rating, reviews: c.reviews_count, downloads: c.downloads, version: c.version }))}
                 columns={[
                   { key: "name", label: "Concurrent" },
                   { key: "rating", label: "Note", format: (v) => v?.toFixed(1) || "" },
@@ -615,11 +670,11 @@ export default function AppsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((c, i) => {
+                  {filteredSorted.map((c, i) => {
                     const brand = isBrand(c.competitor_name);
                     const trendKey = `${store === "playstore" ? "ps" : "as"}_${c.competitor_id}`;
                     const trendData = trends[trendKey];
-                    const rowRc = getRankColor(i, sorted.length);
+                    const rowRc = getRankColor(i, filteredSorted.length);
                     return (
                       <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${rowRc.bg} ${brand ? "ring-1 ring-inset ring-violet-300" : ""}`}>
                         <td className="px-4 py-3">
@@ -668,8 +723,8 @@ export default function AppsPage() {
           </div>
 
           {/* Brand Position Insight */}
-          {brandName && sorted.length > 1 && (() => {
-            const brandIdx = sorted.findIndex(c => isBrand(c.competitor_name));
+          {brandName && filteredSorted.length > 1 && (() => {
+            const brandIdx = filteredSorted.findIndex(c => isBrand(c.competitor_name));
             if (brandIdx < 0) return null;
             if (brandIdx === 0) return (
               <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
@@ -679,24 +734,24 @@ export default function AppsPage() {
                 </p>
               </div>
             );
-            const leaderVal = getRankingValue(sorted[0]);
-            const brandVal = getRankingValue(sorted[brandIdx]);
+            const leaderVal = getRankingValue(filteredSorted[0]);
+            const brandVal = getRankingValue(filteredSorted[brandIdx]);
             const gap = leaderVal > 0 ? Math.round(((leaderVal - brandVal) / leaderVal) * 100) : 0;
             return (
               <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-3">
                 <Trophy className="h-5 w-5 text-amber-600 shrink-0" />
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {sorted.length} en {getRankingLabel()}, {gap}% derriere le leader.
+                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {filteredSorted.length} en {getRankingLabel()}, {gap}% derriere le leader.
                 </p>
               </div>
             );
           })()}
 
           {/* Recommendations */}
-          {brandName && sorted.length > 1 && (() => {
+          {brandName && filteredSorted.length > 1 && (() => {
             const recs: string[] = [];
-            const brandItem = sorted.find(c => isBrand(c.competitor_name));
-            const brandIdx = sorted.findIndex(c => isBrand(c.competitor_name));
+            const brandItem = filteredSorted.find(c => isBrand(c.competitor_name));
+            const brandIdx = filteredSorted.findIndex(c => isBrand(c.competitor_name));
             if (!brandItem) return null;
 
             // Rating analysis
