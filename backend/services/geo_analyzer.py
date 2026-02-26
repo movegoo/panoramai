@@ -354,7 +354,7 @@ class GeoAnalyzer:
             self.errors.append("claude: ANTHROPIC_API_KEY manquante")
             return ""
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
@@ -408,9 +408,9 @@ class GeoAnalyzer:
         try:
             url = (
                 "https://generativelanguage.googleapis.com/v1beta/"
-                f"models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
+                f"models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
             )
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(
                     url,
                     headers={"content-type": "application/json"},
@@ -427,7 +427,7 @@ class GeoAnalyzer:
                 um = data.get("usageMetadata", {})
                 trace_generation(
                     name="geo_analyzer.query_gemini",
-                    model="gemini-3-flash-preview",
+                    model="gemini-2.0-flash",
                     input=query,
                     output=answer,
                     usage={"input_tokens": um.get("promptTokenCount"), "output_tokens": um.get("candidatesTokenCount")},
@@ -456,7 +456,7 @@ class GeoAnalyzer:
             self.errors.append("chatgpt: OPENAI_API_KEY manquante")
             return ""
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers={
@@ -509,7 +509,7 @@ class GeoAnalyzer:
             self.errors.append("mistral: MISTRAL_API_KEY manquante")
             return ""
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.post(
                     "https://api.mistral.ai/v1/chat/completions",
                     headers={
@@ -556,62 +556,83 @@ class GeoAnalyzer:
             self.errors.append(msg)
             return ""
 
-    async def _analyze_response(self, query: str, answer: str, brand_names: list[str]) -> dict | None:
-        """Use Gemini Flash to extract structured brand mentions from a raw AI answer."""
+    async def _analyze_response(self, query: str, answer: str, brand_names: list[str], platform: str = "unknown") -> dict | None:
+        """Use Gemini Flash to extract structured brand mentions from a raw AI answer.
+
+        Retries once on failure.
+        """
         if not answer or not settings.GEMINI_API_KEY:
+            if not answer:
+                logger.warning(f"Analysis skipped for {platform}: empty answer")
+            else:
+                logger.warning(f"Analysis skipped for {platform}: GEMINI_API_KEY missing")
             return None
         prompt = ANALYSIS_PROMPT.format(
             query=query,
             brand_names=", ".join(brand_names),
             answer=answer,
         )
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    url,
-                    json={
-                        "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {
-                            "maxOutputTokens": 1000,
-                            "temperature": 0.1,
-                            "responseMimeType": "application/json",
+
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
+                async with httpx.AsyncClient(timeout=45) as client:
+                    resp = await client.post(
+                        url,
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {
+                                "maxOutputTokens": 1000,
+                                "temperature": 0.1,
+                                "responseMimeType": "application/json",
+                            },
                         },
-                    },
-                )
-                resp.raise_for_status()
-                resp_data = resp.json()
-                candidates = resp_data.get("candidates", [])
-                if not candidates:
-                    return None
-                text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    )
+                    resp.raise_for_status()
+                    resp_data = resp.json()
+                    candidates = resp_data.get("candidates", [])
+                    if not candidates:
+                        logger.warning(f"Analysis for {platform}: no candidates in Gemini response")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(1)
+                            continue
+                        return None
+                    text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
-                from core.langfuse_client import trace_generation
-                usage = resp_data.get("usageMetadata", {})
-                trace_generation(
-                    name="geo_analyzer.analyze_response",
-                    model="gemini-3-flash-preview",
-                    input=prompt,
-                    output=text,
-                    usage={"input_tokens": usage.get("promptTokenCount"), "output_tokens": usage.get("candidatesTokenCount")},
-                )
+                    from core.langfuse_client import trace_generation
+                    usage = resp_data.get("usageMetadata", {})
+                    trace_generation(
+                        name="geo_analyzer.analyze_response",
+                        model="gemini-2.0-flash",
+                        input=prompt,
+                        output=text,
+                        usage={"input_tokens": usage.get("promptTokenCount"), "output_tokens": usage.get("candidatesTokenCount")},
+                    )
 
-                # Strip possible markdown code fences
-                text = text.strip()
-                if text.startswith("```"):
-                    text = text.split("\n", 1)[-1]
-                if text.endswith("```"):
-                    text = text.rsplit("```", 1)[0]
-                return json.loads(text.strip())
-        except Exception as e:
-            logger.error(f"Analysis error: {e}")
-            return None
+                    # Strip possible markdown code fences
+                    text = text.strip()
+                    if text.startswith("```"):
+                        text = text.split("\n", 1)[-1]
+                    if text.endswith("```"):
+                        text = text.rsplit("```", 1)[0]
+                    result = json.loads(text.strip())
+                    logger.info(f"Analysis OK for {platform}: {len(result.get('brands_mentioned', []))} brands found")
+                    return result
+            except Exception as e:
+                logger.error(f"Analysis error for {platform} (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                self.errors.append(f"analysis({platform}): {type(e).__name__}: {e}")
+                return None
 
     async def _process_single_query(
         self, keyword: str, query: str, brand_names: list[str],
     ) -> list[dict[str, Any]]:
         """Process a single GEO query across all platforms in parallel."""
         results: list[dict[str, Any]] = []
+        logger.info(f"Processing query '{keyword}': {query[:80]}...")
 
         # Query all engines in parallel
         claude_task = asyncio.create_task(self._query_claude(query))
@@ -622,17 +643,22 @@ class GeoAnalyzer:
         answers_raw = await asyncio.gather(mistral_task, claude_task, gemini_task, chatgpt_task)
         platform_names = ["mistral", "claude", "gemini", "chatgpt"]
 
-        answers = {
-            name: ans for name, ans in zip(platform_names, answers_raw) if ans
-        }
+        answers = {}
+        for name, ans in zip(platform_names, answers_raw):
+            if ans:
+                answers[name] = ans
+                logger.info(f"  {name}: OK ({len(ans)} chars)")
+            else:
+                logger.warning(f"  {name}: FAILED (empty response)")
 
         if not answers:
+            logger.warning(f"Query '{keyword}': ALL platforms failed")
             return results
 
         # Analyse all responses in parallel
         analysis_tasks = {
             platform: asyncio.create_task(
-                self._analyze_response(query, answer, brand_names)
+                self._analyze_response(query, answer, brand_names, platform=platform)
             )
             for platform, answer in answers.items()
         }
