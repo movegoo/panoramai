@@ -874,6 +874,8 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
     logger.info(f"BANCO enrich-all: {len(competitors)} competitors to process")
 
     try:
+        # Ensure CSV is downloaded first
+        await banco_service._ensure_csv_on_disk()
         counts = await banco_service.bulk_import(competitors, db)
     except Exception as e:
         logger.error(f"BANCO enrich-all error: {type(e).__name__}: {e}")
