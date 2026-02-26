@@ -864,9 +864,30 @@ async def list_banco_brands():
     return {"total": len(brands), "brands": brands[:100]}
 
 
+@router.post("/banco/enrich/{competitor_id}")
+async def enrich_one_competitor(competitor_id: int, db: Session = Depends(get_db)):
+    """Enrichit un seul concurrent avec la base BANCO."""
+    import traceback as tb
+    try:
+        from services.banco import banco_service
+
+        comp = db.query(Competitor).filter(Competitor.id == competitor_id).first()
+        if not comp:
+            raise HTTPException(status_code=404, detail="Concurrent non trouvé")
+
+        count = await banco_service.search_and_store(comp.id, comp.name, db)
+        return {"competitor": comp.name, "competitor_id": comp.id, "stores_found": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"BANCO enrich error: {tb.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/banco/enrich-all")
 async def enrich_all_competitors(db: Session = Depends(get_db)):
-    """Enrichit tous les concurrents existants avec la base commerces."""
+    """Enrichit tous les concurrents existants avec la base commerces.
+    Retourne immédiatement la liste des concurrents à enrichir, puis les enrichit un par un."""
     import traceback as tb
     try:
         from services.banco import banco_service
@@ -882,54 +903,15 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
             if key:
                 seen_names.setdefault(key, []).append(cid)
 
-        results = []
-        total_stores = 0
-        for name_key, comp_ids in seen_names.items():
-            try:
-                # Enrich first competitor ID, then copy to others
-                primary_id = comp_ids[0]
-                display_name = name_key.title()
-                count = await banco_service.search_and_store(primary_id, display_name, db)
-                results.append({"competitor": display_name, "stores_found": count})
-                total_stores += count
-
-                # Copy stores to other competitor IDs with the same name
-                if count > 0 and len(comp_ids) > 1:
-                    from database import StoreLocation
-                    primary_stores = db.query(StoreLocation).filter(
-                        StoreLocation.competitor_id == primary_id,
-                        StoreLocation.source == "BANCO",
-                    ).all()
-                    for other_id in comp_ids[1:]:
-                        db.query(StoreLocation).filter(
-                            StoreLocation.competitor_id == other_id,
-                            StoreLocation.source == "BANCO",
-                        ).delete()
-                        for store in primary_stores:
-                            db.add(StoreLocation(
-                                competitor_id=other_id,
-                                name=store.name,
-                                brand_name=store.brand_name,
-                                category=store.category,
-                                address=store.address,
-                                postal_code=store.postal_code,
-                                city=store.city,
-                                department=store.department,
-                                latitude=store.latitude,
-                                longitude=store.longitude,
-                                siret=store.siret,
-                                source="BANCO",
-                            ))
-                        db.commit()
-            except Exception as e:
-                logger.error(f"BANCO error for {name_key}: {type(e).__name__}: {e}")
-                db.rollback()
-                results.append({"competitor": name_key, "stores_found": 0, "error": str(e)})
-
+        # Return the list immediately for client-side batching
         return {
-            "message": f"{len(seen_names)} enseignes enrichies ({len(rows)} competitors)",
-            "total_stores": total_stores,
-            "results": [r for r in results if r.get("stores_found", 0) > 0 or r.get("error")],
+            "message": f"{len(seen_names)} enseignes uniques à enrichir ({len(rows)} competitor rows)",
+            "unique_brands": len(seen_names),
+            "total_competitors": len(rows),
+            "competitors": [
+                {"name": name_key, "ids": comp_ids}
+                for name_key, comp_ids in seen_names.items()
+            ],
         }
     except Exception as e:
         logger.error(f"BANCO enrich-all FATAL: {tb.format_exc()}")
