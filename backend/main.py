@@ -712,3 +712,26 @@ async def trigger_creative_analysis():
     import asyncio
     asyncio.create_task(scheduler.daily_creative_analysis())
     return {"message": "Analyse créative lancée en background", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scheduler/run-social-analysis")
+async def trigger_social_analysis():
+    """Déclenche la collecte + analyse IA des posts sociaux."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_social_analysis())
+    return {"message": "Collecte + analyse sociale lancée en background", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scheduler/run-all")
+async def trigger_all_enrichment():
+    """Déclenche TOUT : collecte données + snapshots/signaux + creative analysis + social analysis."""
+    import asyncio
+
+    async def _run_all():
+        await scheduler.daily_data_collection()
+        await scheduler.daily_snapshots_and_signals()
+        await scheduler.daily_creative_analysis()
+        await scheduler.daily_social_analysis()
+
+    asyncio.create_task(_run_all())
+    return {"message": "Enrichissement complet lancé en background", "timestamp": datetime.utcnow().isoformat()}

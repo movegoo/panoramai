@@ -51,6 +51,15 @@ class DataCollectionScheduler:
             replace_existing=True
         )
 
+        # Daily social content collection + AI analysis (1h30 after collection)
+        self.scheduler.add_job(
+            self.daily_social_analysis,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 1, minute=settings.SCHEDULER_MINUTE + 30),
+            id="daily_social_analysis",
+            name="Daily Social Content Analysis",
+            replace_existing=True
+        )
+
         # Weekly market data refresh (Sundays 3 AM)
         self.scheduler.add_job(
             self.weekly_market_data_refresh,
@@ -748,6 +757,170 @@ class DataCollectionScheduler:
 
         except Exception as e:
             logger.error(f"Daily creative analysis failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_social_analysis(self):
+        """Collect social posts (TikTok, YouTube, Instagram) + AI analysis for all competitors."""
+        import asyncio
+        logger.info(f"Starting daily social content analysis at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import SocialPost, AdvertiserCompetitor
+            from services.scrapecreators import scrapecreators
+            from services.social_content_analyzer import social_content_analyzer
+
+            competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+            total_new = 0
+            total_analyzed = 0
+
+            # ── Phase 1: Collect posts ──
+            for comp in competitors:
+                try:
+                    # TikTok
+                    if comp.tiktok_username:
+                        data = await scrapecreators.fetch_tiktok_videos(comp.tiktok_username, limit=10)
+                        if data.get("success"):
+                            for video in data.get("videos", []):
+                                post_id = f"tt_{video.get('id', '')}"
+                                if not post_id or post_id == "tt_":
+                                    continue
+                                if db.query(SocialPost).filter(SocialPost.post_id == post_id).first():
+                                    continue
+                                published = None
+                                ct = video.get("create_time")
+                                if ct and isinstance(ct, (int, float)):
+                                    try:
+                                        published = datetime.utcfromtimestamp(ct)
+                                    except (ValueError, OSError):
+                                        pass
+                                db.add(SocialPost(
+                                    post_id=post_id, competitor_id=comp.id, platform="tiktok",
+                                    title="", description=video.get("description", "")[:2000],
+                                    url=f"https://tiktok.com/@{comp.tiktok_username}/video/{video.get('id', '')}",
+                                    published_at=published,
+                                    views=video.get("views", 0) or 0, likes=video.get("likes", 0) or 0,
+                                    comments=video.get("comments", 0) or 0, shares=video.get("shares", 0) or 0,
+                                    collected_at=datetime.utcnow(),
+                                ))
+                                total_new += 1
+                        await asyncio.sleep(0.3)
+
+                    # YouTube
+                    if comp.youtube_channel_id:
+                        data = await scrapecreators.fetch_youtube_videos(channel_id=comp.youtube_channel_id, limit=10)
+                        if data.get("success"):
+                            for video in data.get("videos", []):
+                                vid = video.get("video_id", "")
+                                post_id = f"yt_{vid}"
+                                if not vid:
+                                    continue
+                                if db.query(SocialPost).filter(SocialPost.post_id == post_id).first():
+                                    continue
+                                db.add(SocialPost(
+                                    post_id=post_id, competitor_id=comp.id, platform="youtube",
+                                    title=video.get("title", "")[:1000], description=video.get("description", "")[:2000],
+                                    url=f"https://youtube.com/watch?v={vid}",
+                                    thumbnail_url=video.get("thumbnail_url", ""),
+                                    duration=video.get("duration", ""),
+                                    views=video.get("views", 0) or 0, likes=video.get("likes", 0) or 0,
+                                    comments=video.get("comments", 0) or 0,
+                                    collected_at=datetime.utcnow(),
+                                ))
+                                total_new += 1
+                        await asyncio.sleep(0.3)
+
+                    # Instagram
+                    if comp.instagram_username:
+                        data = await scrapecreators._get("/v1/instagram/profile", {"handle": comp.instagram_username.lstrip("@")})
+                        if data.get("success"):
+                            user_data = data.get("data", {}).get("user", {})
+                            edges = user_data.get("edge_owner_to_timeline_media", {}).get("edges", [])
+                            for edge in edges[:10]:
+                                node = edge.get("node", {})
+                                ig_id = node.get("id", "")
+                                post_id = f"ig_{ig_id}"
+                                if not ig_id:
+                                    continue
+                                if db.query(SocialPost).filter(SocialPost.post_id == post_id).first():
+                                    continue
+                                caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
+                                caption = caption_edges[0].get("node", {}).get("text", "") if caption_edges else ""
+                                published = None
+                                ts = node.get("taken_at_timestamp")
+                                if ts:
+                                    try:
+                                        published = datetime.utcfromtimestamp(ts)
+                                    except (ValueError, OSError):
+                                        pass
+                                shortcode = node.get("shortcode", "")
+                                thumbnail = node.get("thumbnail_src", "") or node.get("display_url", "")
+                                db.add(SocialPost(
+                                    post_id=post_id, competitor_id=comp.id, platform="instagram",
+                                    title="", description=caption[:2000],
+                                    url=f"https://instagram.com/p/{shortcode}/" if shortcode else "",
+                                    thumbnail_url=thumbnail, published_at=published,
+                                    views=node.get("video_view_count", 0) or 0,
+                                    likes=node.get("edge_liked_by", {}).get("count", 0) or 0,
+                                    comments=node.get("edge_media_to_comment", {}).get("count", 0) or 0,
+                                    collected_at=datetime.utcnow(),
+                                ))
+                                total_new += 1
+                        await asyncio.sleep(0.3)
+
+                except Exception as e:
+                    logger.error(f"Social collect error for {comp.name}: {e}")
+
+            db.commit()
+            logger.info(f"Social collection done: {total_new} new posts from {len(competitors)} competitors")
+
+            # ── Phase 2: AI analysis on unanalyzed posts ──
+            unanalyzed = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None)).all()
+            comp_names = {}
+            for post in unanalyzed:
+                if post.competitor_id not in comp_names:
+                    comp = db.query(Competitor).get(post.competitor_id)
+                    comp_names[post.competitor_id] = comp.name if comp else ""
+
+            for post in unanalyzed:
+                try:
+                    result = await asyncio.wait_for(
+                        social_content_analyzer.analyze_content(
+                            platform=post.platform,
+                            title=post.title or "",
+                            description=post.description or "",
+                            thumbnail_url=post.thumbnail_url or "",
+                            views=post.views or 0,
+                            likes=post.likes or 0,
+                            comments=post.comments or 0,
+                            shares=post.shares or 0,
+                            brand_name=comp_names.get(post.competitor_id, ""),
+                        ),
+                        timeout=30,
+                    )
+                    if result:
+                        import json
+                        post.content_analysis = json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else result
+                        post.content_theme = result.get("theme", "") if isinstance(result, dict) else ""
+                        post.content_tone = result.get("tone", "") if isinstance(result, dict) else ""
+                        post.content_engagement_score = result.get("engagement_score", 0) if isinstance(result, dict) else 0
+                        post.content_topics = json.dumps(result.get("content_topics", []), ensure_ascii=False) if isinstance(result, dict) else "[]"
+                        post.content_products = json.dumps(result.get("content_products", []), ensure_ascii=False) if isinstance(result, dict) else "[]"
+                        post.content_analyzed_at = datetime.utcnow()
+                        total_analyzed += 1
+                        if total_analyzed % 10 == 0:
+                            db.commit()
+                except Exception as e:
+                    logger.error(f"Social analysis error for post {post.post_id}: {e}")
+                    post.content_analyzed_at = datetime.utcnow()
+                    post.content_engagement_score = 0
+
+            db.commit()
+            logger.info(f"Social analysis done: {total_analyzed} posts analyzed")
+
+        except Exception as e:
+            logger.error(f"Daily social analysis failed: {e}")
         finally:
             db.close()
 
