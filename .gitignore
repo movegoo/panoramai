@@ -32,4 +32,5 @@ Thumbs.db
 
 # Claude
 .claude/
+!.claude/skills/
 .vercel
