@@ -664,9 +664,10 @@ export default function DashboardPage() {
   );
 
   const data = swrData?.brand ? swrData : null;
-  const needsOnboarding = swrData && !swrData.brand;
+  const is404 = swrError && (swrError as any).status === 404;
+  const needsOnboarding = (swrData && !swrData.brand) || is404;
   const error = swrError
-    ? (swrError as any).status === 404
+    ? is404
       ? null
       : (swrError as any).status === 401
         ? null  // 401 handled by useAPI redirect
