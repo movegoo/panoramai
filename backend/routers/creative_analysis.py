@@ -69,18 +69,7 @@ async def analyze_all_creatives(
         db.commit()
         logger.info(f"Force mode: reset {reset_count} previously analyzed ads")
     else:
-        # Auto-reset previous failures (score=0) so they can be retried
-        reset_query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
-            Ad.creative_analyzed_at.isnot(None),
-            Ad.creative_score == 0,
-        )
-        if user:
-            reset_query = reset_query.filter(Competitor.id.in_(comp_ids))
-        for ad in reset_query.all():
-            ad.creative_analyzed_at = None
-            ad.creative_score = None
-            ad.creative_analysis = None
-        db.commit()
+        pass  # Failed ads (score=0) stay marked as analyzed — use force=true to retry
 
     from sqlalchemy import or_
     query = db.query(Ad).join(Competitor, Ad.competitor_id == Competitor.id).filter(
