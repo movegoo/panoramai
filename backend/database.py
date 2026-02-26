@@ -276,6 +276,14 @@ class StoreLocation(Base):
     google_rating = Column(Float, nullable=True)
     google_reviews_count = Column(Integer, nullable=True)
     google_place_id = Column(String(255), nullable=True)
+    google_phone = Column(String(50), nullable=True)
+    google_website = Column(String(500), nullable=True)
+    google_type = Column(String(100), nullable=True)
+    google_thumbnail = Column(String(500), nullable=True)
+    google_open_state = Column(String(50), nullable=True)
+    google_hours = Column(Text, nullable=True)  # JSON weekly hours
+    google_price = Column(String(10), nullable=True)
+    gmb_score = Column(Integer, nullable=True)  # Composite score 0-100
     rating_fetched_at = Column(DateTime, nullable=True)
     recorded_at = Column(DateTime, default=datetime.utcnow)
 
@@ -650,6 +658,14 @@ def _run_migrations(engine):
             ("store_locations", "google_rating", "FLOAT"),
             ("store_locations", "google_reviews_count", "INTEGER"),
             ("store_locations", "google_place_id", "VARCHAR(255)"),
+            ("store_locations", "google_phone", "VARCHAR(50)"),
+            ("store_locations", "google_website", "VARCHAR(500)"),
+            ("store_locations", "google_type", "VARCHAR(100)"),
+            ("store_locations", "google_thumbnail", "VARCHAR(500)"),
+            ("store_locations", "google_open_state", "VARCHAR(50)"),
+            ("store_locations", "google_hours", "TEXT"),
+            ("store_locations", "google_price", "VARCHAR(10)"),
+            ("store_locations", "gmb_score", "INTEGER"),
             ("store_locations", "rating_fetched_at", "TIMESTAMP"),
             # Creative Analysis columns
             ("geo_results", "user_id", "INTEGER REFERENCES users(id)"),

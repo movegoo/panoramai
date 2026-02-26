@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import FranceMap from "@/components/map/FranceMap";
-import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users } from "lucide-react";
-import { API_BASE, brandAPI } from "@/lib/api";
+import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users, Star, MessageSquare, CheckCircle2, ExternalLink, Trophy, ThumbsDown } from "lucide-react";
+import { API_BASE, brandAPI, geoAPI, GmbScoringData, GmbScoringCompetitor } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 interface StoreGroup {
@@ -22,6 +22,22 @@ function getRankColor(rank: number, total: number) {
   return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
 }
 
+function getScoreColor(score: number | null) {
+  if (score === null) return "bg-gray-200";
+  if (score >= 75) return "bg-emerald-500";
+  if (score >= 55) return "bg-yellow-500";
+  if (score >= 35) return "bg-orange-500";
+  return "bg-red-500";
+}
+
+function getScoreTextColor(score: number | null) {
+  if (score === null) return "text-gray-400";
+  if (score >= 75) return "text-emerald-700";
+  if (score >= 55) return "text-yellow-700";
+  if (score >= 35) return "text-orange-700";
+  return "text-red-600";
+}
+
 export default function GeoPage() {
   const { currentAdvertiserId } = useAuth();
   const [storeGroups, setStoreGroups] = useState<StoreGroup[]>([]);
@@ -29,6 +45,8 @@ export default function GeoPage() {
   const [brandStoreCount, setBrandStoreCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [catchmentData, setCatchmentData] = useState<any>(null);
+  const [gmbScoring, setGmbScoring] = useState<GmbScoringData | null>(null);
+  const [gmbLoading, setGmbLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
@@ -70,10 +88,18 @@ export default function GeoPage() {
             setCatchmentData(await catchRes.json());
           }
         } catch {}
+
+        // GMB Scoring
+        try {
+          const scoring = await geoAPI.getGmbScoring();
+          setGmbScoring(scoring);
+        } catch {}
+        setGmbLoading(false);
       } catch (err) {
         console.error("Failed to load geo data:", err);
       } finally {
         setLoading(false);
+        setGmbLoading(false);
       }
     }
     loadData();
@@ -114,6 +140,10 @@ export default function GeoPage() {
     }
   }
 
+  // GMB scoring helpers
+  const gmbLeader = gmbScoring?.competitors?.[0];
+  const brandGmb = gmbScoring?.competitors?.find(c => brandName && c.competitor_name.toLowerCase() === brandName.toLowerCase());
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -127,6 +157,263 @@ export default function GeoPage() {
           </p>
         </div>
       </div>
+
+      {/* GMB Scoring Section */}
+      {!gmbLoading && gmbScoring && gmbScoring.competitors.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <Star className="h-4.5 w-4.5 text-amber-500" />
+            Scoring Google My Business
+          </h2>
+
+          {/* GMB KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 shadow-md shadow-amber-200/50">
+                  <Star className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Score GMB moyen</span>
+              </div>
+              <p className="text-lg font-bold text-foreground">{gmbScoring.market_avg_score}/100</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Moyenne marche</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-yellow-400 to-yellow-500 shadow-md shadow-yellow-200/50">
+                  <Star className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Rating moyen</span>
+              </div>
+              <p className="text-lg font-bold text-foreground">{gmbScoring.market_avg_rating.toFixed(1)}/5</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {gmbLeader ? `Leader: ${gmbLeader.competitor_name} (${gmbLeader.avg_rating?.toFixed(1) || "—"})` : ""}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-200/50">
+                  <MessageSquare className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground">Total avis</span>
+              </div>
+              <p className="text-lg font-bold text-foreground">{gmbScoring.total_reviews.toLocaleString()}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{gmbScoring.total_stores.toLocaleString()} magasins</p>
+            </div>
+            {brandGmb ? (
+              <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-200/50">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">{brandName}</span>
+                </div>
+                <p className="text-lg font-bold text-violet-700">{brandGmb.avg_score ?? "—"}/100</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  #{brandGmb.rank} / {gmbScoring.competitors.length} — Completude {brandGmb.completeness_pct}%
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-md shadow-emerald-200/50">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">Completude</span>
+                </div>
+                <p className="text-lg font-bold text-foreground">
+                  {gmbScoring.competitors.length > 0
+                    ? `${Math.round(gmbScoring.competitors.reduce((s, c) => s + c.completeness_pct, 0) / gmbScoring.competitors.length)}%`
+                    : "—"}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Profils GMB complets</p>
+              </div>
+            )}
+          </div>
+
+          {/* Competitor Ranking Table */}
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="px-5 py-3 border-b border-border bg-gray-50/50">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                Classement GMB par enseigne
+              </h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-gray-50/30">
+                    <th className="text-left py-2.5 px-4 font-medium text-muted-foreground w-10">#</th>
+                    <th className="text-left py-2.5 px-4 font-medium text-muted-foreground">Enseigne</th>
+                    <th className="text-left py-2.5 px-4 font-medium text-muted-foreground">Score GMB</th>
+                    <th className="text-center py-2.5 px-4 font-medium text-muted-foreground">Rating</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-muted-foreground">Avis</th>
+                    <th className="text-center py-2.5 px-4 font-medium text-muted-foreground">Completude</th>
+                    <th className="text-right py-2.5 px-4 font-medium text-muted-foreground">Magasins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gmbScoring.competitors.map((comp) => {
+                    const isBrand = brandName && comp.competitor_name.toLowerCase() === brandName.toLowerCase();
+                    const scorePct = comp.avg_score !== null ? comp.avg_score : 0;
+                    return (
+                      <tr
+                        key={comp.competitor_id}
+                        className={`border-b border-border last:border-0 hover:bg-gray-50/50 transition-colors ${isBrand ? "bg-violet-50/40" : ""}`}
+                      >
+                        <td className="py-2.5 px-4">
+                          <span className={`text-xs font-bold ${comp.rank <= 3 ? "text-amber-600" : "text-muted-foreground"}`}>
+                            {comp.rank}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: comp.color }} />
+                            {comp.logo_url && (
+                              <img src={comp.logo_url} alt="" className="w-5 h-5 rounded object-contain" />
+                            )}
+                            <span className={`font-medium truncate ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
+                              {comp.competitor_name}
+                              {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : getScoreColor(comp.avg_score)}`}
+                                style={{ width: `${Math.max(scorePct, 2)}%` }}
+                              />
+                            </div>
+                            <span className={`font-bold ${isBrand ? "text-violet-700" : getScoreTextColor(comp.avg_score)}`}>
+                              {comp.avg_score ?? "—"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                            <span className="font-semibold">{comp.avg_rating?.toFixed(1) ?? "—"}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-medium">
+                          {comp.total_reviews.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-4 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            comp.completeness_pct >= 80 ? "bg-emerald-100 text-emerald-700" :
+                            comp.completeness_pct >= 50 ? "bg-yellow-100 text-yellow-700" :
+                            "bg-red-100 text-red-600"
+                          }`}>
+                            {comp.completeness_pct}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4 text-right text-muted-foreground">
+                          {comp.stores_with_rating}/{comp.stores_count}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Top 5 / Flop 5 Stores */}
+          {gmbScoring.competitors.some(c => c.top_stores.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Top 5 */}
+              <div className="rounded-2xl border border-emerald-200 bg-card p-5">
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-emerald-500" />
+                  Top magasins
+                </h3>
+                <div className="space-y-2">
+                  {gmbScoring.competitors
+                    .flatMap(c => c.top_stores.map(s => ({ ...s, competitor_name: c.competitor_name, color: c.color })))
+                    .sort((a, b) => (b.gmb_score ?? 0) - (a.gmb_score ?? 0))
+                    .slice(0, 5)
+                    .map((s, i) => (
+                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs font-bold text-emerald-600 w-5">{i + 1}</span>
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium text-foreground truncate">{s.name}</div>
+                            <div className="text-[10px] text-muted-foreground">{s.city} — {s.competitor_name}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                            <span className="text-xs font-semibold">{s.rating?.toFixed(1) ?? "—"}</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">{s.reviews_count?.toLocaleString() ?? "—"} avis</span>
+                          <span className={`text-xs font-bold ${getScoreTextColor(s.gmb_score)}`}>{s.gmb_score ?? "—"}</span>
+                          {s.place_id && (
+                            <a
+                              href={`https://www.google.com/maps/place/?q=place_id:${s.place_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-500 hover:text-blue-700"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Flop 5 */}
+              <div className="rounded-2xl border border-red-200 bg-card p-5">
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <ThumbsDown className="h-4 w-4 text-red-500" />
+                  Magasins a ameliorer
+                </h3>
+                <div className="space-y-2">
+                  {gmbScoring.competitors
+                    .flatMap(c => (c.flop_stores.length > 0 ? c.flop_stores : c.top_stores.slice(-2)).map(s => ({ ...s, competitor_name: c.competitor_name, color: c.color })))
+                    .sort((a, b) => (a.gmb_score ?? 999) - (b.gmb_score ?? 999))
+                    .slice(0, 5)
+                    .map((s, i) => (
+                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs font-bold text-red-500 w-5">{i + 1}</span>
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium text-foreground truncate">{s.name}</div>
+                            <div className="text-[10px] text-muted-foreground">{s.city} — {s.competitor_name}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                            <span className="text-xs font-semibold">{s.rating?.toFixed(1) ?? "—"}</span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">{s.reviews_count?.toLocaleString() ?? "—"} avis</span>
+                          <span className={`text-xs font-bold ${getScoreTextColor(s.gmb_score)}`}>{s.gmb_score ?? "—"}</span>
+                          {s.place_id && (
+                            <a
+                              href={`https://www.google.com/maps/place/?q=place_id:${s.place_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-500 hover:text-blue-700"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Competitive Intelligence Dashboard */}
       {!loading && storeGroups.length > 0 && (

@@ -1467,6 +1467,51 @@ export const mcpAPI = {
     fetchAPI<{ message: string }>("/mcp/keys", { method: "DELETE" }),
 };
 
+// GMB Scoring API
+export interface GmbScoringStore {
+  id: number;
+  name: string;
+  city: string;
+  rating: number | null;
+  reviews_count: number | null;
+  gmb_score: number | null;
+  place_id: string | null;
+}
+
+export interface GmbScoringCompetitor {
+  competitor_id: number;
+  competitor_name: string;
+  color: string;
+  logo_url: string | null;
+  avg_score: number | null;
+  avg_rating: number | null;
+  total_reviews: number;
+  stores_count: number;
+  stores_with_rating: number;
+  completeness_pct: number;
+  top_stores: GmbScoringStore[];
+  flop_stores: GmbScoringStore[];
+  rank: number;
+}
+
+export interface GmbScoringData {
+  competitors: GmbScoringCompetitor[];
+  market_avg_score: number;
+  market_avg_rating: number;
+  total_stores: number;
+  total_reviews: number;
+}
+
+export const geoAPI = {
+  getGmbScoring: (department?: string, city?: string) => {
+    const params = new URLSearchParams();
+    if (department) params.set("department", department);
+    if (city) params.set("city", city);
+    const qs = params.toString();
+    return fetchAPI<GmbScoringData>(`/geo/gmb-scoring${qs ? `?${qs}` : ""}`);
+  },
+};
+
 export const socialContentAPI = {
   collectAll: () =>
     fetchAPI<{ message: string; new: number; updated: number; total_in_db: number; by_competitor: any[]; errors?: string[]; competitors_scanned?: number }>(

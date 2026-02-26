@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User, UserAdvertiser, AdvertiserCompetitor
 from core.auth import get_current_user, get_optional_user
 from core.permissions import parse_advertiser_header
-from services.gmb_service import gmb_service
+from services.gmb_service import gmb_service, compute_gmb_score
 from services.geodata import (
     geodata_service,
     haversine_distance,
@@ -1019,6 +1019,23 @@ async def enrich_gmb(
             store.google_rating = result.get("rating")
             store.google_reviews_count = result.get("reviews_count")
             store.google_place_id = result.get("place_id")
+            store.google_phone = result.get("phone")
+            store.google_website = result.get("website")
+            store.google_type = result.get("type")
+            store.google_thumbnail = result.get("thumbnail")
+            store.google_open_state = result.get("open_state")
+            store.google_hours = result.get("hours")
+            store.google_price = result.get("price")
+            store.gmb_score = compute_gmb_score(
+                rating=result.get("rating"),
+                reviews_count=result.get("reviews_count"),
+                phone=result.get("phone"),
+                website=result.get("website"),
+                hours=result.get("hours"),
+                thumbnail=result.get("thumbnail"),
+                gtype=result.get("type"),
+                open_state=result.get("open_state"),
+            )
             store.rating_fetched_at = now
             enriched_count += 1
 
@@ -1150,6 +1167,169 @@ async def enrich_gmb_demo(
         "message": f"{enriched_count} magasins enrichis avec données GMB demo",
         "enriched": enriched_count,
         "by_competitor": summary,
+    }
+
+
+# =============================================================================
+# Endpoints - GMB Scoring Dashboard
+# =============================================================================
+
+@router.get("/gmb-scoring")
+async def get_gmb_scoring(
+    department: Optional[str] = None,
+    city: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """
+    Classement des concurrents par score GMB moyen.
+    Retourne avg_score, avg_rating, total_reviews, stores_count,
+    top/flop stores, completeness %.
+    Filtrable par département ou ville.
+    """
+    from sqlalchemy import func
+
+    # Get user's competitors
+    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
+    user_comp_query = db.query(Competitor.id, Competitor.name).filter(
+        (Competitor.is_active == True) | (Competitor.is_active == None)
+    )
+    if user:
+        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
+    if x_advertiser_id:
+        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
+    competitors_list = user_comp_query.all()
+    comp_map = {c.id: c.name for c in competitors_list}
+    comp_ids = list(comp_map.keys())
+
+    if not comp_ids:
+        return {"competitors": [], "market_avg_score": 0, "market_avg_rating": 0, "total_stores": 0}
+
+    # Build store query with optional filters
+    store_filters = [
+        StoreLocation.source == "BANCO",
+        StoreLocation.competitor_id.in_(comp_ids),
+    ]
+    if department:
+        store_filters.append(StoreLocation.department == department)
+    if city:
+        store_filters.append(func.lower(StoreLocation.city) == city.lower())
+
+    stores = db.query(StoreLocation).filter(*store_filters).all()
+
+    # Group by competitor
+    by_comp: dict[int, list] = {}
+    for s in stores:
+        by_comp.setdefault(s.competitor_id, []).append(s)
+
+    # Aggregate per competitor
+    competitors_result = []
+    all_scores = []
+    all_ratings = []
+    total_reviews_market = 0
+
+    for comp_id, comp_stores in by_comp.items():
+        comp_name = comp_map.get(comp_id, "Inconnu")
+        color = COMPETITOR_COLORS.get(comp_name.lower(), "#6b7280")
+
+        rated = [s for s in comp_stores if s.google_rating is not None]
+        scored = [s for s in comp_stores if s.gmb_score is not None]
+
+        avg_score = round(sum(s.gmb_score for s in scored) / len(scored), 1) if scored else None
+        avg_rating = round(sum(s.google_rating for s in rated) / len(rated), 2) if rated else None
+        total_reviews = sum(s.google_reviews_count or 0 for s in comp_stores)
+
+        # Completeness: % of stores with phone, website, hours, thumbnail, type
+        completeness_fields = ["google_phone", "google_website", "google_hours", "google_thumbnail", "google_type"]
+        total_fields = len(comp_stores) * len(completeness_fields)
+        filled_fields = sum(
+            1 for s in comp_stores for f in completeness_fields if getattr(s, f, None)
+        )
+        completeness_pct = round(filled_fields / total_fields * 100, 1) if total_fields > 0 else 0
+
+        # Top 3 stores (best gmb_score)
+        sorted_by_score = sorted(
+            [s for s in comp_stores if s.gmb_score is not None],
+            key=lambda s: s.gmb_score,
+            reverse=True,
+        )
+        top_stores = [
+            {
+                "id": s.id,
+                "name": s.name,
+                "city": s.city,
+                "rating": s.google_rating,
+                "reviews_count": s.google_reviews_count,
+                "gmb_score": s.gmb_score,
+                "place_id": s.google_place_id,
+            }
+            for s in sorted_by_score[:3]
+        ]
+
+        # Flop 3 stores (worst gmb_score)
+        flop_stores = [
+            {
+                "id": s.id,
+                "name": s.name,
+                "city": s.city,
+                "rating": s.google_rating,
+                "reviews_count": s.google_reviews_count,
+                "gmb_score": s.gmb_score,
+                "place_id": s.google_place_id,
+            }
+            for s in sorted_by_score[-3:][::-1]
+        ] if len(sorted_by_score) > 3 else []
+
+        if avg_score is not None:
+            all_scores.append(avg_score)
+        if avg_rating is not None:
+            all_ratings.append(avg_rating)
+        total_reviews_market += total_reviews
+
+        competitors_result.append({
+            "competitor_id": comp_id,
+            "competitor_name": comp_name,
+            "color": color,
+            "logo_url": None,
+            "avg_score": avg_score,
+            "avg_rating": avg_rating,
+            "total_reviews": total_reviews,
+            "stores_count": len(comp_stores),
+            "stores_with_rating": len(rated),
+            "completeness_pct": completeness_pct,
+            "top_stores": top_stores,
+            "flop_stores": flop_stores,
+        })
+
+    # Add logo_url from Competitor table
+    if comp_ids:
+        comps = db.query(Competitor).filter(Competitor.id.in_(comp_ids)).all()
+        logo_map = {c.id: c.logo_url for c in comps}
+        for entry in competitors_result:
+            entry["logo_url"] = logo_map.get(entry["competitor_id"])
+
+    # Sort by avg_score descending (None last)
+    competitors_result.sort(key=lambda x: x["avg_score"] if x["avg_score"] is not None else -1, reverse=True)
+
+    # Add rank
+    for i, entry in enumerate(competitors_result):
+        entry["rank"] = i + 1
+
+    market_avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
+    market_avg_rating = round(sum(all_ratings) / len(all_ratings), 2) if all_ratings else 0
+
+    return {
+        "competitors": competitors_result,
+        "market_avg_score": market_avg_score,
+        "market_avg_rating": market_avg_rating,
+        "total_stores": len(stores),
+        "total_reviews": total_reviews_market,
+        "filters": {
+            "department": department,
+            "city": city,
+        },
     }
 
 

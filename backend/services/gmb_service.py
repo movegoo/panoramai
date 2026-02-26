@@ -4,6 +4,7 @@ Fetches real ratings/reviews for store locations via SearchAPI Google Maps
 with Google Places API as fallback.
 """
 import asyncio
+import json
 import logging
 import os
 import time
@@ -18,6 +19,76 @@ logger = logging.getLogger(__name__)
 
 SEARCHAPI_BASE = "https://www.searchapi.io/api/v1/search"
 GOOGLE_PLACES_BASE = "https://maps.googleapis.com/maps/api/place"
+
+
+def compute_gmb_score(
+    rating: Optional[float] = None,
+    reviews_count: Optional[int] = None,
+    phone: Optional[str] = None,
+    website: Optional[str] = None,
+    hours: Optional[str] = None,
+    thumbnail: Optional[str] = None,
+    gtype: Optional[str] = None,
+    open_state: Optional[str] = None,
+) -> int:
+    """
+    Compute a composite GMB score (0-100) based on:
+    - Rating (0-30 pts)
+    - Volume of reviews (0-25 pts)
+    - Profile completeness (0-25 pts)
+    - Open status (0-20 pts)
+    """
+    score = 0
+
+    # Rating (0-30)
+    if rating is not None:
+        if rating >= 4.5:
+            score += 30
+        elif rating >= 4.0:
+            score += 22
+        elif rating >= 3.5:
+            score += 15
+        else:
+            score += 5
+
+    # Reviews volume (0-25)
+    if reviews_count is not None:
+        if reviews_count >= 200:
+            score += 25
+        elif reviews_count >= 100:
+            score += 18
+        elif reviews_count >= 50:
+            score += 12
+        elif reviews_count >= 10:
+            score += 6
+        else:
+            score += 2
+
+    # Profile completeness (0-25): 5 pts each
+    if phone:
+        score += 5
+    if website:
+        score += 5
+    if hours:
+        score += 5
+    if thumbnail:
+        score += 5
+    if gtype:
+        score += 5
+
+    # Open status (0-20)
+    if open_state:
+        state_lower = open_state.lower()
+        if "ouvert" in state_lower or "open" in state_lower:
+            score += 20
+        elif "fermé temporairement" in state_lower or "temporarily closed" in state_lower:
+            score += 5
+        else:
+            score += 10
+    else:
+        score += 10  # No data = neutral
+
+    return min(score, 100)
 
 
 class GMBService:
@@ -46,7 +117,8 @@ class GMBService:
         """
         Fetch GMB data for a single store.
         Tries SearchAPI first, then Google Places API as fallback.
-        Returns {rating, reviews_count, place_id} or {error}.
+        Returns {rating, reviews_count, place_id, phone, website, type,
+                 thumbnail, open_state, hours, price} or {error}.
         """
         # Try SearchAPI Google Maps first
         if self.searchapi_key:
@@ -153,6 +225,12 @@ class GMBService:
             if not best:
                 return {"success": False, "error": "No matching result"}
 
+            # Extract extended fields from SearchAPI local_results
+            hours_json = None
+            hours_data = best.get("operating_hours") or best.get("hours")
+            if hours_data:
+                hours_json = json.dumps(hours_data, ensure_ascii=False) if isinstance(hours_data, (dict, list)) else str(hours_data)
+
             return {
                 "success": True,
                 "rating": best.get("rating"),
@@ -160,6 +238,13 @@ class GMBService:
                 "place_id": best.get("place_id"),
                 "title": best.get("title"),
                 "address": best.get("address"),
+                "phone": best.get("phone"),
+                "website": best.get("website"),
+                "type": best.get("type"),
+                "thumbnail": best.get("thumbnail"),
+                "open_state": best.get("open_state"),
+                "hours": hours_json,
+                "price": best.get("price"),
                 "source": "searchapi",
             }
         except Exception as e:
@@ -181,7 +266,8 @@ class GMBService:
         params: dict = {
             "input": query,
             "inputtype": "textquery",
-            "fields": "place_id,name,rating,user_ratings_total,formatted_address,geometry",
+            "fields": "place_id,name,rating,user_ratings_total,formatted_address,geometry,"
+                      "formatted_phone_number,website,types,opening_hours,photos,business_status,price_level",
             "key": self.google_places_key,
         }
         if latitude and longitude:
@@ -201,6 +287,41 @@ class GMBService:
                 return {"success": False, "error": "No candidates"}
 
             place = candidates[0]
+
+            # Map price_level to symbols
+            price_level = place.get("price_level")
+            price_str = None
+            if price_level is not None:
+                price_str = "$" * max(1, price_level)
+
+            # Opening hours
+            hours_json = None
+            opening_hours = place.get("opening_hours")
+            if opening_hours:
+                hours_json = json.dumps(opening_hours.get("weekday_text", []), ensure_ascii=False)
+
+            # Business status -> open_state
+            biz_status = place.get("business_status")
+            open_state = None
+            if biz_status == "OPERATIONAL":
+                open_state = "Ouvert"
+            elif biz_status == "TEMPORARILY_CLOSED":
+                open_state = "Fermé temporairement"
+            elif biz_status == "CLOSED_PERMANENTLY":
+                open_state = "Fermé définitivement"
+
+            # Thumbnail from photos
+            thumbnail = None
+            photos = place.get("photos")
+            if photos and self.google_places_key:
+                ref = photos[0].get("photo_reference")
+                if ref:
+                    thumbnail = f"{GOOGLE_PLACES_BASE}/photo?maxwidth=400&photo_reference={ref}&key={self.google_places_key}"
+
+            # Types -> primary type
+            types = place.get("types", [])
+            primary_type = types[0] if types else None
+
             return {
                 "success": True,
                 "rating": place.get("rating"),
@@ -208,6 +329,13 @@ class GMBService:
                 "place_id": place.get("place_id"),
                 "title": place.get("name"),
                 "address": place.get("formatted_address"),
+                "phone": place.get("formatted_phone_number"),
+                "website": place.get("website"),
+                "type": primary_type,
+                "thumbnail": thumbnail,
+                "open_state": open_state,
+                "hours": hours_json,
+                "price": price_str,
                 "source": "google_places",
             }
         except Exception as e:
