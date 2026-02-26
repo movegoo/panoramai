@@ -46,6 +46,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
+import { SmartFilter } from "@/components/smart-filter";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "snapchat";
 
@@ -138,6 +139,8 @@ export default function SocialPage() {
   const [brandName, setBrandName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   const [contentInsights, setContentInsights] = useState<ContentInsights | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -497,6 +500,39 @@ export default function SocialPage() {
   const sorted = [...currentData].sort((a, b) => getRankingValue(b) - getRankingValue(a));
   const maxRankingVal = sorted.length > 0 ? getRankingValue(sorted[0]) || 1 : 1;
 
+  const aiFilteredData = useMemo(() => {
+    if (!aiFilters) return null;
+    // Auto-switch platform if specified
+    if (aiFilters.platform?.length === 1) {
+      const p = aiFilters.platform[0].toLowerCase();
+      if (["instagram", "tiktok", "youtube", "snapchat"].includes(p)) {
+        setPlatform(p as Platform);
+      }
+    }
+    // Auto-switch ranking view if metric specified
+    if (aiFilters.metric) {
+      const m = aiFilters.metric.toLowerCase();
+      if (m === "followers") setRankingView("audience");
+      else if (m === "engagement") setRankingView("engagement");
+      else if (m === "growth") setRankingView("growth");
+    }
+    return aiFilters;
+  }, [aiFilters]);
+
+  const displayData = useMemo(() => {
+    if (!aiFilters?.competitor_name?.length && !aiFilters?.text_search) return sorted;
+    return sorted.filter((item: any) => {
+      const name = (item.name || item.competitor_name || item.username || "").toLowerCase();
+      if (aiFilters.competitor_name?.length) {
+        return aiFilters.competitor_name.some((n: string) => name.includes(n.toLowerCase()));
+      }
+      if (aiFilters.text_search) {
+        return name.includes(aiFilters.text_search.toLowerCase());
+      }
+      return true;
+    });
+  }, [sorted, aiFilters]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -529,6 +565,13 @@ export default function SocialPage() {
           </Button>
         </div>
       </div>
+
+      <SmartFilter
+        page="social"
+        placeholder="Filtrer les réseaux sociaux... (ex: Instagram Leclerc, engagement TikTok)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
 
       {/* ── Cross-Platform Overview ── */}
       {crossPlatformData.length > 0 && (
@@ -565,7 +608,19 @@ export default function SocialPage() {
                 </tr>
               </thead>
               <tbody>
-                {crossPlatformData.map((c, i) => (
+                {(aiFilters?.competitor_name?.length || aiFilters?.text_search
+                  ? crossPlatformData.filter((c) => {
+                      const name = c.name.toLowerCase();
+                      if (aiFilters.competitor_name?.length) {
+                        return aiFilters.competitor_name.some((n: string) => name.includes(n.toLowerCase()));
+                      }
+                      if (aiFilters.text_search) {
+                        return name.includes(aiFilters.text_search.toLowerCase());
+                      }
+                      return true;
+                    })
+                  : crossPlatformData
+                ).map((c, i) => (
                   <tr key={c.id} className={`border-t border-white/10 ${isBrand(c.name) ? "bg-violet-500/15" : ""}`}>
                     <td className="py-2.5 pr-2">
                       {i < 3 ? (
@@ -667,7 +722,7 @@ export default function SocialPage() {
 
           {/* ── Ranked Cards Grid ── */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {sorted.map((c, i) => {
+            {displayData.map((c, i) => {
               const primaryVal = getRankingValue(c);
               const pct = maxRankingVal > 0 ? (primaryVal / maxRankingVal) * 100 : 0;
               const followers = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
@@ -803,7 +858,7 @@ export default function SocialPage() {
               </div>
               <ExportMenu
                 filename={`social_${platform}_details`}
-                data={sorted.map(c => ({ name: c.competitor_name, followers: platform === "youtube" ? c.subscribers : c.followers, engagement: c.engagement_rate, posts: c.posts_count || c.videos_count, likes: c.avg_likes || c.likes }))}
+                data={displayData.map(c => ({ name: c.competitor_name, followers: platform === "youtube" ? c.subscribers : c.followers, engagement: c.engagement_rate, posts: c.posts_count || c.videos_count, likes: c.avg_likes || c.likes }))}
                 columns={[
                   { key: "name", label: "Concurrent" },
                   { key: "followers", label: platform === "youtube" ? "Abonnes" : "Followers" },
@@ -853,7 +908,7 @@ export default function SocialPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((c, i) => {
+                  {displayData.map((c, i) => {
                     const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.subscribers || c.ads_count || 0) : (c.followers || 0);
                     const brand = isBrand(c.competitor_name);
                     return (
@@ -917,11 +972,11 @@ export default function SocialPage() {
           </div>
 
           {/* ── Brand Position Insight ── */}
-          {brandName && sorted.length > 1 && (() => {
-            const brandIdx = sorted.findIndex(c => isBrand(c.competitor_name));
+          {brandName && displayData.length > 1 && (() => {
+            const brandIdx = displayData.findIndex(c => isBrand(c.competitor_name));
             if (brandIdx < 0) return null;
-            const leaderVal = getRankingValue(sorted[0]);
-            const brandVal = getRankingValue(sorted[brandIdx]);
+            const leaderVal = getRankingValue(displayData[0]);
+            const brandVal = getRankingValue(displayData[brandIdx]);
             const gap = leaderVal > 0 ? Math.round(((leaderVal - brandVal) / leaderVal) * 100) : 0;
             if (brandIdx === 0) return (
               <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
@@ -935,7 +990,7 @@ export default function SocialPage() {
               <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-3">
                 <Trophy className="h-5 w-5 text-amber-600 shrink-0" />
                 <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {sorted.length} en {getRankingLabel()}, {gap}% derriere le leader.
+                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {displayData.length} en {getRankingLabel()}, {gap}% derriere le leader.
                 </p>
               </div>
             );
