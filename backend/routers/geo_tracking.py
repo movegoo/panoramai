@@ -146,6 +146,94 @@ async def track_geo(
     return response
 
 
+@router.post("/track-all")
+async def track_all_geo(
+    db: Session = Depends(get_db),
+):
+    """Run GEO tracking for ALL active advertisers (all verticals). No auth required (admin batch)."""
+    advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+    if not advertisers:
+        return {"error": "No active advertisers found"}
+
+    overall = []
+    for adv in advertisers:
+        # Get competitors for this advertiser
+        competitors = (
+            db.query(Competitor)
+            .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+            .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+            .all()
+        )
+        if not competitors:
+            overall.append({"advertiser": adv.company_name, "sector": adv.sector, "skipped": "no competitors"})
+            continue
+
+        sector = adv.sector or "supermarche"
+        sector_label = get_sector_label(sector)
+        comp_map = {c.name.lower(): c for c in competitors}
+        brand_names = [c.name for c in competitors]
+
+        logger.info(f"GEO track-all: {adv.company_name} ({sector}) — {len(competitors)} competitors")
+
+        try:
+            results, errors = await geo_analyzer.run_full_analysis(brand_names, sector=sector, sector_label=sector_label)
+        except Exception as e:
+            logger.error(f"GEO track-all failed for {adv.company_name}: {e}")
+            overall.append({"advertiser": adv.company_name, "sector": sector, "error": str(e)})
+            continue
+
+        now = datetime.utcnow()
+        total_mentions = 0
+        active_platforms = set()
+
+        for r in results:
+            active_platforms.add(r["platform"])
+            name_lower = r["brand_name"].lower()
+            comp = comp_map.get(name_lower)
+            if not comp:
+                for cname, c in comp_map.items():
+                    if name_lower in cname or cname in name_lower:
+                        comp = c
+                        break
+
+            geo = GeoResult(
+                user_id=adv.user_id,
+                advertiser_id=adv.id,
+                keyword=r["keyword"],
+                query=r["query"],
+                platform=r["platform"],
+                raw_answer=r["raw_answer"],
+                analysis=r["analysis"],
+                competitor_id=comp.id if comp else None,
+                mentioned=True,
+                position_in_answer=r["position_in_answer"],
+                recommended=r["recommended"],
+                sentiment=r["sentiment"],
+                context_snippet=r["context_snippet"],
+                primary_recommendation=r["primary_recommendation"],
+                recorded_at=now,
+            )
+            db.add(geo)
+            total_mentions += 1
+
+        db.commit()
+
+        entry = {
+            "advertiser": adv.company_name,
+            "advertiser_id": adv.id,
+            "sector": sector,
+            "competitors": len(competitors),
+            "platforms": sorted(active_platforms),
+            "total_mentions": total_mentions,
+        }
+        if errors:
+            entry["errors"] = errors
+        overall.append(entry)
+        logger.info(f"GEO track-all: {adv.company_name} done — {total_mentions} mentions on {sorted(active_platforms)}")
+
+    return {"tracked_advertisers": len(overall), "results": overall}
+
+
 @router.get("/results")
 async def get_results(
     db: Session = Depends(get_db),
