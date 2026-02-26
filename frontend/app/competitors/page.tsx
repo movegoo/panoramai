@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,7 @@ const CHANNELS = [
 ] as const;
 
 export default function CompetitorsPage() {
+  const { currentAdvertiserId } = useAuth();
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [freshness, setFreshness] = useState<FreshnessData | null>(null);
   const [storeCounts, setStoreCounts] = useState<Record<number, number>>({});
@@ -170,7 +172,7 @@ export default function CompetitorsPage() {
 
   useEffect(() => {
     loadCompetitors();
-  }, []);
+  }, [currentAdvertiserId]);
 
   async function loadCompetitors() {
     try {

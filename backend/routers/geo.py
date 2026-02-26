@@ -561,6 +561,8 @@ async def get_all_competitor_stores(
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
     user_comp_query = db.query(Competitor.id).filter(Competitor.is_active == True)
+    # Exclude the brand itself from its own competitor list
+    user_comp_query = user_comp_query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))
     if user:
         user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
     if x_advertiser_id:

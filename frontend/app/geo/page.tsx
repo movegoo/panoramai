@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import FranceMap from "@/components/map/FranceMap";
 import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users } from "lucide-react";
 import { API_BASE, brandAPI } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 interface StoreGroup {
   competitor_id: number;
@@ -22,6 +23,7 @@ function getRankColor(rank: number, total: number) {
 }
 
 export default function GeoPage() {
+  const { currentAdvertiserId } = useAuth();
   const [storeGroups, setStoreGroups] = useState<StoreGroup[]>([]);
   const [brandName, setBrandName] = useState<string | null>(null);
   const [brandStoreCount, setBrandStoreCount] = useState<number>(0);
@@ -75,7 +77,7 @@ export default function GeoPage() {
       }
     }
     loadData();
-  }, []);
+  }, [currentAdvertiserId]);
 
   const totalStores = storeGroups.reduce((sum, g) => sum + g.total, 0);
   const leader = storeGroups[0];
