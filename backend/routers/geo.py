@@ -560,7 +560,7 @@ async def get_all_competitor_stores(
     # Get the user's competitor IDs to filter store locations
     user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
     comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id).filter(((Competitor.is_active == True) | (Competitor.is_active == None)) | (Competitor.is_active == None))
+    user_comp_query = db.query(Competitor.id).filter((Competitor.is_active == True) | (Competitor.is_active == None))
     # Exclude the brand itself from its own competitor list
     user_comp_query = user_comp_query.filter((Competitor.is_brand == False) | (Competitor.is_brand == None))
     if user:
@@ -868,8 +868,18 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
     Utilise bulk_import: 1 seul téléchargement, 1 seul scan CSV."""
     from services.banco import banco_service
 
-    competitors = db.query(Competitor).filter(((Competitor.is_active == True) | (Competitor.is_active == None)) | (Competitor.is_active == None)).all()
-    counts = await banco_service.bulk_import(competitors, db)
+    competitors = db.query(Competitor).filter(
+        (Competitor.is_active == True) | (Competitor.is_active == None)
+    ).all()
+    logger.info(f"BANCO enrich-all: {len(competitors)} competitors to process")
+
+    try:
+        counts = await banco_service.bulk_import(competitors, db)
+    except Exception as e:
+        logger.error(f"BANCO enrich-all error: {type(e).__name__}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"error": str(e), "message": f"Error enriching: {e}"}
 
     results = [
         {"competitor": c.name, "stores_found": counts.get(c.id, 0)}
