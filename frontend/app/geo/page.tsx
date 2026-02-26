@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import FranceMap from "@/components/map/FranceMap";
+import { SmartFilter } from "@/components/smart-filter";
 import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users, Star, MessageSquare, CheckCircle2, ExternalLink, Trophy, ThumbsDown } from "lucide-react";
 import { API_BASE, brandAPI, geoAPI, GmbScoringData, GmbScoringCompetitor } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -47,6 +48,8 @@ export default function GeoPage() {
   const [catchmentData, setCatchmentData] = useState<any>(null);
   const [gmbScoring, setGmbScoring] = useState<GmbScoringData | null>(null);
   const [gmbLoading, setGmbLoading] = useState(true);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   useEffect(() => {
     async function loadData() {
@@ -105,13 +108,47 @@ export default function GeoPage() {
     loadData();
   }, [currentAdvertiserId]);
 
-  const totalStores = storeGroups.reduce((sum, g) => sum + g.total, 0);
-  const leader = storeGroups[0];
-  const brandGroup = storeGroups.find(g => brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase());
+  const filteredStoreGroups = useMemo(() => {
+    if (!aiFilters || !storeGroups.length) return storeGroups;
+    let result = [...storeGroups];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      result = result.filter((g: any) => names.some((n: string) => g.competitor_name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter((g: any) => g.competitor_name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [storeGroups, aiFilters]);
+
+  const filteredGmbCompetitors = useMemo(() => {
+    if (!aiFilters || !gmbScoring?.competitors?.length) return gmbScoring?.competitors || [];
+    let result = [...gmbScoring.competitors];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      result = result.filter((c: any) => names.some((n: string) => c.name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.score_min) {
+      result = result.filter((c: any) => (c.score || 0) >= aiFilters.score_min);
+    }
+    if (aiFilters.rating_min) {
+      result = result.filter((c: any) => (c.avg_rating || 0) >= aiFilters.rating_min);
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter((c: any) => c.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [gmbScoring?.competitors, aiFilters]);
+
+  const totalStores = filteredStoreGroups.reduce((sum, g) => sum + g.total, 0);
+  const leader = filteredStoreGroups[0];
+  const brandGroup = filteredStoreGroups.find(g => brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase());
 
   // Generate recommendations
   const recommendations: string[] = [];
-  if (brandName && storeGroups.length > 1) {
+  if (brandName && filteredStoreGroups.length > 1) {
     if (brandGroup && leader && leader.competitor_id !== brandGroup.competitor_id) {
       const gap = leader.total - brandGroup.total;
       if (gap > 50) {
@@ -125,8 +162,8 @@ export default function GeoPage() {
         `Aucun magasin ${brandName} n'est reference. Importez vos points de vente (CSV ou manuellement) pour analyser votre couverture geographique.`
       );
     }
-    if (storeGroups.length >= 3) {
-      const last = storeGroups[storeGroups.length - 1];
+    if (filteredStoreGroups.length >= 3) {
+      const last = filteredStoreGroups[filteredStoreGroups.length - 1];
       if (last.total < totalStores * 0.05) {
         recommendations.push(
           `${last.competitor_name} a une presence marginale (${last.total} magasins, ${(last.total / totalStores * 100).toFixed(1)}% du total). Opportunite de capter ses zones de chalandise.`
@@ -141,8 +178,8 @@ export default function GeoPage() {
   }
 
   // GMB scoring helpers
-  const gmbLeader = gmbScoring?.competitors?.[0];
-  const brandGmb = gmbScoring?.competitors?.find(c => brandName && c.competitor_name.toLowerCase() === brandName.toLowerCase());
+  const gmbLeader = filteredGmbCompetitors[0];
+  const brandGmb = filteredGmbCompetitors.find(c => brandName && c.competitor_name.toLowerCase() === brandName.toLowerCase());
 
   return (
     <div className="space-y-6">
@@ -158,8 +195,15 @@ export default function GeoPage() {
         </div>
       </div>
 
+      <SmartFilter
+        page="geo"
+        placeholder="Filtrer la géographie... (ex: Leclerc, score > 80, Île-de-France)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
+
       {/* GMB Scoring Section */}
-      {!gmbLoading && gmbScoring && gmbScoring.competitors.length > 0 && (
+      {!gmbLoading && gmbScoring && filteredGmbCompetitors.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
             <Star className="h-4.5 w-4.5 text-amber-500" />
@@ -210,7 +254,7 @@ export default function GeoPage() {
                 </div>
                 <p className="text-lg font-bold text-violet-700">{brandGmb.avg_score ?? "—"}/100</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  #{brandGmb.rank} / {gmbScoring.competitors.length} — Completude {brandGmb.completeness_pct}%
+                  #{brandGmb.rank} / {filteredGmbCompetitors.length} — Completude {brandGmb.completeness_pct}%
                 </p>
               </div>
             ) : (
@@ -222,8 +266,8 @@ export default function GeoPage() {
                   <span className="text-xs font-medium text-muted-foreground">Completude</span>
                 </div>
                 <p className="text-lg font-bold text-foreground">
-                  {gmbScoring.competitors.length > 0
-                    ? `${Math.round(gmbScoring.competitors.reduce((s, c) => s + c.completeness_pct, 0) / gmbScoring.competitors.length)}%`
+                  {filteredGmbCompetitors.length > 0
+                    ? `${Math.round(filteredGmbCompetitors.reduce((s, c) => s + c.completeness_pct, 0) / filteredGmbCompetitors.length)}%`
                     : "—"}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">Profils GMB complets</p>
@@ -253,7 +297,7 @@ export default function GeoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {gmbScoring.competitors.map((comp) => {
+                  {filteredGmbCompetitors.map((comp) => {
                     const isBrand = brandName && comp.competitor_name.toLowerCase() === brandName.toLowerCase();
                     const scorePct = comp.avg_score !== null ? comp.avg_score : 0;
                     return (
@@ -321,7 +365,7 @@ export default function GeoPage() {
           </div>
 
           {/* Top 5 / Flop 5 Stores */}
-          {gmbScoring.competitors.some(c => c.top_stores.length > 0) && (
+          {filteredGmbCompetitors.some(c => c.top_stores.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top 5 */}
               <div className="rounded-2xl border border-emerald-200 bg-card p-5">
@@ -330,7 +374,7 @@ export default function GeoPage() {
                   Top magasins
                 </h3>
                 <div className="space-y-2">
-                  {gmbScoring.competitors
+                  {filteredGmbCompetitors
                     .flatMap(c => c.top_stores.map(s => ({ ...s, competitor_name: c.competitor_name, color: c.color })))
                     .sort((a, b) => (b.gmb_score ?? 0) - (a.gmb_score ?? 0))
                     .slice(0, 5)
@@ -374,7 +418,7 @@ export default function GeoPage() {
                   Magasins a ameliorer
                 </h3>
                 <div className="space-y-2">
-                  {gmbScoring.competitors
+                  {filteredGmbCompetitors
                     .flatMap(c => (c.flop_stores.length > 0 ? c.flop_stores : c.top_stores.slice(-2)).map(s => ({ ...s, competitor_name: c.competitor_name, color: c.color })))
                     .sort((a, b) => (a.gmb_score ?? 999) - (b.gmb_score ?? 999))
                     .slice(0, 5)
@@ -416,7 +460,7 @@ export default function GeoPage() {
       )}
 
       {/* Competitive Intelligence Dashboard */}
-      {!loading && storeGroups.length > 0 && (
+      {!loading && filteredStoreGroups.length > 0 && (
         <div className="space-y-4">
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -428,7 +472,7 @@ export default function GeoPage() {
                 <span className="text-xs font-medium text-muted-foreground">Total magasins</span>
               </div>
               <p className="text-lg font-bold text-foreground">{totalStores.toLocaleString()}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">{storeGroups.length} enseignes</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{filteredStoreGroups.length} enseignes</p>
             </div>
             <div className="rounded-2xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -450,7 +494,7 @@ export default function GeoPage() {
                 </div>
                 <p className="text-lg font-bold text-violet-700">{brandGroup.total.toLocaleString()}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  #{storeGroups.indexOf(brandGroup) + 1} / {storeGroups.length} enseignes
+                  #{filteredStoreGroups.indexOf(brandGroup) + 1} / {filteredStoreGroups.length} enseignes
                 </p>
               </div>
             )}
@@ -477,9 +521,9 @@ export default function GeoPage() {
                 Repartition des points de vente
               </h2>
               <div className="space-y-2">
-                {storeGroups.map((g, i) => {
+                {filteredStoreGroups.map((g, i) => {
                   const isBrand = brandName && g.competitor_name.toLowerCase() === brandName.toLowerCase();
-                  const rc = getRankColor(i, storeGroups.length);
+                  const rc = getRankColor(i, filteredStoreGroups.length);
                   const barColors: Record<string, string> = {
                     "text-emerald-700": "bg-emerald-500",
                     "text-yellow-700": "bg-yellow-500",
