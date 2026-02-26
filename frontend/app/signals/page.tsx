@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAPI } from "@/lib/use-api";
 import { signalsAPI, SignalItem, SignalSummary } from "@/lib/api";
 import { formatNumber, getRelativeTime } from "@/lib/utils";
+import { SmartFilter } from "@/components/smart-filter";
 import {
   Bell,
   BellOff,
@@ -116,6 +117,8 @@ export default function SignalsPage() {
   const [platformFilter, setPlatformFilter] = useState<string | null>(null);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   // SWR queries
   const { data: signals, mutate: refreshSignals, isLoading: loadingSignals } = useAPI<SignalItem[]>(
@@ -148,7 +151,32 @@ export default function SignalsPage() {
     refreshSummary();
   };
 
+  useEffect(() => {
+    if (!aiFilters) return;
+    if (aiFilters.severity?.length === 1) {
+      setSeverityFilter(aiFilters.severity[0]);
+    }
+    if (aiFilters.platform?.length === 1) {
+      setPlatformFilter(aiFilters.platform[0]);
+    }
+  }, [aiFilters]);
+
   const signalsList = signals || [];
+
+  const filteredSignals = useMemo(() => {
+    if (!aiFilters?.competitor_name?.length && !aiFilters?.text_search) return signalsList;
+    return signalsList.filter((s: any) => {
+      const text = `${s.title || ""} ${s.description || ""} ${s.competitor_name || ""}`.toLowerCase();
+      if (aiFilters.competitor_name?.length) {
+        return aiFilters.competitor_name.some((n: string) => text.includes(n.toLowerCase()));
+      }
+      if (aiFilters.text_search) {
+        return text.includes(aiFilters.text_search.toLowerCase());
+      }
+      return true;
+    });
+  }, [signalsList, aiFilters]);
+
   const total = summary?.total || 0;
   const unread = summary?.unread || 0;
   const bySeverity = summary?.by_severity || {};
@@ -189,6 +217,13 @@ export default function SignalsPage() {
           </button>
         </div>
       </div>
+
+      <SmartFilter
+        page="signals"
+        placeholder="Filtrer les signaux... (ex: alertes critiques Instagram, Leclerc)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); setSeverityFilter(null); setPlatformFilter(null); }}
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -289,13 +324,13 @@ export default function SignalsPage() {
 
       {/* Signals list */}
       <div className="space-y-2">
-        {loadingSignals && signalsList.length === 0 && (
+        {loadingSignals && filteredSignals.length === 0 && (
           <div className="flex items-center justify-center py-16">
             <div className="h-6 w-6 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
           </div>
         )}
 
-        {!loadingSignals && signalsList.length === 0 && (
+        {!loadingSignals && filteredSignals.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 mb-4">
               <Bell className="h-7 w-7 text-gray-400" />
@@ -307,7 +342,7 @@ export default function SignalsPage() {
           </div>
         )}
 
-        {signalsList.map((signal) => {
+        {filteredSignals.map((signal) => {
           const sevCfg = SEVERITY_CONFIG[signal.severity] || SEVERITY_CONFIG.info;
           return (
             <div
