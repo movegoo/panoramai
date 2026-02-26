@@ -957,8 +957,6 @@ async def enrich_gmb(
     force: bool = False,
     max_per_run: int = 50,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-    x_advertiser_id: str | None = Header(None),
 ):
     """
     Enrichit les store_locations avec des données Google My Business réelles.
@@ -966,21 +964,14 @@ async def enrich_gmb(
     - force=true : ré-enrichit tous les magasins (même ceux déjà enrichis)
     - max_per_run : limite le nombre de requêtes API par exécution (défaut 50)
     """
-    logger = logging.getLogger(__name__)
-
     if not gmb_service.is_configured:
         raise HTTPException(status_code=503, detail="GMB service not configured (no SearchAPI or Google Places key)")
 
-    # Filter stores by user's competitors
-    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
-    comp_ids_from_adv = [r[0] for r in db.query(AdvertiserCompetitor.competitor_id).filter(AdvertiserCompetitor.advertiser_id.in_(user_adv_ids)).all()]
-    user_comp_query = db.query(Competitor.id, Competitor.name).filter((Competitor.is_active == True) | (Competitor.is_active == None))
-    if user:
-        user_comp_query = user_comp_query.filter(Competitor.id.in_(comp_ids_from_adv))
-    if x_advertiser_id:
-        user_comp_query = user_comp_query.filter(Competitor.advertiser_id == int(x_advertiser_id))
-    competitors_list = user_comp_query.all()
-    comp_map = {c.id: c.name for c in competitors_list}
+    # Get all competitors with BANCO stores
+    competitors_list = db.query(Competitor.id, Competitor.name).filter(
+        (Competitor.is_active == True) | (Competitor.is_active == None)
+    ).all()
+    comp_map = {c[0]: c[1] for c in competitors_list}
     comp_ids = list(comp_map.keys())
 
     if not comp_ids:
