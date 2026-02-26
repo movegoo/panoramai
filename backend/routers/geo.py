@@ -864,14 +864,16 @@ async def list_banco_brands():
 
 @router.post("/banco/enrich-all")
 async def enrich_all_competitors(db: Session = Depends(get_db)):
-    """Enrichit tous les concurrents existants avec la base commerces.
-    Utilise bulk_import: 1 seul téléchargement, 1 seul scan CSV."""
+    """Enrichit tous les concurrents existants avec la base commerces."""
     from services.banco import banco_service
+    import traceback as tb
 
-    competitors = db.query(Competitor).filter(
-        (Competitor.is_active == True) | (Competitor.is_active == None)
-    ).all()
-    logger.info(f"BANCO enrich-all: {len(competitors)} competitors to process")
+    try:
+        competitors = db.query(Competitor).all()
+        logger.info(f"BANCO enrich-all: {len(competitors)} competitors to process")
+    except Exception as e:
+        logger.error(f"BANCO query error: {tb.format_exc()}")
+        return {"error": str(e)}
 
     results = []
     total_stores = 0
