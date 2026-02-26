@@ -475,7 +475,6 @@ export interface AdvertiserSummary {
   company_name: string;
   sector: string;
   logo_url?: string;
-  features?: Record<string, boolean>;
 }
 
 export interface AuthUser {
@@ -485,6 +484,7 @@ export interface AuthUser {
   has_brand: boolean;
   brand_name?: string;
   is_admin?: boolean;
+  features?: Record<string, boolean>;
   advertisers?: AdvertiserSummary[];
 }
 
@@ -1112,12 +1112,12 @@ export const adminAPI = {
     }>("/admin/data-health"),
   getFeatureRegistry: () =>
     fetchAPI<Record<string, { label: string; blocks: Record<string, string> }>>("/admin/features/registry"),
-  getUserFeatures: (userId: number, advertiserId: number) =>
-    fetchAPI<{ user_id: number; advertiser_id: number; features: Record<string, boolean>; raw_features: Record<string, boolean> | null }>(
-      `/admin/features/${userId}/${advertiserId}`
+  getUserFeatures: (userId: number) =>
+    fetchAPI<{ user_id: number; features: Record<string, boolean>; raw_features: Record<string, boolean> | null }>(
+      `/admin/features/${userId}`
     ),
-  updateUserFeatures: (userId: number, advertiserId: number, features: Record<string, boolean>) =>
-    fetchAPI<{ message: string; features: Record<string, boolean> }>(`/admin/features/${userId}/${advertiserId}`, {
+  updateUserFeatures: (userId: number, features: Record<string, boolean>) =>
+    fetchAPI<{ message: string; features: Record<string, boolean> }>(`/admin/features/${userId}`, {
       method: "PUT",
       body: JSON.stringify({ features }),
     }),

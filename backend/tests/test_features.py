@@ -92,10 +92,9 @@ class TestMeReturnsFeatures:
         response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         data = response.json()
-        assert "advertisers" in data
-        assert len(data["advertisers"]) >= 1
-        assert "features" in data["advertisers"][0]
-        features = data["advertisers"][0]["features"]
+        # Features are on the user level, not per-advertiser
+        assert "features" in data
+        features = data["features"]
         assert isinstance(features, dict)
         assert features.get("seo") is True
 
@@ -105,14 +104,33 @@ class TestMeReturnsFeatures:
         db.add(adv)
         db.commit()
         db.refresh(adv)
-        link = UserAdvertiser(user_id=user.id, advertiser_id=adv.id, role="owner", features=None)
+        link = UserAdvertiser(user_id=user.id, advertiser_id=adv.id, role="owner")
         db.add(link)
         db.commit()
 
         response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         data = response.json()
-        features = data["advertisers"][0]["features"]
+        features = data["features"]
         assert all(v is True for v in features.values())
+
+    def test_me_with_restricted_features(self, client, db, test_user):
+        user, token = test_user
+        user.features = {"seo": False, "signals": False}
+        db.commit()
+        adv = Advertiser(company_name="Brand3", sector="supermarche", is_active=True)
+        db.add(adv)
+        db.commit()
+        db.refresh(adv)
+        link = UserAdvertiser(user_id=user.id, advertiser_id=adv.id, role="owner")
+        db.add(link)
+        db.commit()
+
+        response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        data = response.json()
+        assert data["features"]["seo"] is False
+        assert data["features"]["seo.serp_rankings"] is False  # cascade
+        assert data["features"]["signals"] is False
+        assert data["features"]["overview"] is True  # other pages unaffected
 
 
 class TestAdminFeaturesEndpoints:
@@ -130,7 +148,7 @@ class TestAdminFeaturesEndpoints:
         headers = {"Authorization": f"Bearer {token}"}
         return admin, headers
 
-    def _make_user_with_adv(self, db):
+    def _make_user(self, db):
         user = User(
             email="user@test.com",
             name="User",
@@ -139,14 +157,7 @@ class TestAdminFeaturesEndpoints:
         db.add(user)
         db.commit()
         db.refresh(user)
-        adv = Advertiser(company_name="UserBrand", sector="supermarche", is_active=True)
-        db.add(adv)
-        db.commit()
-        db.refresh(adv)
-        link = UserAdvertiser(user_id=user.id, advertiser_id=adv.id, role="owner")
-        db.add(link)
-        db.commit()
-        return user, adv
+        return user
 
     def test_admin_get_registry(self, client, db):
         admin, headers = self._make_admin(db)
@@ -159,21 +170,22 @@ class TestAdminFeaturesEndpoints:
 
     def test_admin_get_user_features(self, client, db):
         admin, headers = self._make_admin(db)
-        user, adv = self._make_user_with_adv(db)
+        user = self._make_user(db)
 
-        response = client.get(f"/api/admin/features/{user.id}/{adv.id}", headers=headers)
+        response = client.get(f"/api/admin/features/{user.id}", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert data["user_id"] == user.id
-        assert data["advertiser_id"] == adv.id
         assert isinstance(data["features"], dict)
+        # NULL features = all true
+        assert all(v is True for v in data["features"].values())
 
     def test_admin_update_features(self, client, db):
         admin, headers = self._make_admin(db)
-        user, adv = self._make_user_with_adv(db)
+        user = self._make_user(db)
 
         response = client.put(
-            f"/api/admin/features/{user.id}/{adv.id}",
+            f"/api/admin/features/{user.id}",
             headers=headers,
             json={"features": {"seo": False, "geo.france_map": False}},
         )
@@ -185,7 +197,7 @@ class TestAdminFeaturesEndpoints:
         assert data["features"]["geo"] is True  # page still enabled
 
         # Verify persistence
-        response2 = client.get(f"/api/admin/features/{user.id}/{adv.id}", headers=headers)
+        response2 = client.get(f"/api/admin/features/{user.id}", headers=headers)
         assert response2.json()["features"]["seo"] is False
 
     def test_admin_update_features_non_admin_forbidden(self, client, db):
@@ -202,7 +214,7 @@ class TestAdminFeaturesEndpoints:
         headers = {"Authorization": f"Bearer {token}"}
 
         response = client.put(
-            "/api/admin/features/1/1",
+            "/api/admin/features/1",
             headers=headers,
             json={"features": {"seo": False}},
         )
@@ -211,7 +223,7 @@ class TestAdminFeaturesEndpoints:
     def test_admin_update_features_invalid_user(self, client, db):
         admin, headers = self._make_admin(db)
         response = client.put(
-            "/api/admin/features/9999/9999",
+            "/api/admin/features/9999",
             headers=headers,
             json={"features": {"seo": False}},
         )

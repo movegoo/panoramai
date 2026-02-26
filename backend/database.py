@@ -28,6 +28,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+    features = Column(JSON, nullable=True)  # {"seo": false, "signals": false, ...} — NULL = full access
     ms_user_id = Column(Integer, unique=True, nullable=True, index=True)
     mcp_api_key = Column(String(64), unique=True, nullable=True, index=True)
 
@@ -610,7 +611,6 @@ class UserAdvertiser(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=False, index=True)
     role = Column(String(20), default="owner")  # owner, member
-    features = Column(JSON, nullable=True)  # {"seo": false, "geo.france_map": false, ...}
     added_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -746,7 +746,7 @@ def _run_migrations(engine):
             ("social_posts", "content_emotional_trigger", "VARCHAR(100)"),
             ("social_posts", "content_brand_visible", "VARCHAR(200)"),
             # Feature access control
-            ("user_advertisers", "features", "JSON"),
+            ("users", "features", "JSON"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

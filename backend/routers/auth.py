@@ -132,8 +132,7 @@ async def reset_user(email: str, db: Session = Depends(get_db), user: User = Dep
 async def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get current user profile."""
     ua_rows = db.query(UserAdvertiser).filter(UserAdvertiser.user_id == user.id).all()
-    ua_map = {r.advertiser_id: r.features for r in ua_rows}
-    user_adv_ids = list(ua_map.keys())
+    user_adv_ids = [r.advertiser_id for r in ua_rows]
     advertisers = db.query(Advertiser).filter(
         Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True
     ).order_by(Advertiser.id).all() if user_adv_ids else []
@@ -145,13 +144,13 @@ async def get_me(user: User = Depends(get_current_user), db: Session = Depends(g
         "has_brand": len(advertisers) > 0,
         "brand_name": advertisers[0].company_name if advertisers else None,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
+        "features": resolve_features(user.features),
         "advertisers": [
             {
                 "id": a.id,
                 "company_name": a.company_name,
                 "sector": a.sector,
                 "logo_url": a.logo_url,
-                "features": resolve_features(ua_map.get(a.id)),
             }
             for a in advertisers
         ],

@@ -1,6 +1,6 @@
 """
 Feature access control registry and helpers.
-Manages per-user per-advertiser feature toggles.
+Manages per-advertiser feature toggles (pages & blocks).
 """
 
 # Registry: feature_key -> French label

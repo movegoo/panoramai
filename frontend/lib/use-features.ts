@@ -3,9 +3,8 @@
 import { useAuth } from "@/lib/auth";
 
 export function useFeatureAccess() {
-  const { user, currentAdvertiserId } = useAuth();
-  const adv = user?.advertisers?.find((a) => a.id === currentAdvertiserId);
-  const features = adv?.features;
+  const { user } = useAuth();
+  const features = user?.features;
 
   function can(key: string): boolean {
     if (!features) return true;

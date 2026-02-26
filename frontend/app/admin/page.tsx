@@ -355,11 +355,9 @@ export default function AdminPage() {
 
   // Features access control state
   const [featureRegistry, setFeatureRegistry] = useState<Record<string, { label: string; blocks: Record<string, string> }> | null>(null);
-  const [featSelectedUser, setFeatSelectedUser] = useState<number | null>(null);
+  const [featAllAdvs, setFeatAllAdvs] = useState<{ id: number; company_name: string }[]>([]);
   const [featSelectedAdv, setFeatSelectedAdv] = useState<number | null>(null);
-  const [featUserAdvs, setFeatUserAdvs] = useState<{ id: number; company_name: string }[]>([]);
   const [featValues, setFeatValues] = useState<Record<string, boolean>>({});
-  const [featRaw, setFeatRaw] = useState<Record<string, boolean> | null>(null);
   const [featLoading, setFeatLoading] = useState(false);
   const [featSaving, setFeatSaving] = useState(false);
 
@@ -1126,75 +1124,43 @@ export default function AdminPage() {
             <div className="px-4 py-3 border-b border-border flex items-center gap-2">
               <Lock className="h-4 w-4 text-violet-600" />
               <h2 className="text-sm font-bold text-foreground">Droits d&apos;acces</h2>
-              <span className="text-[10px] text-muted-foreground">par user + enseigne</span>
+              <span className="text-[10px] text-muted-foreground">par utilisateur</span>
             </div>
             <div className="p-4 space-y-4">
               {/* User selector */}
-              <div className="flex flex-wrap gap-3">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Utilisateur</label>
-                  <select
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                    value={featSelectedUser || ""}
-                    onChange={(e) => {
-                      const uid = Number(e.target.value);
-                      setFeatSelectedUser(uid || null);
-                      setFeatSelectedAdv(null);
-                      setFeatValues({});
-                      setFeatRaw(null);
-                      if (uid) {
-                        const u = users.find((u) => u.id === uid);
-                        setFeatUserAdvs(u?.advertisers || []);
-                      } else {
-                        setFeatUserAdvs([]);
-                      }
-                    }}
-                  >
-                    <option value="">Choisir un utilisateur...</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.email}){u.brand_name ? ` — ${u.brand_name}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {featSelectedUser && (
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Enseigne</label>
-                    <select
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                      value={featSelectedAdv || ""}
-                      onChange={async (e) => {
-                        const aid = Number(e.target.value);
-                        setFeatSelectedAdv(aid || null);
-                        if (aid && featSelectedUser) {
-                          setFeatLoading(true);
-                          try {
-                            if (!featureRegistry) {
-                              const reg = await adminAPI.getFeatureRegistry();
-                              setFeatureRegistry(reg);
-                            }
-                            const data = await adminAPI.getUserFeatures(featSelectedUser, aid);
-                            setFeatValues(data.features);
-                            setFeatRaw(data.raw_features);
-                          } catch {
-                            setFeatValues({});
-                            setFeatRaw(null);
-                          } finally {
-                            setFeatLoading(false);
-                          }
+              <div className="max-w-md">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Utilisateur</label>
+                <select
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  value={featSelectedAdv || ""}
+                  onChange={async (e) => {
+                    const uid = Number(e.target.value);
+                    setFeatSelectedAdv(uid || null);
+                    setFeatValues({});
+                    if (uid) {
+                      setFeatLoading(true);
+                      try {
+                        if (!featureRegistry) {
+                          const reg = await adminAPI.getFeatureRegistry();
+                          setFeatureRegistry(reg);
                         }
-                      }}
-                    >
-                      <option value="">Choisir une enseigne...</option>
-                      {featUserAdvs.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.company_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                        const data = await adminAPI.getUserFeatures(uid);
+                        setFeatValues(data.features);
+                      } catch {
+                        setFeatValues({});
+                      } finally {
+                        setFeatLoading(false);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">Choisir un utilisateur...</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email}){u.brand_name ? ` — ${u.brand_name}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Feature grid */}
@@ -1215,7 +1181,6 @@ export default function AdminPage() {
                             onChange={(e) => {
                               const next = { ...featValues, [pageKey]: e.target.checked };
                               if (!e.target.checked) {
-                                // Cascade: disable all blocks
                                 Object.keys(page.blocks).forEach((bk) => {
                                   next[bk] = false;
                                 });
@@ -1258,11 +1223,10 @@ export default function AdminPage() {
                   })}
                   <button
                     onClick={async () => {
-                      if (!featSelectedUser || !featSelectedAdv) return;
+                      if (!featSelectedAdv) return;
                       setFeatSaving(true);
                       try {
                         const result = await adminAPI.updateUserFeatures(
-                          featSelectedUser,
                           featSelectedAdv,
                           featValues
                         );
@@ -1281,8 +1245,6 @@ export default function AdminPage() {
                     {featSaving ? "Enregistrement..." : "Enregistrer les droits"}
                   </button>
                 </div>
-              ) : featSelectedUser && !featSelectedAdv ? (
-                <p className="text-xs text-muted-foreground">Selectionnez une enseigne pour gerer les droits.</p>
               ) : null}
             </div>
           </div>
