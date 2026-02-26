@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime
 from collections import defaultdict
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
@@ -696,3 +697,76 @@ async def _generate_ai_analysis(
     except Exception as e:
         logger.warning(f"GEO AI analysis parse error: {e}")
         return None
+
+
+@router.get("/trends")
+async def get_trends(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    x_advertiser_id: str | None = Header(None),
+):
+    """Return GEO visibility trends over time: visibility % per competitor per date."""
+    competitors = _get_user_competitors(db, user, x_advertiser_id)
+    valid_ids = {c.id for c in competitors}
+    comp_names = {c.id: c.name for c in competitors}
+
+    brand = _get_user_brand(db, user, x_advertiser_id)
+
+    user_filter = GeoResult.user_id == user.id if user else GeoResult.user_id.is_(None)
+    adv_filter = GeoResult.advertiser_id == int(x_advertiser_id) if x_advertiser_id else True
+
+    # Get all tracking dates (distinct recorded_at dates)
+    date_col = func.date(GeoResult.recorded_at).label("tracking_date")
+    dates = (
+        db.query(date_col)
+        .filter(user_filter, adv_filter, GeoResult.mentioned == True)
+        .group_by(date_col)
+        .order_by(date_col)
+        .all()
+    )
+
+    if not dates:
+        return {"trends": [], "competitors": [], "brand_name": brand.company_name if brand else None}
+
+    # For each date, compute visibility % per competitor
+    trends = []
+    for (tracking_date,) in dates:
+        day_rows = (
+            db.query(GeoResult)
+            .filter(
+                func.date(GeoResult.recorded_at) == tracking_date,
+                user_filter,
+                adv_filter,
+                GeoResult.mentioned == True,
+            )
+            .all()
+        )
+
+        # Count mentions per competitor
+        mentions: dict[int, int] = defaultdict(int)
+        total = 0
+        for r in day_rows:
+            if r.competitor_id and r.competitor_id in valid_ids:
+                mentions[r.competitor_id] += 1
+                total += 1
+
+        if total == 0:
+            continue
+
+        day_data: dict[str, Any] = {"date": str(tracking_date)}
+        for cid, count in mentions.items():
+            day_data[comp_names[cid]] = round(count / total * 100, 1)
+
+        trends.append(day_data)
+
+    competitor_list = [
+        {"id": c.id, "name": c.name}
+        for c in competitors
+        if c.id in valid_ids
+    ]
+
+    return {
+        "trends": trends,
+        "competitors": competitor_list,
+        "brand_name": brand.company_name if brand else None,
+    }

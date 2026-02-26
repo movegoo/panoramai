@@ -26,6 +26,7 @@ from routers import google_trends_news
 from routers import moby
 from routers import mcp_keys
 from routers import meta_ads
+from routers import smart_filter
 from services.scheduler import scheduler
 
 # Logging
@@ -537,6 +538,7 @@ app.include_router(freshness.router, prefix="/api/freshness", tags=["Fraîcheur 
 app.include_router(moby.router, prefix="/api/moby", tags=["Moby AI Assistant"])
 app.include_router(mcp_keys.router, prefix="/api/mcp", tags=["MCP Integration"])
 app.include_router(meta_ads.router, prefix="/api/meta-ads", tags=["Meta Ad Library"])
+app.include_router(smart_filter.router, prefix="/api/smart-filter", tags=["Smart Filter IA"])
 
 # Mount MCP SSE server (non-fatal if competitive-mcp not available)
 try:

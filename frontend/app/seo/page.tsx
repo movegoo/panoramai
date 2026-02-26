@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Globe, RefreshCw, Search, TrendingUp, AlertTriangle, Sparkles, ExternalLink, BarChart3 } from "lucide-react";
 import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
 import { ExportMenu } from "@/components/export-menu";
+import { SmartFilter } from "@/components/smart-filter";
 import { useAPI } from "@/lib/use-api";
 
 function formatDate(iso: string | null) {
@@ -33,6 +34,8 @@ function getRankColor(rank: number, total: number) {
 export default function SeoPage() {
   const [tracking, setTracking] = useState(false);
   const [trackResult, setTrackResult] = useState<string | null>(null);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   const { data: insights, isLoading: loadingInsights, mutate: refreshInsights } = useAPI<SeoInsights>("/seo/insights");
   const { data: rankData, isLoading: loadingRankings, mutate: refreshRankings } = useAPI<{ keywords: SerpRanking[]; last_tracked: string | null }>("/seo/rankings");
@@ -64,6 +67,26 @@ export default function SeoPage() {
   const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
   const brandAvg = insights?.avg_position.find(a => a.competitor_id === brandId);
   const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === brandId);
+
+  const filteredRankings = useMemo(() => {
+    if (!aiFilters || !rankings.length) return rankings;
+    let result = [...rankings];
+    if (aiFilters.keyword?.length) {
+      const kws = aiFilters.keyword.map((k: string) => k.toLowerCase());
+      result = result.filter((r: any) => kws.some((k: string) => r.keyword.toLowerCase().includes(k)));
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter((r: any) => r.keyword.toLowerCase().includes(q));
+    }
+    return result;
+  }, [rankings, aiFilters]);
+
+  const filteredSov = useMemo(() => {
+    if (!aiFilters?.competitor_name?.length || !insights?.share_of_voice) return insights?.share_of_voice || [];
+    const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+    return insights.share_of_voice.filter((s: any) => names.some((n: string) => s.competitor.toLowerCase().includes(n)));
+  }, [insights?.share_of_voice, aiFilters]);
 
   // Build competitor list for ranking grid (from rankings + insights)
   const competitorNames: string[] = [];
@@ -111,6 +134,13 @@ export default function SeoPage() {
           {trackResult}
         </div>
       )}
+
+      <SmartFilter
+        page="seo"
+        placeholder="Filtrer le SEO... (ex: mot-clé livraison, top 3, Leclerc)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -173,9 +203,9 @@ export default function SeoPage() {
               Part de voix SEO
             </h2>
             <div className="space-y-3">
-              {insights.share_of_voice.map((s, i) => {
+              {filteredSov.map((s, i) => {
                 const isBrand = s.competitor_id === brandId;
-                const rc = getRankColor(i, insights.share_of_voice.length);
+                const rc = getRankColor(i, filteredSov.length);
                 const barColors: Record<string, string> = {
                   "text-emerald-700": "bg-emerald-500",
                   "text-yellow-700": "bg-yellow-500",
@@ -257,7 +287,7 @@ export default function SeoPage() {
                 />
               )}
             </div>
-            {rankings.length > 0 && competitorNames.length > 0 ? (
+            {filteredRankings.length > 0 && competitorNames.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
@@ -270,7 +300,7 @@ export default function SeoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rankings.map((kw) => {
+                  {filteredRankings.map((kw) => {
                     const posMap: Record<string, number | null> = {};
                     competitorNames.forEach(n => { posMap[n] = null; });
                     kw.results.forEach(r => {

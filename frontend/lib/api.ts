@@ -1354,6 +1354,13 @@ export const geoTrackingAPI = {
     fetchAPI<{ queries: GeoQueryResult[]; last_tracked: string | null }>("/geo-tracking/results"),
 
   getInsights: () => fetchAPI<GeoInsights>("/geo-tracking/insights"),
+
+  getTrends: () =>
+    fetchAPI<{
+      trends: Record<string, any>[];
+      competitors: { id: number; name: string }[];
+      brand_name: string | null;
+    }>("/geo-tracking/trends"),
 };
 
 // Signals API
@@ -1527,4 +1534,13 @@ export const socialContentAPI = {
 
   getInsights: (platform?: string) =>
     fetchAPI<ContentInsights>(`/social-content/insights${platform ? `?platform=${platform}` : ""}`),
+};
+
+// Smart Filter API (global, multi-page)
+export const smartFilterAPI = {
+  filter: (query: string, page: string) =>
+    fetchAPI<{ filters: Record<string, any>; interpretation: string }>(
+      "/smart-filter",
+      { method: "POST", body: JSON.stringify({ query, page }) }
+    ),
 };

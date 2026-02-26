@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
+import { SmartFilter } from "@/components/smart-filter";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -1562,10 +1563,8 @@ export default function AdsPage() {
   const [creativeCompetitorId, setCreativeCompetitorId] = useState<number | null>(null);
 
   // AI Smart Filter
-  const [aiQuery, setAiQuery] = useState("");
   const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
   const [aiInterpretation, setAiInterpretation] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
 
   function handlePeriodChange(days: PeriodDays) {
     setPeriodDays(days);
@@ -1574,36 +1573,6 @@ export default function AdsPage() {
     from.setDate(from.getDate() - days);
     setFilterDateFrom(from.toISOString().split("T")[0]);
     setFilterDateTo(to.toISOString().split("T")[0]);
-  }
-
-  async function handleSmartFilter() {
-    const q = aiQuery.trim();
-    if (!q) return;
-    setAiLoading(true);
-    try {
-      const result = await creativeAPI.smartFilter(q);
-      setAiFilters(result.filters);
-      setAiInterpretation(result.interpretation);
-      // Auto-set creative competitor filter when AI filter targets a specific competitor
-      if (result.filters.competitor_name && Array.isArray(result.filters.competitor_name) && result.filters.competitor_name.length === 1) {
-        const targetName = result.filters.competitor_name[0].toLowerCase();
-        const match = competitors.find(c => c.name.toLowerCase().includes(targetName));
-        if (match) setCreativeCompetitorId(match.id);
-      }
-    } catch (e) {
-      console.error("Smart filter error:", e);
-      setAiFilters({ text_search: q });
-      setAiInterpretation(`Recherche : ${q}`);
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  function clearSmartFilter() {
-    setAiQuery("");
-    setAiFilters(null);
-    setAiInterpretation("");
-    setCreativeCompetitorId(null);
   }
 
   function deduplicateAds(ads: (Ad & { competitor_name: string })[]) {
@@ -1808,7 +1777,8 @@ export default function AdsPage() {
     setFilterPromoType(new Set());
     setFilterCreativeFormat(new Set());
     setFilterSeasonal(new Set());
-    clearSmartFilter();
+    setAiFilters(null);
+    setAiInterpretation("");
   }
 
   // Build advertiser logos map: always use competitor logo_url
@@ -2259,53 +2229,13 @@ export default function AdsPage() {
       </div>
 
       {/* ── AI Smart Filter ──────────────────── */}
-      <div className="relative">
-        <div className="relative flex items-center gap-2">
-          <div className="relative flex-1">
-            <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-500" />
-            <input
-              type="text"
-              value={aiQuery}
-              onChange={(e) => setAiQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !aiLoading) handleSmartFilter(); }}
-              placeholder="Décrivez les pubs que vous cherchez... (ex: vidéos drôles Leclerc, promos Noël avec des fruits)"
-              className="w-full pl-10 pr-10 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-muted-foreground/60"
-            />
-            {aiQuery && !aiLoading && (
-              <button onClick={clearSmartFilter} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            )}
-            {aiLoading && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-500 animate-spin" />
-            )}
-          </div>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSmartFilter}
-            disabled={aiLoading || !aiQuery.trim()}
-            className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Filtrer
-          </Button>
-        </div>
-        {aiInterpretation && aiFilters && (
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-medium border border-violet-200">
-              <Sparkles className="h-3 w-3" />
-              {aiInterpretation}
-              <button onClick={clearSmartFilter} className="ml-1 hover:text-violet-950">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {filteredAds.length} résultat{filteredAds.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
-      </div>
+      <SmartFilter
+        page="ads"
+        placeholder="Décrivez les pubs que vous cherchez... (ex: vidéos drôles Leclerc, promos Noël avec des fruits)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+        resultCount={filteredAds.length}
+      />
 
       {/* ── KPI Banner ─────────────────────── */}
       <div className="rounded-2xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-4 sm:px-8 py-5 sm:py-6 text-white relative overflow-hidden">

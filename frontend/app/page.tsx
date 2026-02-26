@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   watchAPI,
   brandAPI,
@@ -61,6 +61,7 @@ import {
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
+import { SmartFilter } from "@/components/smart-filter";
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -661,6 +662,8 @@ export default function DashboardPage() {
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [showAllAdvertisers, setShowAllAdvertisers] = useState(false);
   const [gmbData, setGmbData] = useState<GmbScoringData | null>(null);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   // Fetch GMB scoring data
   useEffect(() => {
@@ -717,8 +720,24 @@ export default function DashboardPage() {
     );
 
   const { brand, competitors, insights, platform_leaders: pl, ad_intelligence: adI, rankings } = data;
-  const allPlayersSorted = [...(brand ? [brand, ...competitors] : competitors)].sort((a, b) => b.score - a.score);
-  const allPlayers = brand ? [brand, ...competitors] : competitors;
+
+  const filteredCompetitors = useMemo(() => {
+    if (!data?.competitors) return [];
+    if (!aiFilters) return data.competitors;
+    let result = [...data.competitors];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      result = result.filter(c => names.some((n: string) => c.name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      result = result.filter(c => c.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [data?.competitors, aiFilters]);
+
+  const allPlayersSorted = [...(brand ? [brand, ...filteredCompetitors] : filteredCompetitors)].sort((a, b) => b.score - a.score);
+  const allPlayers = brand ? [brand, ...filteredCompetitors] : filteredCompetitors;
 
   // Build platform rankings (top 3 per platform)
   const brandNameLower = data!.brand_name.toLowerCase();
@@ -882,6 +901,13 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <SmartFilter
+        page="overview"
+        placeholder="Filtrer le dashboard... (ex: Leclerc, plateformes Instagram)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
 
       {/* ── RECOMMANDATIONS ─────────────────────────────── */}
       {adI.recommendations.length > 0 && (

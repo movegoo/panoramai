@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
 import { exportCSV, exportXLSX, ExportColumn } from "@/lib/export";
@@ -17,6 +17,7 @@ import {
   Search, Newspaper, RefreshCw, ExternalLink,
 } from "lucide-react";
 import { API_BASE, getCurrentAdvertiserId } from "@/lib/api";
+import { SmartFilter } from "@/components/smart-filter";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -257,6 +258,9 @@ export default function TendancesPage() {
   const [selectedCategory, setSelectedCategory] = useState("social");
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
   const [hiddenCompetitors, setHiddenCompetitors] = useState<Set<string>>(new Set());
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
+
 
   const dateFrom = useMemo(() => {
     const d = new Date();
@@ -281,6 +285,26 @@ export default function TendancesPage() {
     () => [...summaries].sort((a, b) => (b.is_brand ? 1 : 0) - (a.is_brand ? 1 : 0) || a.name.localeCompare(b.name)),
     [summaries]
   );
+
+  useEffect(() => {
+    if (aiFilters?.metric_category) {
+      setSelectedCategory(aiFilters.metric_category);
+    }
+  }, [aiFilters]);
+
+  const filteredSummaries = useMemo(() => {
+    if (!aiFilters?.competitor_name?.length && !aiFilters?.text_search) return sortedSummaries;
+    return sortedSummaries.filter((s: any) => {
+      const name = (s.name || "").toLowerCase();
+      if (aiFilters.competitor_name?.length) {
+        return aiFilters.competitor_name.some((n: string) => name.includes(n.toLowerCase()));
+      }
+      if (aiFilters.text_search) {
+        return name.includes(aiFilters.text_search.toLowerCase());
+      }
+      return true;
+    });
+  }, [sortedSummaries, aiFilters]);
 
   const selectedCat = METRIC_CATEGORIES.find((c) => c.id === selectedCategory)!;
 
@@ -450,6 +474,13 @@ export default function TendancesPage() {
           </div>
         </div>
       </div>
+
+      <SmartFilter
+        page="tendances"
+        placeholder="Filtrer les tendances... (ex: Leclerc social, croissance TikTok)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
 
       {/* Smart Insights */}
       {insights.length > 0 && (
@@ -663,7 +694,7 @@ export default function TendancesPage() {
 
                     {/* Competitor values row */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                      {sortedSummaries.map((comp, i) => {
+                      {filteredSummaries.map((comp, i) => {
                         const val = comp.metrics[metric.key];
                         const compId = String(comp.competitor_id);
                         const compData = competitors[compId];
@@ -788,7 +819,7 @@ export default function TendancesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedSummaries.map((comp) => (
+                  {filteredSummaries.map((comp) => (
                     <tr key={comp.competitor_id} className={`border-b last:border-0 ${comp.is_brand ? "bg-violet-50/30" : ""}`}>
                       <td className="py-2.5 px-2">
                         <div className="flex items-center gap-2">

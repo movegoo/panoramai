@@ -1,7 +1,8 @@
 """
 Smart Filter Service.
 Translates natural language queries into structured JSON filters
-for client-side ad filtering, using Gemini Flash.
+for client-side filtering, using Gemini Flash.
+Supports multiple page contexts with different filter schemas.
 """
 import json
 import logging
@@ -16,7 +17,22 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-FILTER_SYSTEM_PROMPT = """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des publicités.
+# ---------------------------------------------------------------------------
+# Per-page system prompts
+# ---------------------------------------------------------------------------
+
+_COMMON_RULES = """
+RÈGLES :
+1. Retourne UNIQUEMENT un JSON valide : {"filters": {...}, "interpretation": "..."}
+2. "interpretation" = résumé en français de ce que tu as compris (1 phrase courte)
+3. N'inclus QUE les champs pertinents (pas de champs vides ou null)
+4. Pour les champs textuels, utilise des mots-clés en minuscules
+5. Sois flexible avec les synonymes et variations linguistiques
+6. Si la requête mentionne un concurrent, ajoute competitor_name
+7. Si tu ne comprends pas la requête, retourne : {"filters": {"text_search": "<la requête>"}, "interpretation": "Recherche textuelle"}"""
+
+PAGE_PROMPTS: dict[str, str] = {
+    "ads": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des publicités.
 
 CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
 
@@ -39,26 +55,115 @@ CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
 - "target_audience_contains": [str] — mots-clés dans target_audience (ex: ["jeunes", "familles", "seniors"])
 - "is_active": bool — pub encore active
 
-RÈGLES :
-1. Retourne UNIQUEMENT un JSON valide : {"filters": {...}, "interpretation": "..."}
-2. "interpretation" = résumé en français de ce que tu as compris (1 phrase courte)
-3. N'inclus QUE les champs pertinents (pas de champs vides ou null)
-4. Pour les champs textuels, utilise des mots-clés en minuscules
-5. Pour display_format, utilise TOUJOURS les majuscules
-6. Sois flexible : "vidéos" → display_format: ["VIDEO"], "drôle" → creative_tone: ["humoristique"]
-7. Si la requête mentionne un concurrent, ajoute competitor_name
-8. Si tu ne comprends pas la requête, retourne : {"filters": {"text_search": "<la requête>"}, "interpretation": "Recherche textuelle"}"""
+RÈGLES SPÉCIFIQUES :
+- Pour display_format, utilise TOUJOURS les majuscules
+- "vidéos" → display_format: ["VIDEO"], "drôle" → creative_tone: ["humoristique"]
+""" + _COMMON_RULES,
+
+    "social": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des données de réseaux sociaux.
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "platform": [str] — plateformes (ex: ["instagram", "tiktok", "youtube", "snapchat"])
+- "metric": str — métrique principale à mettre en avant (ex: "followers", "engagement", "growth")
+- "competitor_name": [str] — noms de concurrents
+- "growth_direction": str — direction de croissance ("up" ou "down")
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "apps": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des données d'applications mobiles.
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "store": str — magasin d'applications ("playstore" ou "appstore")
+- "metric": str — métrique principale (ex: "rating", "reviews", "downloads")
+- "competitor_name": [str] — noms de concurrents
+- "rating_min": float — note minimale (ex: 4.0)
+- "rating_max": float — note maximale
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "geo": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des données géographiques (magasins, scores GMB).
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "competitor_name": [str] — noms de concurrents
+- "score_min": float — score GMB minimum
+- "rating_min": float — note Google minimum
+- "department": [str] — départements (ex: ["75", "92", "69"])
+- "region": [str] — régions (ex: ["Île-de-France", "Auvergne-Rhône-Alpes"])
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "seo": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des données SEO (positionnement SERP).
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "keyword": [str] — mots-clés SEO spécifiques
+- "competitor_name": [str] — noms de concurrents
+- "position_max": int — position maximale dans les résultats (ex: 3, 10)
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "signals": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des signaux et alertes concurrentiels.
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "severity": [str] — niveaux de sévérité (ex: ["critical", "warning", "info"])
+- "platform": [str] — plateformes (ex: ["instagram", "tiktok", "youtube", "playstore", "appstore", "meta", "google"])
+- "competitor_name": [str] — noms de concurrents
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "tendances": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des tendances et évolutions.
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "platform": [str] — plateformes (ex: ["instagram", "tiktok", "youtube", "meta", "google"])
+- "metric_category": str — catégorie de métrique ("social", "apps", "ads", "google_trends", "presse")
+- "competitor_name": [str] — noms de concurrents
+- "growth_direction": str — direction de tendance ("up" ou "down")
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "overview": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer le tableau de bord global.
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "competitor_name": [str] — noms de concurrents
+- "platform": [str] — plateformes (ex: ["instagram", "tiktok", "youtube", "meta", "google", "playstore", "appstore"])
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+
+    "geo-tracking": """Tu es un assistant qui traduit des requêtes en langage naturel en filtres JSON structurés pour filtrer des données de visibilité IA (GEO tracking).
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "platform": [str] — moteurs IA (ex: ["claude", "gemini", "chatgpt", "mistral"])
+- "competitor_name": [str] — noms de concurrents
+- "keyword": [str] — mots-clés / requêtes trackées
+- "sentiment": [str] — sentiments (ex: ["positif", "neutre", "négatif"])
+- "recommended": bool — uniquement les marques recommandées
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+}
+
+# Alias for the VGEO page (same context as geo-tracking)
+PAGE_PROMPTS["vgeo"] = PAGE_PROMPTS["geo-tracking"]
+
+# Legacy constant for backwards compatibility
+FILTER_SYSTEM_PROMPT = PAGE_PROMPTS["ads"]
 
 
 class SmartFilterService:
-    """Translates natural language queries to structured ad filters via Gemini."""
+    """Translates natural language queries to structured filters via Gemini."""
 
     @property
     def gemini_key(self) -> str:
         return os.getenv("GEMINI_API_KEY", "") or settings.GEMINI_API_KEY
 
-    async def parse_query(self, query: str) -> dict[str, Any]:
-        """Parse a natural language query into structured filters."""
+    async def parse_query(self, query: str, page: str = "ads") -> dict[str, Any]:
+        """Parse a natural language query into structured filters for the given page context."""
         if not self.gemini_key:
             logger.warning("No Gemini API key configured, falling back to text_search")
             return {
@@ -66,14 +171,16 @@ class SmartFilterService:
                 "interpretation": "Recherche textuelle (clé API Gemini manquante)",
             }
 
+        system_prompt = PAGE_PROMPTS.get(page, PAGE_PROMPTS["ads"])
+
         try:
-            result = await self._call_gemini(query)
+            result = await self._call_gemini(query, system_prompt)
             if result:
                 parsed = self._parse_json(result)
                 if parsed:
                     return parsed
         except Exception as e:
-            logger.error(f"Smart filter error: {e}")
+            logger.error(f"Smart filter error (page={page}): {e}")
 
         # Fallback
         return {
@@ -81,14 +188,14 @@ class SmartFilterService:
             "interpretation": f"Recherche textuelle : {query}",
         }
 
-    async def _call_gemini(self, query: str) -> str:
+    async def _call_gemini(self, query: str, system_prompt: str) -> str:
         """Call Gemini Flash for fast structured output."""
         url = GEMINI_API_URL.format(model="gemini-2.0-flash") + f"?key={self.gemini_key}"
         payload = {
             "contents": [
                 {
                     "parts": [
-                        {"text": f"[Instructions système]\n{FILTER_SYSTEM_PROMPT}"},
+                        {"text": f"[Instructions système]\n{system_prompt}"},
                         {"text": f"[Utilisateur]\n{query}"},
                     ]
                 }
