@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from database import get_db, Ad, Competitor, User, SystemSetting, AdvertiserCompetitor, UserAdvertiser
+from pydantic import BaseModel
+
 from services.creative_analyzer import creative_analyzer
+from services.smart_filter import smart_filter_service
 from core.auth import get_current_user
 from core.permissions import parse_advertiser_header, get_user_competitor_ids
 
@@ -892,3 +895,14 @@ def _build_geo_analysis(rows: list) -> list[dict]:
 
     geo.sort(key=lambda g: g["ad_count"], reverse=True)
     return geo[:15]
+
+
+class SmartFilterRequest(BaseModel):
+    query: str
+
+
+@router.post("/smart-filter")
+async def smart_filter(req: SmartFilterRequest):
+    """Translate a natural language query into structured ad filters using AI."""
+    result = await smart_filter_service.parse_query(req.query)
+    return result

@@ -1191,6 +1191,12 @@ export const creativeAPI = {
     const qs = params.toString();
     return fetchAPI<CreativeInsights>(`/creative/insights${qs ? `?${qs}` : ""}`);
   },
+
+  smartFilter: (query: string) =>
+    fetchAPI<{ filters: Record<string, any>; interpretation: string }>(
+      "/creative/smart-filter",
+      { method: "POST", body: JSON.stringify({ query }) }
+    ),
 };
 
 // Social Content Analysis API

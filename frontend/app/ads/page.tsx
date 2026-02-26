@@ -1560,6 +1560,12 @@ export default function AdsPage() {
   const [analyzingCreatives, setAnalyzingCreatives] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<{ message?: string; analyzed: number; errors: number; remaining: number } | null>(null);
 
+  // AI Smart Filter
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+
   function handlePeriodChange(days: PeriodDays) {
     setPeriodDays(days);
     const to = new Date();
@@ -1567,6 +1573,29 @@ export default function AdsPage() {
     from.setDate(from.getDate() - days);
     setFilterDateFrom(from.toISOString().split("T")[0]);
     setFilterDateTo(to.toISOString().split("T")[0]);
+  }
+
+  async function handleSmartFilter() {
+    const q = aiQuery.trim();
+    if (!q) return;
+    setAiLoading(true);
+    try {
+      const result = await creativeAPI.smartFilter(q);
+      setAiFilters(result.filters);
+      setAiInterpretation(result.interpretation);
+    } catch (e) {
+      console.error("Smart filter error:", e);
+      setAiFilters({ text_search: q });
+      setAiInterpretation(`Recherche : ${q}`);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function clearSmartFilter() {
+    setAiQuery("");
+    setAiFilters(null);
+    setAiInterpretation("");
   }
 
   function deduplicateAds(ads: (Ad & { competitor_name: string })[]) {
@@ -1768,6 +1797,7 @@ export default function AdsPage() {
     setFilterPromoType(new Set());
     setFilterCreativeFormat(new Set());
     setFilterSeasonal(new Set());
+    clearSmartFilter();
   }
 
   // Build advertiser logos map: always use competitor logo_url
@@ -1994,6 +2024,40 @@ export default function AdsPage() {
           || (ad.link_description || "").toLowerCase().includes(q);
         if (!match) return false;
       }
+      // AI Smart Filter
+      if (aiFilters) {
+        const f = aiFilters;
+        const includes = (field: string | string[] | undefined | null, keywords: string[]): boolean => {
+          if (!field) return false;
+          const text = (Array.isArray(field) ? field.join(" ") : String(field)).toLowerCase();
+          return keywords.some(kw => text.includes(kw.toLowerCase()));
+        };
+        if (f.products_contain && !includes((ad as any).products_detected, f.products_contain)) return false;
+        if (f.tags_contain && !includes((ad as any).creative_tags, f.tags_contain)) return false;
+        if (f.product_category && !(f.product_category as string[]).some((c: string) => (ad.product_category || "").toLowerCase().includes(c.toLowerCase()))) return false;
+        if (f.creative_concept && !(f.creative_concept as string[]).some((c: string) => (ad.creative_concept || "").toLowerCase().includes(c.toLowerCase()))) return false;
+        if (f.creative_tone && !(f.creative_tone as string[]).some((t: string) => (ad.creative_tone || "").toLowerCase().includes(t.toLowerCase()))) return false;
+        if (f.ad_objective && !(f.ad_objective as string[]).some((o: string) => (ad.ad_objective || "").toLowerCase().includes(o.toLowerCase()))) return false;
+        if (f.display_format && !(f.display_format as string[]).some((fmt: string) => (ad.display_format || "").toUpperCase() === fmt.toUpperCase())) return false;
+        if (f.platform && !(f.platform as string[]).some((p: string) => (ad.platform || "").toLowerCase().includes(p.toLowerCase()))) return false;
+        if (f.seasonal_event && !(f.seasonal_event as string[]).some((s: string) => (ad.seasonal_event || "").toLowerCase().includes(s.toLowerCase()))) return false;
+        if (f.promo_type && !(f.promo_type as string[]).some((p: string) => (ad.promo_type || "").toLowerCase().includes(p.toLowerCase()))) return false;
+        if (f.creative_has_face !== undefined && ad.creative_has_face !== f.creative_has_face) return false;
+        if (f.creative_has_product !== undefined && ad.creative_has_product !== f.creative_has_product) return false;
+        if (f.price_visible !== undefined && ad.price_visible !== f.price_visible) return false;
+        if (f.creative_score_min && (ad.creative_score || 0) < f.creative_score_min) return false;
+        if (f.competitor_name && !(f.competitor_name as string[]).some((n: string) => ad.competitor_name.toLowerCase().includes(n.toLowerCase()))) return false;
+        if (f.target_audience_contains && !includes((ad as any).target_audience, f.target_audience_contains)) return false;
+        if (f.is_active !== undefined && ad.is_active !== f.is_active) return false;
+        if (f.text_search) {
+          const q = (f.text_search as string).toLowerCase();
+          const match = (ad.title || "").toLowerCase().includes(q)
+            || (ad.ad_text || "").toLowerCase().includes(q)
+            || (ad.page_name || "").toLowerCase().includes(q)
+            || (ad.creative_summary || "").toLowerCase().includes(q);
+          if (!match) return false;
+        }
+      }
       return true;
     });
     // Sort: ads with reliable creative_url first, then by start_date descending
@@ -2012,10 +2076,10 @@ export default function AdsPage() {
       return bDate - aDate;
     });
     return result;
-  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery]);
+  }, [allAds, filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery, aiFilters]);
 
   // Reset pagination when filters change
-  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery]);
+  useEffect(() => { setVisibleCount(12); }, [filterSource, filterCompetitors, filterPlatforms, filterFormats, filterAdvertisers, filterStatus, filterDateFrom, filterDateTo, filterGender, filterLocations, filterAdType, filterCountry, filterCategories, filterObjectives, filterSuperCat, filterPromoType, filterCreativeFormat, filterSeasonal, searchQuery, aiFilters]);
 
   const visibleAds = useMemo(() => filteredAds.slice(0, visibleCount), [filteredAds, visibleCount]);
   const hasMoreAds = visibleCount < filteredAds.length;
@@ -2026,7 +2090,8 @@ export default function AdsPage() {
     + (filterGender !== "none" ? 1 : 0) + filterLocations.size
     + (filterAdType !== "all" ? 1 : 0) + filterCountry.size
     + filterCategories.size + filterObjectives.size + filterSuperCat.size
-    + filterPromoType.size + filterCreativeFormat.size + filterSeasonal.size;
+    + filterPromoType.size + filterCreativeFormat.size + filterSeasonal.size
+    + (aiFilters ? 1 : 0);
 
   const stats = useMemo(() => {
     const active = filteredAds.filter(a => a.is_active).length;
@@ -2156,6 +2221,55 @@ export default function AdsPage() {
             Scanner tout
           </Button>
         </div>
+      </div>
+
+      {/* ── AI Smart Filter ──────────────────── */}
+      <div className="relative">
+        <div className="relative flex items-center gap-2">
+          <div className="relative flex-1">
+            <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-500" />
+            <input
+              type="text"
+              value={aiQuery}
+              onChange={(e) => setAiQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !aiLoading) handleSmartFilter(); }}
+              placeholder="Décrivez les pubs que vous cherchez... (ex: vidéos drôles Leclerc, promos Noël avec des fruits)"
+              className="w-full pl-10 pr-10 py-2.5 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-400 placeholder:text-muted-foreground/60"
+            />
+            {aiQuery && !aiLoading && (
+              <button onClick={clearSmartFilter} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {aiLoading && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-500 animate-spin" />
+            )}
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleSmartFilter}
+            disabled={aiLoading || !aiQuery.trim()}
+            className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Filtrer
+          </Button>
+        </div>
+        {aiInterpretation && aiFilters && (
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-medium border border-violet-200">
+              <Sparkles className="h-3 w-3" />
+              {aiInterpretation}
+              <button onClick={clearSmartFilter} className="ml-1 hover:text-violet-950">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {filteredAds.length} résultat{filteredAds.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── KPI Banner ─────────────────────── */}
