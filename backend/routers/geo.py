@@ -873,25 +873,21 @@ async def enrich_all_competitors(db: Session = Depends(get_db)):
     ).all()
     logger.info(f"BANCO enrich-all: {len(competitors)} competitors to process")
 
-    try:
-        # Ensure CSV is downloaded first
-        await banco_service._ensure_csv_on_disk()
-        counts = await banco_service.bulk_import(competitors, db)
-    except Exception as e:
-        logger.error(f"BANCO enrich-all error: {type(e).__name__}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return {"error": str(e), "message": f"Error enriching: {e}"}
-
-    results = [
-        {"competitor": c.name, "stores_found": counts.get(c.id, 0)}
-        for c in competitors
-    ]
+    results = []
+    total_stores = 0
+    for comp in competitors:
+        try:
+            count = await banco_service.search_and_store(comp.id, comp.name, db)
+            results.append({"competitor": comp.name, "stores_found": count})
+            total_stores += count
+        except Exception as e:
+            logger.error(f"BANCO error for {comp.name}: {type(e).__name__}: {e}")
+            results.append({"competitor": comp.name, "stores_found": 0, "error": str(e)})
 
     return {
         "message": f"{len(competitors)} concurrents enrichis",
-        "total_stores": sum(counts.values()),
-        "results": results,
+        "total_stores": total_stores,
+        "results": [r for r in results if r.get("stores_found", 0) > 0 or r.get("error")],
     }
 
 
