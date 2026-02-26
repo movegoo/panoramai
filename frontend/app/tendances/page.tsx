@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { API_BASE, getCurrentAdvertiserId } from "@/lib/api";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -441,7 +442,7 @@ export default function TendancesPage() {
   const isLoading = tsLoading || sumLoading;
 
   return (
-    <div className="space-y-6">
+    <PageGate page="tendances"><div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -851,7 +852,7 @@ export default function TendancesPage() {
 
       {/* ─── News Dashboard Widget ─── */}
       <LatestNewsWidget />
-    </div>
+    </div></PageGate>
   );
 }
 

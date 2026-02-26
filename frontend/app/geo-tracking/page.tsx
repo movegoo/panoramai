@@ -6,6 +6,7 @@ import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 import { ExportMenu } from "@/components/export-menu";
 import { useAPI } from "@/lib/use-api";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
@@ -141,7 +142,7 @@ export default function GeoTrackingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="geo_tracking"><div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -650,7 +651,7 @@ export default function GeoTrackingPage() {
           ) : null}
         </>
       )}
-    </div>
+    </div></PageGate>
   );
 }
 

@@ -8,9 +8,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from database import get_db, User, Advertiser
+from database import get_db, User, Advertiser, UserAdvertiser
 from core.auth import hash_password, verify_password, create_access_token, get_current_user
 from core.config import settings
+from core.features import resolve_features
 
 router = APIRouter()
 
@@ -28,8 +29,9 @@ class LoginRequest(BaseModel):
 
 def _build_user_dict(user: User, db: Session) -> dict:
     """Build user response dict."""
-    from database import UserAdvertiser
-    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    ua_rows = db.query(UserAdvertiser).filter(UserAdvertiser.user_id == user.id).all()
+    ua_map = {r.advertiser_id: r.features for r in ua_rows}
+    user_adv_ids = list(ua_map.keys())
     advertisers = db.query(Advertiser).filter(
         Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True
     ).order_by(Advertiser.id).all() if user_adv_ids else []
@@ -41,7 +43,13 @@ def _build_user_dict(user: User, db: Session) -> dict:
         "has_brand": len(advertisers) > 0,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
         "advertisers": [
-            {"id": a.id, "company_name": a.company_name, "sector": a.sector, "logo_url": a.logo_url}
+            {
+                "id": a.id,
+                "company_name": a.company_name,
+                "sector": a.sector,
+                "logo_url": a.logo_url,
+                "features": resolve_features(ua_map.get(a.id)),
+            }
             for a in advertisers
         ],
     }
@@ -123,8 +131,9 @@ async def reset_user(email: str, db: Session = Depends(get_db), user: User = Dep
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get current user profile."""
-    from database import UserAdvertiser
-    user_adv_ids = [r[0] for r in db.query(UserAdvertiser.advertiser_id).filter(UserAdvertiser.user_id == user.id).all()]
+    ua_rows = db.query(UserAdvertiser).filter(UserAdvertiser.user_id == user.id).all()
+    ua_map = {r.advertiser_id: r.features for r in ua_rows}
+    user_adv_ids = list(ua_map.keys())
     advertisers = db.query(Advertiser).filter(
         Advertiser.id.in_(user_adv_ids), Advertiser.is_active == True
     ).order_by(Advertiser.id).all() if user_adv_ids else []
@@ -137,7 +146,13 @@ async def get_me(user: User = Depends(get_current_user), db: Session = Depends(g
         "brand_name": advertisers[0].company_name if advertisers else None,
         "is_admin": bool(user.is_admin) if user.is_admin is not None else False,
         "advertisers": [
-            {"id": a.id, "company_name": a.company_name, "sector": a.sector, "logo_url": a.logo_url}
+            {
+                "id": a.id,
+                "company_name": a.company_name,
+                "sector": a.sector,
+                "logo_url": a.logo_url,
+                "features": resolve_features(ua_map.get(a.id)),
+            }
             for a in advertisers
         ],
     }

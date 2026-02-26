@@ -16,10 +16,11 @@ from sqlalchemy import func, distinct
 from database import (
     get_db, engine, User, Advertiser, Competitor,
     Ad, InstagramData, TikTokData, YouTubeData, AppData, StoreLocation,
-    PromptTemplate, Store, AdvertiserCompetitor,
+    PromptTemplate, Store, AdvertiserCompetitor, UserAdvertiser,
     deduplicate_competitors,
 )
 from core.auth import get_current_user
+from core.features import resolve_features, get_registry_grouped
 from core.sectors import SECTORS, list_sectors
 from services.scheduler import scheduler
 
@@ -693,6 +694,7 @@ def _serialize_user(u: User, db: Session) -> dict:
         "has_brand": brand is not None,
         "brand_name": brand.company_name if brand else None,
         "competitors_count": comp_count,
+        "advertisers": [{"id": a.id, "company_name": a.company_name} for a in adv_links],
     }
 
 
@@ -1021,4 +1023,81 @@ async def admin_data_health(
         "stale": stale,
         "coverage": {k: {"count": v, "pct": round(v / total * 100)} for k, v in coverage.items()},
         "report": report,
+    }
+
+
+# ── Feature Access Control ────────────────────────────────────────────────────
+
+@router.get("/features/registry")
+async def get_feature_registry(user: User = Depends(get_current_user)):
+    """Return the feature registry grouped by page (for admin UI)."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+    return get_registry_grouped()
+
+
+@router.get("/features/{user_id}/{advertiser_id}")
+async def get_user_features(
+    user_id: int,
+    advertiser_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get resolved features for a user-advertiser pair."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    ua = db.query(UserAdvertiser).filter(
+        UserAdvertiser.user_id == user_id,
+        UserAdvertiser.advertiser_id == advertiser_id,
+    ).first()
+    if not ua:
+        raise HTTPException(status_code=404, detail="Association user-enseigne introuvable")
+
+    return {
+        "user_id": user_id,
+        "advertiser_id": advertiser_id,
+        "features": resolve_features(ua.features),
+        "raw_features": ua.features,
+    }
+
+
+class FeaturesUpdateRequest(BaseModel):
+    features: dict
+
+
+@router.put("/features/{user_id}/{advertiser_id}")
+async def update_user_features(
+    user_id: int,
+    advertiser_id: int,
+    body: FeaturesUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update features for a user-advertiser pair."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+
+    ua = db.query(UserAdvertiser).filter(
+        UserAdvertiser.user_id == user_id,
+        UserAdvertiser.advertiser_id == advertiser_id,
+    ).first()
+    if not ua:
+        raise HTTPException(status_code=404, detail="Association user-enseigne introuvable")
+
+    # Store only explicit false values (clean up true values to keep JSON small)
+    clean = {k: v for k, v in body.features.items() if v is False or v == False}
+    ua.features = clean if clean else None
+    db.commit()
+    db.refresh(ua)
+
+    return {
+        "message": "Droits mis a jour",
+        "user_id": user_id,
+        "advertiser_id": advertiser_id,
+        "features": resolve_features(ua.features),
     }

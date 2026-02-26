@@ -31,6 +31,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { PageGate } from "@/components/page-gate";
 
 const COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6"];
 const PLATFORM_COLORS: Record<string, string> = {
@@ -154,7 +155,7 @@ export default function AdsOverviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <PageGate page="ads_overview"><div className="min-h-screen bg-background">
       {/* ── Hero ── */}
       <div className="bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-6 py-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -515,7 +516,7 @@ export default function AdsOverviewPage() {
           </div>
         </div>
       )}
-    </div>
+    </div></PageGate>
   );
 }
 

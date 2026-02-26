@@ -48,6 +48,7 @@ import {
   Key,
   Activity,
   RefreshCw,
+  Lock,
 } from "lucide-react";
 import { FreshnessBadge } from "@/components/freshness-badge";
 
@@ -351,6 +352,16 @@ export default function AdminPage() {
 
   // Freshness state
   const [freshness, setFreshness] = useState<FreshnessData | null>(null);
+
+  // Features access control state
+  const [featureRegistry, setFeatureRegistry] = useState<Record<string, { label: string; blocks: Record<string, string> }> | null>(null);
+  const [featSelectedUser, setFeatSelectedUser] = useState<number | null>(null);
+  const [featSelectedAdv, setFeatSelectedAdv] = useState<number | null>(null);
+  const [featUserAdvs, setFeatUserAdvs] = useState<{ id: number; company_name: string }[]>([]);
+  const [featValues, setFeatValues] = useState<Record<string, boolean>>({});
+  const [featRaw, setFeatRaw] = useState<Record<string, boolean> | null>(null);
+  const [featLoading, setFeatLoading] = useState(false);
+  const [featSaving, setFeatSaving] = useState(false);
 
   // User editing state
   const [editingUser, setEditingUser] = useState<number | null>(null);
@@ -1109,6 +1120,172 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* ── Feature Access Control ── */}
+          <div className="rounded-xl border border-border bg-card">
+            <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+              <Lock className="h-4 w-4 text-violet-600" />
+              <h2 className="text-sm font-bold text-foreground">Droits d&apos;acces</h2>
+              <span className="text-[10px] text-muted-foreground">par user + enseigne</span>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* User selector */}
+              <div className="flex flex-wrap gap-3">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Utilisateur</label>
+                  <select
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    value={featSelectedUser || ""}
+                    onChange={(e) => {
+                      const uid = Number(e.target.value);
+                      setFeatSelectedUser(uid || null);
+                      setFeatSelectedAdv(null);
+                      setFeatValues({});
+                      setFeatRaw(null);
+                      if (uid) {
+                        const u = users.find((u) => u.id === uid);
+                        setFeatUserAdvs(u?.advertisers || []);
+                      } else {
+                        setFeatUserAdvs([]);
+                      }
+                    }}
+                  >
+                    <option value="">Choisir un utilisateur...</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email}){u.brand_name ? ` — ${u.brand_name}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {featSelectedUser && (
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="text-xs font-medium text-muted-foreground mb-1 block">Enseigne</label>
+                    <select
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                      value={featSelectedAdv || ""}
+                      onChange={async (e) => {
+                        const aid = Number(e.target.value);
+                        setFeatSelectedAdv(aid || null);
+                        if (aid && featSelectedUser) {
+                          setFeatLoading(true);
+                          try {
+                            if (!featureRegistry) {
+                              const reg = await adminAPI.getFeatureRegistry();
+                              setFeatureRegistry(reg);
+                            }
+                            const data = await adminAPI.getUserFeatures(featSelectedUser, aid);
+                            setFeatValues(data.features);
+                            setFeatRaw(data.raw_features);
+                          } catch {
+                            setFeatValues({});
+                            setFeatRaw(null);
+                          } finally {
+                            setFeatLoading(false);
+                          }
+                        }
+                      }}
+                    >
+                      <option value="">Choisir une enseigne...</option>
+                      {featUserAdvs.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.company_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Feature grid */}
+              {featLoading ? (
+                <div className="flex items-center justify-center h-20">
+                  <div className="animate-spin h-5 w-5 border-2 border-violet-500 border-t-transparent rounded-full" />
+                </div>
+              ) : featSelectedAdv && featureRegistry ? (
+                <div className="space-y-3">
+                  {Object.entries(featureRegistry).map(([pageKey, page]) => {
+                    const pageEnabled = featValues[pageKey] !== false;
+                    return (
+                      <div key={pageKey} className="rounded-lg border border-border/60 p-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={pageEnabled}
+                            onChange={(e) => {
+                              const next = { ...featValues, [pageKey]: e.target.checked };
+                              if (!e.target.checked) {
+                                // Cascade: disable all blocks
+                                Object.keys(page.blocks).forEach((bk) => {
+                                  next[bk] = false;
+                                });
+                              }
+                              setFeatValues(next);
+                            }}
+                            className="rounded border-border text-violet-600 focus:ring-violet-500"
+                          />
+                          <span className="text-sm font-semibold text-foreground">{page.label}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{pageKey}</span>
+                        </label>
+                        {Object.keys(page.blocks).length > 0 && (
+                          <div className="ml-6 mt-2 grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                            {Object.entries(page.blocks).map(([blockKey, blockLabel]) => {
+                              const blockEnabled = pageEnabled && featValues[blockKey] !== false;
+                              return (
+                                <label
+                                  key={blockKey}
+                                  className={`flex items-center gap-1.5 cursor-pointer text-xs ${
+                                    !pageEnabled ? "opacity-40 pointer-events-none" : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={blockEnabled}
+                                    disabled={!pageEnabled}
+                                    onChange={(e) => {
+                                      setFeatValues({ ...featValues, [blockKey]: e.target.checked });
+                                    }}
+                                    className="rounded border-border text-violet-600 focus:ring-violet-500 h-3 w-3"
+                                  />
+                                  <span className="text-muted-foreground">{blockLabel}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    onClick={async () => {
+                      if (!featSelectedUser || !featSelectedAdv) return;
+                      setFeatSaving(true);
+                      try {
+                        const result = await adminAPI.updateUserFeatures(
+                          featSelectedUser,
+                          featSelectedAdv,
+                          featValues
+                        );
+                        setFeatValues(result.features);
+                        alert("Droits mis a jour !");
+                      } catch (e: any) {
+                        alert("Erreur: " + (e.message || "Echec"));
+                      } finally {
+                        setFeatSaving(false);
+                      }
+                    }}
+                    disabled={featSaving}
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    {featSaving ? "Enregistrement..." : "Enregistrer les droits"}
+                  </button>
+                </div>
+              ) : featSelectedUser && !featSelectedAdv ? (
+                <p className="text-xs text-muted-foreground">Selectionnez une enseigne pour gerer les droits.</p>
+              ) : null}
+            </div>
+          </div>
 
           {/* Users table */}
           <div className="rounded-xl border border-border bg-card">

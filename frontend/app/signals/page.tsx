@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Shield,
 } from "lucide-react";
+import { PageGate } from "@/components/page-gate";
 
 /* ─────────── Helpers ─────────── */
 
@@ -185,7 +186,7 @@ export default function SignalsPage() {
   const platformKeys = Object.keys(byPlatform).sort((a, b) => byPlatform[b] - byPlatform[a]);
 
   return (
-    <div className="space-y-6">
+    <PageGate page="signals"><div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -404,6 +405,6 @@ export default function SignalsPage() {
           );
         })}
       </div>
-    </div>
+    </div></PageGate>
   );
 }

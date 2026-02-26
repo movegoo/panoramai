@@ -62,6 +62,7 @@ import {
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -766,7 +767,7 @@ export default function DashboardPage() {
   const asRanking = buildAppRanking("appstore");
 
   return (
-    <div className="space-y-8">
+    <PageGate page="overview"><div className="space-y-8">
       {/* ── Hero header ────────────────────────────────── */}
       <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 p-5 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-violet-400/[0.05]" />
@@ -1663,6 +1664,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </div>
+    </div></PageGate>
   );
 }

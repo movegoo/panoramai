@@ -64,6 +64,7 @@ import {
 import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -2304,7 +2305,7 @@ export default function AdsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="ads"><div className="space-y-6">
       {/* ── Header ─────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -3698,6 +3699,6 @@ export default function AdsPage() {
           )}
         </>
       )}
-    </div>
+    </div></PageGate>
   );
 }

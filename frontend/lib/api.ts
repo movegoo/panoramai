@@ -475,6 +475,7 @@ export interface AdvertiserSummary {
   company_name: string;
   sector: string;
   logo_url?: string;
+  features?: Record<string, boolean>;
 }
 
 export interface AuthUser {
@@ -975,6 +976,7 @@ export interface AdminUser {
   has_brand: boolean;
   brand_name: string | null;
   competitors_count: number;
+  advertisers?: { id: number; company_name: string }[];
 }
 
 export interface PromptTemplateData {
@@ -1108,6 +1110,17 @@ export const adminAPI = {
       coverage: Record<string, { count: number; pct: number }>;
       report: any[];
     }>("/admin/data-health"),
+  getFeatureRegistry: () =>
+    fetchAPI<Record<string, { label: string; blocks: Record<string, string> }>>("/admin/features/registry"),
+  getUserFeatures: (userId: number, advertiserId: number) =>
+    fetchAPI<{ user_id: number; advertiser_id: number; features: Record<string, boolean>; raw_features: Record<string, boolean> | null }>(
+      `/admin/features/${userId}/${advertiserId}`
+    ),
+  updateUserFeatures: (userId: number, advertiserId: number, features: Record<string, boolean>) =>
+    fetchAPI<{ message: string; features: Record<string, boolean> }>(`/admin/features/${userId}/${advertiserId}`, {
+      method: "PUT",
+      body: JSON.stringify({ features }),
+    }),
 };
 
 // Freshness API

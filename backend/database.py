@@ -610,6 +610,7 @@ class UserAdvertiser(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=False, index=True)
     role = Column(String(20), default="owner")  # owner, member
+    features = Column(JSON, nullable=True)  # {"seo": false, "geo.france_map": false, ...}
     added_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -744,6 +745,8 @@ def _run_migrations(engine):
             ("social_posts", "content_target_audience", "VARCHAR(200)"),
             ("social_posts", "content_emotional_trigger", "VARCHAR(100)"),
             ("social_posts", "content_brand_visible", "VARCHAR(200)"),
+            # Feature access control
+            ("user_advertisers", "features", "JSON"),
         ]
         existing_tables = inspector.get_table_names()
         for table, column, col_type in migrations:

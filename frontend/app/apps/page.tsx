@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 type Store = "playstore" | "appstore";
 type RankingView = "rating" | "reviews" | "downloads";
@@ -358,7 +359,7 @@ export default function AppsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="apps"><div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -948,7 +949,7 @@ export default function AppsPage() {
           )}
         </div>
       )}
-    </div>
+    </div></PageGate>
   );
 }
 

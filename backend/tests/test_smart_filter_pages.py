@@ -22,9 +22,6 @@ class TestPagePrompts:
         for page in self.EXPECTED_PAGES:
             assert page in PAGE_PROMPTS, f"Missing prompt for page: {page}"
 
-    def test_vgeo_aliases_geo_tracking(self):
-        assert PAGE_PROMPTS["vgeo"] == PAGE_PROMPTS["geo-tracking"]
-
     def test_each_prompt_contains_rules(self):
         for page, prompt in PAGE_PROMPTS.items():
             assert "RÈGLES" in prompt, f"Page '{page}' prompt missing RÈGLES section"

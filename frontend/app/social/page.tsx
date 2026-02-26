@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "snapchat";
 
@@ -545,7 +546,7 @@ export default function SocialPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="social"><div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -1456,6 +1457,6 @@ export default function SocialPage() {
           </div>
         )}
       </div>
-    </div>
+    </div></PageGate>
   );
 }

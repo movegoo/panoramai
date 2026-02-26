@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useFeatureAccess } from "@/lib/use-features";
 import {
   LayoutDashboard,
   Users,
@@ -30,7 +31,23 @@ import {
   X,
   Sparkles,
   Bell,
+  Lock,
 } from "lucide-react";
+
+const HREF_TO_FEATURE: Record<string, string> = {
+  "/": "overview",
+  "/competitors": "competitors",
+  "/ads": "ads",
+  "/ads-overview": "ads_overview",
+  "/social": "social",
+  "/apps": "apps",
+  "/geo": "geo",
+  "/seo": "seo",
+  "/geo-tracking": "geo_tracking",
+  "/vgeo": "vgeo",
+  "/tendances": "tendances",
+  "/signals": "signals",
+};
 
 const navigation = [
   {
@@ -66,6 +83,7 @@ const navigation = [
 export function SidebarNav({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user, logout, currentAdvertiserId } = useAuth();
+  const { canPage } = useFeatureAccess();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const advertisers = user?.advertisers || [];
@@ -142,23 +160,32 @@ export function SidebarNav({ onClose }: { onClose?: () => void }) {
                 <div className="space-y-0.5">
                   {section.items.map((item) => {
                     const active = isActive(item.href);
+                    const featureKey = HREF_TO_FEATURE[item.href];
+                    const locked = featureKey ? !canPage(featureKey) : false;
                     return (
                       <Link
                         key={item.name}
-                        href={item.href}
+                        href={locked ? "#" : item.href}
+                        onClick={locked ? (e) => e.preventDefault() : undefined}
                         className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-all ${
-                          active
+                          locked
+                            ? "opacity-40 cursor-not-allowed"
+                            : active
                             ? "bg-gradient-to-r from-violet-50 to-indigo-50 text-violet-700 shadow-sm border border-violet-100/80"
                             : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                         }`}
                       >
-                        <item.icon
-                          className={`h-[16px] w-[16px] shrink-0 ${
-                            active ? "text-violet-600" : "text-muted-foreground/70"
-                          }`}
-                        />
+                        {locked ? (
+                          <Lock className="h-[16px] w-[16px] shrink-0 text-muted-foreground/50" />
+                        ) : (
+                          <item.icon
+                            className={`h-[16px] w-[16px] shrink-0 ${
+                              active ? "text-violet-600" : "text-muted-foreground/70"
+                            }`}
+                          />
+                        )}
                         <span className="truncate">{item.name}</span>
-                        {active && (
+                        {active && !locked && (
                           <div className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-500" />
                         )}
                       </Link>

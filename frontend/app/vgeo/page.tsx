@@ -10,6 +10,7 @@ import {
 import { vgeoAPI } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageGate } from "@/components/page-gate";
 
 // ---------------------------------------------------------------------------
 // Platform config
@@ -190,7 +191,7 @@ export default function VGeoPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="vgeo"><div className="space-y-6">
       <VGeoHeader handleAnalyze={handleAnalyze} analyzing={analyzing} />
 
       {analyzeResult && (
@@ -578,7 +579,7 @@ export default function VGeoPage() {
           )}
         </>
       ) : null}
-    </div>
+    </div></PageGate>
   );
 }
 

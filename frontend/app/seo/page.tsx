@@ -6,6 +6,7 @@ import { seoAPI, SeoInsights, SerpRanking } from "@/lib/api";
 import { ExportMenu } from "@/components/export-menu";
 import { SmartFilter } from "@/components/smart-filter";
 import { useAPI } from "@/lib/use-api";
+import { PageGate } from "@/components/page-gate";
 
 function formatDate(iso: string | null) {
   if (!iso) return "Jamais";
@@ -106,7 +107,7 @@ export default function SeoPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="seo"><div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -428,7 +429,7 @@ export default function SeoPage() {
           ) : null}
         </>
       )}
-    </div>
+    </div></PageGate>
   );
 }
 

@@ -6,6 +6,7 @@ import { SmartFilter } from "@/components/smart-filter";
 import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users, Star, MessageSquare, CheckCircle2, ExternalLink, Trophy, ThumbsDown } from "lucide-react";
 import { API_BASE, brandAPI, geoAPI, GmbScoringData, GmbScoringCompetitor } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { PageGate } from "@/components/page-gate";
 
 interface StoreGroup {
   competitor_id: number;
@@ -182,7 +183,7 @@ export default function GeoPage() {
   const brandGmb = filteredGmbCompetitors.find(c => brandName && c.competitor_name.toLowerCase() === brandName.toLowerCase());
 
   return (
-    <div className="space-y-6">
+    <PageGate page="geo"><div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
           <Map className="h-5 w-5 text-violet-600" />
@@ -645,6 +646,6 @@ export default function GeoPage() {
           )}
         </div>
       )}
-    </div>
+    </div></PageGate>
   );
 }

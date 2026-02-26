@@ -67,6 +67,7 @@ import {
   ArrowUpRight,
   Filter,
 } from "lucide-react";
+import { PageGate } from "@/components/page-gate";
 
 /* ─────────────── TikTok icon ─────────────── */
 function TikTokIcon({ className = "h-4 w-4" }: { className?: string }) {
@@ -311,7 +312,7 @@ export default function CompetitorsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageGate page="competitors"><div className="space-y-6">
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
@@ -751,7 +752,7 @@ export default function CompetitorsPage() {
       {/* Section : Sources de veille concurrentielle                       */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {competitors.length > 0 && <CompetitiveSourcesSection />}
-    </div>
+    </div></PageGate>
   );
 }
 
