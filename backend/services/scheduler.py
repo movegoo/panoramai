@@ -105,6 +105,9 @@ class DataCollectionScheduler:
 
             # Enrich payer/beneficiary via SearchAPI.io (if configured)
             await self._enrich_payers_searchapi(db, competitors)
+
+            # Enrich EU transparency data (age/gender/reach) for Meta ads
+            await self._enrich_transparency(db)
         except Exception as e:
             logger.error(f"Error in daily data collection: {e}")
         finally:
@@ -279,6 +282,71 @@ class DataCollectionScheduler:
                     logger.info(f"Google Ads: {new} new, {updated} updated for {name}")
         except Exception as e:
             logger.error(f"Google Ads fetch failed for {name}: {e}")
+
+    async def _enrich_transparency(self, db: Session):
+        """Enrich Meta ads with EU transparency data (age/gender/reach) via ScrapeCreators."""
+        try:
+            import asyncio
+            import json
+            from services.scrapecreators import scrapecreators
+            from database import Ad
+
+            meta_platforms = ["facebook", "instagram", "messenger", "audience_network", "meta",
+                              "FACEBOOK", "INSTAGRAM", "MESSENGER", "AUDIENCE_NETWORK", "META"]
+
+            # Get ads missing transparency data (max 100 per run)
+            ads_to_enrich = db.query(Ad).filter(
+                Ad.eu_total_reach.is_(None),
+                Ad.platform.in_(meta_platforms),
+            ).limit(100).all()
+
+            if not ads_to_enrich:
+                return
+
+            async def _enrich_one(ad):
+                try:
+                    detail = await scrapecreators.get_facebook_ad_detail(ad.ad_id)
+                    if not detail.get("success"):
+                        ad.eu_total_reach = 0
+                        return False
+                    ad.age_min = detail.get("age_min")
+                    ad.age_max = detail.get("age_max")
+                    ad.gender_audience = detail.get("gender_audience")
+                    ad.eu_total_reach = detail.get("eu_total_reach") or 0
+                    loc = detail.get("location_audience", [])
+                    if loc:
+                        ad.location_audience = json.dumps(loc)
+                    breakdown = detail.get("age_country_gender_reach_breakdown", [])
+                    if breakdown:
+                        ad.age_country_gender_reach = json.dumps(breakdown)
+                    byline = detail.get("byline")
+                    if byline:
+                        ad.byline = byline
+                    payer = detail.get("payer")
+                    beneficiary_val = detail.get("beneficiary")
+                    if payer:
+                        ad.payer = payer
+                    if beneficiary_val:
+                        ad.beneficiary = beneficiary_val
+                    return True
+                except Exception as e:
+                    logger.error(f"Transparency enrichment failed for ad {ad.ad_id}: {e}")
+                    ad.eu_total_reach = 0
+                    return False
+
+            # Process in batches of 10
+            enriched = 0
+            errors = 0
+            for i in range(0, len(ads_to_enrich), 10):
+                batch = ads_to_enrich[i:i + 10]
+                results = await asyncio.gather(*[_enrich_one(ad) for ad in batch])
+                enriched += sum(1 for r in results if r)
+                errors += sum(1 for r in results if not r)
+                db.commit()
+
+            logger.info(f"Transparency: enriched {enriched}/{len(ads_to_enrich)} ads ({errors} errors)")
+        except Exception as e:
+            logger.error(f"Transparency enrichment failed: {e}")
 
     async def _enrich_payers_searchapi(self, db: Session, competitors):
         """Enrich new Meta ads with payer/beneficiary via SearchAPI.io."""
