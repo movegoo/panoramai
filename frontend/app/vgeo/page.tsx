@@ -1,55 +1,78 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  Eye, RefreshCw, BarChart3, TrendingUp, AlertTriangle,
-  Sparkles, Zap, Bot, Star, Search, MessageSquare,
+  Eye, RefreshCw, BarChart3, TrendingUp, Youtube, Video,
+  Sparkles, Zap, Bot, Star, Search, ArrowRight, Target,
+  Clock, Trophy, AlertTriangle, CheckCircle2, XCircle,
+  Minus, Play, ThumbsUp,
 } from "lucide-react";
-import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
+import { vgeoAPI } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { SmartFilter } from "@/components/smart-filter";
 
 // ---------------------------------------------------------------------------
 // Platform config
 // ---------------------------------------------------------------------------
-const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; chartColor: string; icon: string }> = {
-  mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", chartColor: "#ea580c", icon: "https://mistral.ai/favicon.ico" },
-  claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", chartColor: "#b45309", icon: "https://claude.ai/favicon.ico" },
-  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", chartColor: "#2563eb", icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Google-gemini-icon.svg/3840px-Google-gemini-icon.svg.png" },
-  chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", chartColor: "#059669", icon: "https://chatgpt.com/favicon.ico" },
+const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
+  claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", icon: "https://claude.ai/favicon.ico" },
+  gemini: { label: "Gemini", color: "text-blue-600", bg: "bg-blue-100", icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Google-gemini-icon.svg/3840px-Google-gemini-icon.svg.png" },
+  chatgpt: { label: "ChatGPT", color: "text-emerald-600", bg: "bg-emerald-100", icon: "https://chatgpt.com/favicon.ico" },
 };
 
-const COMP_COLORS = [
-  "#7c3aed", "#2563eb", "#059669", "#ea580c", "#dc2626",
-  "#0891b2", "#7c2d12", "#4338ca", "#be123c", "#0d9488",
-];
+const CLASSIFICATION_COLORS: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  HELP: { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", label: "HELP" },
+  HUB: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200", label: "HUB" },
+  HERO: { bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200", label: "HERO" },
+  UNKNOWN: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", label: "?" },
+};
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Score gauge component
 // ---------------------------------------------------------------------------
-function formatDate(iso: string | null) {
-  if (!iso) return "Jamais";
-  const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+function ScoreGauge({ score, size = 120 }: { score: number; size?: number }) {
+  const radius = (size - 16) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = (score / 100) * circumference;
+  const color = score >= 70 ? "#22c55e" : score >= 40 ? "#f59e0b" : "#ef4444";
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" className="text-gray-200" strokeWidth={8} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={8}
+          strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={circumference - progress}
+          className="transition-all duration-1000" />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold" style={{ color }}>{score}</span>
+        <span className="text-[10px] text-muted-foreground font-medium">/100</span>
+      </div>
+    </div>
+  );
 }
 
-function getRankColor(rank: number, total: number) {
-  if (total <= 1) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
-  const pct = rank / (total - 1);
-  if (pct === 0) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" };
-  if (pct <= 0.33) return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" };
-  if (pct <= 0.66) return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" };
-  return { bg: "bg-red-100", text: "text-red-600", border: "border-red-200" };
-}
-
-function getCellColor(value: number, allValues: number[]) {
-  if (value === 0) return "bg-gray-50 text-gray-400";
-  const sorted = Array.from(new Set(allValues)).sort((a, b) => b - a);
-  const rank = sorted.indexOf(value);
-  const total = sorted.filter(v => v > 0).length;
-  if (total <= 1) return "bg-emerald-100 text-emerald-700 font-bold";
-  const c = getRankColor(rank, total);
-  return `${c.bg} ${c.text} font-bold`;
+// ---------------------------------------------------------------------------
+// Sub-score bar
+// ---------------------------------------------------------------------------
+function SubScoreBar({ label, score, weight, icon: Icon }: { label: string; score: number; weight: string; icon: any }) {
+  const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="flex items-center gap-3">
+      <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-foreground">{label}</span>
+          <span className="text-xs text-muted-foreground">{weight}</span>
+        </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${score}%` }} />
+        </div>
+      </div>
+      <span className="text-sm font-bold text-foreground w-10 text-right">{score}</span>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -58,117 +81,108 @@ function getCellColor(value: number, allValues: number[]) {
 export default function VGeoPage() {
   const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
   const [aiInterpretation, setAiInterpretation] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
 
-  // Data fetching
-  const { data: insights, isLoading: loadingInsights, mutate: refreshInsights } = useAPI<GeoInsights>("/geo-tracking/insights");
-  const { data: resData, isLoading: loadingResults, mutate: refreshResults } = useAPI<{ queries: GeoQueryResult[]; last_tracked: string | null }>("/geo-tracking/results");
-  const { data: trendsData, isLoading: loadingTrends, mutate: refreshTrends } = useAPI<{
-    trends: Record<string, any>[];
-    competitors: { id: number; name: string }[];
-    brand_name: string | null;
-  }>("/geo-tracking/trends");
+  // Fetch latest report
+  const { data: report, isLoading, mutate: refreshReport } = useAPI<any>("/vgeo/report");
 
-  const [tracking, setTracking] = useState(false);
-  const [trackResult, setTrackResult] = useState<string | null>(null);
+  const hasReport = report?.has_report;
 
-  const loading = loadingInsights || loadingResults;
-  const results = resData?.queries || [];
-
-  async function handleTrack() {
-    setTracking(true);
-    setTrackResult(null);
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAnalyzeResult(null);
     try {
-      const res = await geoTrackingAPI.track();
-      setTrackResult(`${res.tracked_queries} requetes analysees sur ${res.platforms.length} plateformes IA, ${res.total_mentions} mentions detectees`);
-      refreshInsights();
-      refreshResults();
-      refreshTrends();
+      const res = await vgeoAPI.analyze();
+      setAnalyzeResult(`Analyse terminee ! Score VGEO : ${res.score?.total}/100`);
+      refreshReport();
     } catch (e: any) {
-      setTrackResult(`Erreur: ${e.message}`);
+      setAnalyzeResult(`Erreur: ${e.message}`);
     } finally {
-      setTracking(false);
+      setAnalyzing(false);
     }
   }
 
-  // Brand info
-  const brandId = insights?.brand_competitor_id;
-  const brandName = insights?.brand_name || "Ma marque";
-  const platforms = insights?.platforms || [];
+  // Extract data from report
+  const score = report?.score;
+  const brandChannel = report?.brand_channel;
+  const competitors = report?.competitors || [];
+  const videos = report?.videos || [];
+  const citations = report?.citations || {};
+  const diagnostic = report?.diagnostic || "";
+  const forces = report?.forces || [];
+  const faiblesses = report?.faiblesses || [];
+  const strategy = report?.strategy || [];
+  const actions = report?.actions || [];
 
-  // KPI computations
-  const brandSov = insights?.share_of_voice.find(s => s.competitor_id === brandId);
-  const brandRec = insights?.recommendation_rate.find(r => r.competitor_id === brandId);
-  const brandAvgPos = insights?.avg_position.find(a => a.competitor_id === brandId);
-  const brandMissing = insights?.missing_keywords.find(m => m.competitor_id === brandId);
+  // Classification counts for brand
+  const brandVideos = useMemo(() => videos.filter((v: any) => v.is_brand), [videos]);
+  const helpCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HELP").length, [brandVideos]);
+  const hubCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HUB").length, [brandVideos]);
+  const heroCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HERO").length, [brandVideos]);
+  const totalBrandVideos = brandVideos.length || 1;
 
-  // Competitor names
-  const competitorNames: { name: string; id: number }[] = useMemo(() => {
-    if (!insights) return [];
-    const seen = new Set<number>();
-    const names: { name: string; id: number }[] = [];
-    insights.share_of_voice.forEach(s => {
-      if (!seen.has(s.competitor_id)) {
-        seen.add(s.competitor_id);
-        names.push({ name: s.competitor, id: s.competitor_id });
-      }
-    });
-    return names;
-  }, [insights]);
-
-  // AI Filter logic
-  const filteredSov = useMemo(() => {
-    if (!insights?.share_of_voice) return [];
-    if (!aiFilters?.competitor_name?.length && !aiFilters?.text_search) return insights.share_of_voice;
-    return insights.share_of_voice.filter(s => {
-      const name = s.competitor.toLowerCase();
-      if (aiFilters.competitor_name?.length) {
-        return aiFilters.competitor_name.some((n: string) => name.includes(n.toLowerCase()));
-      }
-      if (aiFilters.text_search) return name.includes(aiFilters.text_search.toLowerCase());
-      return true;
-    });
-  }, [insights?.share_of_voice, aiFilters]);
-
-  const filteredResults = useMemo(() => {
-    if (!results.length) return results;
-    if (!aiFilters) return results;
-    let filtered = [...results];
-    if (aiFilters.keyword?.length) {
-      const kws = aiFilters.keyword.map((k: string) => k.toLowerCase());
-      filtered = filtered.filter(r => kws.some((k: string) => r.keyword.toLowerCase().includes(k)));
+  // Filter videos based on AI filters
+  const filteredVideos = useMemo(() => {
+    if (!videos.length) return videos;
+    if (!aiFilters) return videos;
+    let filtered = [...videos];
+    if (aiFilters.competitor_name?.length) {
+      const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+      filtered = filtered.filter((v: any) => names.some((n: string) => v.channel_name.toLowerCase().includes(n)));
+    }
+    if (aiFilters.classification?.length) {
+      filtered = filtered.filter((v: any) => aiFilters.classification.includes(v.classification));
     }
     if (aiFilters.text_search) {
       const q = aiFilters.text_search.toLowerCase();
-      filtered = filtered.filter(r => r.keyword.toLowerCase().includes(q));
+      filtered = filtered.filter((v: any) => v.title.toLowerCase().includes(q) || v.channel_name.toLowerCase().includes(q));
     }
     return filtered;
-  }, [results, aiFilters]);
+  }, [videos, aiFilters]);
 
-  const filteredCompetitorNames = useMemo(() => {
-    if (!aiFilters?.competitor_name?.length) return competitorNames;
-    const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
-    return competitorNames.filter(c => names.some((n: string) => c.name.toLowerCase().includes(n)));
-  }, [competitorNames, aiFilters]);
+  // Build citation matrix: query -> platform -> brands mentioned
+  const citationMatrix = useMemo(() => {
+    const matrix: Record<string, Record<string, string[]>> = {};
+    for (const [platform, mentions] of Object.entries(citations)) {
+      if (!Array.isArray(mentions)) continue;
+      for (const m of mentions as any[]) {
+        const query = m.query || "";
+        if (!matrix[query]) matrix[query] = {};
+        if (!matrix[query][platform]) matrix[query][platform] = [];
+        if (m.brand && !matrix[query][platform].includes(m.brand)) {
+          matrix[query][platform].push(m.brand);
+        }
+      }
+    }
+    return matrix;
+  }, [citations]);
 
   // Empty state
-  if (!loading && (!insights || insights.total_queries === 0)) {
+  if (!isLoading && !hasReport) {
     return (
       <div className="space-y-6">
-        <VGeoHeader handleTrack={handleTrack} tracking={tracking} platforms={platforms} />
-        <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
+        <VGeoHeader handleAnalyze={handleAnalyze} analyzing={analyzing} />
+        {analyzeResult && (
+          <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-700">
+            {analyzeResult}
+          </div>
+        )}
+        <div className="rounded-2xl border bg-card p-8 text-center space-y-4">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100">
-              <Eye className="h-6 w-6 text-violet-600" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200/50">
+              <Youtube className="h-7 w-7 text-white" />
             </div>
           </div>
-          <h3 className="text-sm font-semibold">Aucune donnee VGEO</h3>
-          <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Lancez une analyse GEO depuis la page GEO pour commencer le suivi de visibilite IA.
+          <h3 className="text-base font-semibold">VGEO — Video Generative Engine Optimization</h3>
+          <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+            Analysez votre strategie YouTube pour maximiser votre visibilite dans les moteurs IA (ChatGPT, Claude, Gemini, Mistral).
+            Le framework HELP/HUB/HERO identifie les contenus que les LLM citent le plus.
           </p>
-          <button onClick={handleTrack} disabled={tracking}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 transition-colors">
-            {tracking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-            {tracking ? "Analyse en cours..." : "Lancer l'analyse"}
+          <button onClick={handleAnalyze} disabled={analyzing}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-violet-200/50 disabled:opacity-50 transition-all">
+            {analyzing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            {analyzing ? "Analyse en cours..." : "Lancer l'analyse VGEO"}
           </button>
         </div>
       </div>
@@ -177,122 +191,164 @@ export default function VGeoPage() {
 
   return (
     <div className="space-y-6">
-      <VGeoHeader handleTrack={handleTrack} tracking={tracking} platforms={platforms} />
+      <VGeoHeader handleAnalyze={handleAnalyze} analyzing={analyzing} />
 
-      {trackResult && (
+      {analyzeResult && (
         <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-700">
-          {trackResult}
+          {analyzeResult}
         </div>
       )}
 
       {/* Smart Filter */}
       <SmartFilter
         page="vgeo"
-        placeholder="Filtrer la visibilite IA... (ex: Leclerc ChatGPT, sentiment positif, mot-cle livraison)"
+        placeholder="Filtrer... (ex: videos HELP, concurrent Leclerc, mot-cle tutoriel)"
         onFilter={(filters, interp) => { setAiFilters(filters); setAiInterpretation(interp); }}
         onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
       />
 
-      {loading ? (
+      {isLoading ? (
         <div className="flex items-center justify-center py-20">
           <RefreshCw className="h-6 w-6 animate-spin text-violet-500" />
-          <span className="ml-3 text-muted-foreground">Chargement des donnees VGEO...</span>
+          <span className="ml-3 text-muted-foreground">Chargement du rapport VGEO...</span>
         </div>
-      ) : insights ? (
+      ) : score ? (
         <>
-          {/* ── Section 1: Hero KPIs ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <HeroCard
-              label="Visibilite marque"
-              value={brandSov ? `${brandSov.pct}%` : "0%"}
-              subtitle={brandSov ? `${brandSov.mentions} mentions` : "Aucune mention"}
-              icon={Eye}
-              gradient="from-violet-500 to-violet-600"
-              shadow="shadow-violet-200/50"
-            />
-            <HeroCard
-              label="Taux recommandation"
-              value={brandRec ? `${brandRec.rate}%` : "0%"}
-              subtitle={brandRec ? `${brandRec.recommended_count}/${brandRec.total_mentions} reponses` : "Aucune"}
-              icon={Star}
-              gradient="from-indigo-500 to-indigo-600"
-              shadow="shadow-indigo-200/50"
-            />
-            <HeroCard
-              label="Position moyenne"
-              value={brandAvgPos ? `#${brandAvgPos.avg_pos}` : "--"}
-              subtitle="Dans les reponses IA"
-              icon={TrendingUp}
-              gradient="from-cyan-500 to-cyan-600"
-              shadow="shadow-cyan-200/50"
-            />
-            <HeroCard
-              label="Plateformes actives"
-              value={String(platforms.length || 4)}
-              subtitle={(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map(p => LLM_CONFIG[p]?.label || p).join(", ")}
-              icon={Bot}
-              gradient="from-teal-500 to-teal-600"
-              shadow="shadow-teal-200/50"
-            />
-          </div>
-
-          {/* ── Section 2: Share of Voice ── */}
+          {/* ── Section 1: Score VGEO global ── */}
           <div className="rounded-2xl border border-border bg-card p-6">
-            <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-violet-500" />
-              Share of Voice IA
-            </h2>
-            <div className="space-y-3">
-              {filteredSov.map((s, i) => {
-                const isBrand = s.competitor_id === brandId;
-                const rc = getRankColor(i, filteredSov.length);
-                const barColors: Record<string, string> = {
-                  "text-emerald-700": "bg-emerald-500",
-                  "text-yellow-700": "bg-yellow-500",
-                  "text-orange-700": "bg-orange-500",
-                  "text-red-600": "bg-red-500",
-                };
-                const barColor = isBrand ? "bg-gradient-to-r from-violet-500 to-indigo-500" : (barColors[rc.text] || "bg-gray-300");
-                return (
-                  <div key={s.competitor_id} className="flex items-center gap-3">
-                    <span className={`w-32 text-sm truncate flex items-center gap-1 ${isBrand ? "text-violet-700 font-bold" : rc.text + " font-medium"}`}>
-                      {s.competitor}
-                      {isBrand && <span className="text-[9px] font-bold text-violet-600 bg-violet-100 rounded px-1 py-0.5 shrink-0">vous</span>}
-                    </span>
-                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${barColor}`}
-                        style={{ width: `${Math.max(s.pct, 2)}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm font-semibold w-16 text-right ${isBrand ? "text-violet-700" : rc.text}`}>
-                      {s.pct}%
-                    </span>
-                    <span className="text-xs text-muted-foreground w-24 text-right">
-                      {s.mentions} mentions
-                    </span>
+            <div className="flex flex-col lg:flex-row items-center gap-8">
+              {/* Gauge */}
+              <div className="flex flex-col items-center gap-2">
+                <ScoreGauge score={score.total} size={140} />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score VGEO</span>
+                {brandChannel && (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Youtube className="h-4 w-4 text-red-500" />
+                    <span className="text-xs text-muted-foreground">{brandChannel.video_count} videos</span>
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Sub-scores */}
+              <div className="flex-1 w-full space-y-4">
+                <SubScoreBar label="Alignement" score={score.alignment} weight="35%" icon={Target} />
+                <SubScoreBar label="Fraicheur" score={score.freshness} weight="30%" icon={Clock} />
+                <SubScoreBar label="Presence IA" score={score.presence} weight="20%" icon={Eye} />
+                <SubScoreBar label="Competitivite" score={score.competitivity} weight="15%" icon={Trophy} />
+              </div>
+            </div>
+
+            {/* Explanation */}
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 text-center">
+                <p className="text-xs text-muted-foreground">Alignement</p>
+                <p className="text-[10px] text-violet-600 mt-0.5">Videos vs requetes LLM</p>
+              </div>
+              <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 text-center">
+                <p className="text-xs text-muted-foreground">Fraicheur</p>
+                <p className="text-[10px] text-violet-600 mt-0.5">Contenu recent {"<"} 3 mois</p>
+              </div>
+              <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 text-center">
+                <p className="text-xs text-muted-foreground">Presence</p>
+                <p className="text-[10px] text-violet-600 mt-0.5">Cite par les moteurs IA</p>
+              </div>
+              <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 text-center">
+                <p className="text-xs text-muted-foreground">Competitivite</p>
+                <p className="text-[10px] text-violet-600 mt-0.5">Position vs concurrents</p>
+              </div>
             </div>
           </div>
 
-          {/* ── Section 3: Comparaison Plateformes ── */}
-          {insights.platform_comparison.length > 0 && (
+          {/* ── Section 2: Classification HELP/HUB/HERO ── */}
+          {brandVideos.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Video className="h-4 w-4 text-violet-500" />
+                Classification HELP / HUB / HERO
+              </h2>
+
+              {/* Distribution bars */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { key: "HELP", count: helpCount, desc: "Tutoriels, FAQ, guides", icon: Search },
+                  { key: "HUB", count: hubCount, desc: "Series, contenu recurrent", icon: Play },
+                  { key: "HERO", count: heroCount, desc: "Evenements, campagnes", icon: Star },
+                ].map(item => {
+                  const pct = Math.round((item.count / totalBrandVideos) * 100);
+                  const cfg = CLASSIFICATION_COLORS[item.key];
+                  return (
+                    <div key={item.key} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <item.icon className={`h-4 w-4 ${cfg.text}`} />
+                        <span className={`text-sm font-bold ${cfg.text}`}>{item.key}</span>
+                      </div>
+                      <p className="text-2xl font-bold text-foreground">{item.count}</p>
+                      <p className="text-[10px] text-muted-foreground">{pct}% — {item.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Stacked bar */}
+              <div className="h-4 rounded-full overflow-hidden flex mb-4">
+                {helpCount > 0 && <div className="bg-emerald-500 transition-all" style={{ width: `${(helpCount / totalBrandVideos) * 100}%` }} />}
+                {hubCount > 0 && <div className="bg-blue-500 transition-all" style={{ width: `${(hubCount / totalBrandVideos) * 100}%` }} />}
+                {heroCount > 0 && <div className="bg-amber-500 transition-all" style={{ width: `${(heroCount / totalBrandVideos) * 100}%` }} />}
+              </div>
+
+              {/* Video list */}
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {filteredVideos.slice(0, 30).map((v: any, i: number) => {
+                  const cfg = CLASSIFICATION_COLORS[v.classification] || CLASSIFICATION_COLORS.UNKNOWN;
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/40 transition-colors">
+                      <span className={`shrink-0 inline-flex items-center justify-center w-14 h-6 rounded text-[10px] font-bold ${cfg.bg} ${cfg.text} border ${cfg.border}`}>
+                        {cfg.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{v.title}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {v.channel_name}
+                          {v.is_brand && <span className="ml-1 text-violet-600 font-bold">(vous)</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                        {v.views > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {v.views >= 1000 ? `${(v.views / 1000).toFixed(0)}K` : v.views}
+                          </span>
+                        )}
+                        {v.likes > 0 && (
+                          <span className="flex items-center gap-1">
+                            <ThumbsUp className="h-3 w-3" />
+                            {v.likes >= 1000 ? `${(v.likes / 1000).toFixed(0)}K` : v.likes}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 3: Citations LLM ── */}
+          {Object.keys(citationMatrix).length > 0 && (
             <div className="rounded-2xl border border-border bg-card p-6">
               <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Bot className="h-4 w-4 text-indigo-500" />
-                Comparaison par plateforme IA
+                Citations dans les moteurs IA
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Concurrent</th>
-                      {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map(p => (
-                        <th key={p} className="text-center py-2 px-4">
+                      <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Requete</th>
+                      {["claude", "gemini", "chatgpt", "mistral"].map(p => (
+                        <th key={p} className="text-center py-2 px-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${LLM_CONFIG[p]?.color || ""}`}>
-                            {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-5 w-5 rounded-sm object-contain" />}
+                            {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-4 w-4 rounded-sm object-contain" />}
                             {LLM_CONFIG[p]?.label || p}
                           </span>
                         </th>
@@ -300,286 +356,226 @@ export default function VGeoPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {insights.platform_comparison
-                      .filter(row => {
-                        if (!aiFilters?.competitor_name?.length) return true;
-                        const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
-                        return names.some((n: string) => (row.competitor || "").toLowerCase().includes(n));
-                      })
-                      .map((row: any) => {
-                        const isBrand = row.competitor_id === brandId;
-                        return (
-                          <tr key={row.competitor_id} className={`border-b border-border/50 ${isBrand ? "bg-violet-50/50" : "hover:bg-muted/30"}`}>
-                            <td className={`py-2.5 pr-4 font-medium ${isBrand ? "text-violet-700 font-bold" : "text-foreground"}`}>
-                              {row.competitor}
-                              {isBrand && <span className="ml-1.5 text-[9px] font-bold text-violet-600 bg-violet-100 rounded px-1.5 py-0.5">vous</span>}
+                    {Object.entries(citationMatrix).slice(0, 20).map(([query, platforms]) => (
+                      <tr key={query} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-2.5 pr-4 text-xs font-medium text-foreground max-w-[300px] truncate">{query}</td>
+                        {["claude", "gemini", "chatgpt", "mistral"].map(p => {
+                          const brands = platforms[p] || [];
+                          const hasBrand = brands.length > 0;
+                          return (
+                            <td key={p} className="text-center py-2.5 px-3">
+                              {hasBrand ? (
+                                <span className="inline-flex items-center gap-1 text-xs">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span className="text-emerald-700 font-medium">{brands.length}</span>
+                                </span>
+                              ) : (
+                                <Minus className="h-3.5 w-3.5 text-gray-300 mx-auto" />
+                              )}
                             </td>
-                            {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map(p => {
-                              const pct = row[`${p}_pct`] ?? 0;
-                              const mentions = row[`${p}_mentions`] ?? 0;
-                              const allPcts = insights.platform_comparison.map((r: any) => r[`${p}_pct`] ?? 0);
-                              const colorCls = getCellColor(pct, allPcts);
-                              return (
-                                <td key={p} className="text-center py-2.5 px-4">
-                                  <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 ${colorCls}`}>
-                                    <span className="text-sm">{pct}%</span>
-                                    <span className="text-xs opacity-70">({mentions})</span>
-                                  </span>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
+                          );
+                        })}
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
 
-          {/* ── Section 4: Heatmap Keywords x Concurrents ── */}
-          {filteredResults.length > 0 && (filteredCompetitorNames.length > 0 || competitorNames.length > 0) && (
-            <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Search className="h-4 w-4 text-violet-500" />
-                Heatmap : mots-cles x concurrents
-              </h2>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mot-cle</th>
-                    {(aiFilters?.competitor_name?.length ? filteredCompetitorNames : competitorNames).map(c => {
-                      const isBrand = c.id === brandId;
-                      return (
-                        <th key={c.id} className={`text-center py-2 px-2 text-xs font-semibold uppercase tracking-wider ${isBrand ? "text-violet-700 bg-violet-50/80" : "text-muted-foreground"}`}>
-                          <div className="flex flex-col items-center gap-0.5">
-                            {c.name}
-                            {isBrand && <span className="text-[9px] font-bold text-violet-600 bg-violet-100 rounded px-1.5 py-0.5 normal-case tracking-normal">vous</span>}
-                          </div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredResults.map(q => {
-                    const displayComps = aiFilters?.competitor_name?.length ? filteredCompetitorNames : competitorNames;
-                    const statusMap: Record<number, { mentioned: boolean; recommended: boolean }> = {};
-                    displayComps.forEach(c => { statusMap[c.id] = { mentioned: false, recommended: false }; });
-
-                    const allMentions = [
-                      ...(q.platforms.mistral || []),
-                      ...(q.platforms.claude || []),
-                      ...(q.platforms.gemini || []),
-                      ...(q.platforms.chatgpt || []),
-                    ];
-                    allMentions.forEach(m => {
-                      if (m.competitor_id && statusMap[m.competitor_id] !== undefined) {
-                        statusMap[m.competitor_id].mentioned = true;
-                        if (m.recommended) statusMap[m.competitor_id].recommended = true;
-                      }
-                    });
-
-                    return (
-                      <tr key={q.keyword} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="py-2.5 pr-4 font-medium text-foreground text-xs">{q.keyword}</td>
-                        {displayComps.map(c => {
-                          const st = statusMap[c.id];
-                          const isBrand = c.id === brandId;
-                          let cls = "bg-gray-100 border-gray-200 text-gray-400";
-                          let label = "\u2014";
-                          if (st?.mentioned && st?.recommended) {
-                            cls = isBrand
-                              ? "bg-violet-300 border-violet-400 text-violet-900 ring-2 ring-violet-400/50"
-                              : "bg-emerald-200 border-emerald-300 text-emerald-800";
-                            label = "\u2605";
-                          } else if (st?.mentioned) {
-                            cls = isBrand
-                              ? "bg-violet-200 border-violet-300 text-violet-700 ring-2 ring-violet-300/50"
-                              : "bg-yellow-100 border-yellow-200 text-yellow-700";
-                            label = "\u2713";
-                          } else {
-                            cls = isBrand
-                              ? "bg-red-100 border-red-200 text-red-400 ring-2 ring-red-200/50"
-                              : "bg-gray-100 border-gray-200 text-gray-400";
-                          }
-                          return (
-                            <td key={c.id} className={`text-center py-2.5 px-2 ${isBrand ? "bg-violet-50/50" : ""}`}>
-                              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg border text-xs font-bold ${cls}`}>
-                                {label}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-emerald-200 border border-emerald-300 text-emerald-800 text-[10px] font-bold">{"\u2605"}</span>
-                  Mentionne + Recommande
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-yellow-100 border border-yellow-200 text-yellow-700 text-[10px] font-bold">{"\u2713"}</span>
-                  Mentionne
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-gray-100 border border-gray-200 text-gray-400 text-[10px] font-bold">{"\u2014"}</span>
-                  Absent
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* ── Section 5: Analyse Sentiment ── */}
-          {insights.sentiment && insights.sentiment.length > 0 && (
+          {/* ── Section 4: Comparaison concurrents ── */}
+          {competitors.length > 0 && (
             <div className="rounded-2xl border border-border bg-card p-6">
               <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-violet-500" />
-                Analyse Sentiment
+                <BarChart3 className="h-4 w-4 text-violet-500" />
+                Comparaison concurrents
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {insights.sentiment
-                  .filter(s => {
-                    if (!aiFilters?.competitor_name?.length) return true;
-                    const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
-                    return names.some((n: string) => s.competitor.toLowerCase().includes(n));
-                  })
-                  .map(s => {
-                    const isBrand = s.competitor_id === brandId;
-                    const total = s.positive + s.neutral + s.negative || 1;
-                    const posPct = Math.round(s.positive / total * 100);
-                    const neuPct = Math.round(s.neutral / total * 100);
-                    const negPct = 100 - posPct - neuPct;
+              <div className="space-y-3">
+                {/* Brand first */}
+                {score && (
+                  <div className="flex items-center gap-3">
+                    <span className="w-32 text-sm font-bold text-violet-700 truncate flex items-center gap-1">
+                      Votre marque
+                      <span className="text-[9px] font-bold text-violet-600 bg-violet-100 rounded px-1 py-0.5">vous</span>
+                    </span>
+                    <div className="flex-1 h-7 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all"
+                        style={{ width: `${score.total}%` }} />
+                    </div>
+                    <span className="text-sm font-bold text-violet-700 w-12 text-right">{score.total}</span>
+                  </div>
+                )}
+                {competitors
+                  .sort((a: any, b: any) => (b.score?.total || 0) - (a.score?.total || 0))
+                  .map((c: any, i: number) => {
+                    const cScore = c.score?.total || 0;
+                    const barColor = cScore >= 70 ? "bg-emerald-500" : cScore >= 40 ? "bg-amber-500" : "bg-red-400";
                     return (
-                      <div key={s.competitor_id} className={`rounded-xl border p-4 ${isBrand ? "border-violet-200 bg-violet-50/50 ring-1 ring-violet-200" : "border-border"}`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className={`text-sm font-semibold ${isBrand ? "text-violet-700" : "text-foreground"}`}>
-                            {s.competitor}
-                          </span>
-                          {isBrand && <span className="text-[9px] font-bold text-violet-600 bg-violet-100 rounded px-1 py-0.5">vous</span>}
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="w-32 text-sm font-medium text-foreground truncate">{c.name}</span>
+                        <div className="flex-1 h-7 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${barColor}`}
+                            style={{ width: `${cScore}%` }} />
                         </div>
-                        {/* Stacked bar */}
-                        <div className="flex h-5 rounded-full overflow-hidden mb-2">
-                          {posPct > 0 && <div className="bg-emerald-500 transition-all" style={{ width: `${posPct}%` }} />}
-                          {neuPct > 0 && <div className="bg-yellow-400 transition-all" style={{ width: `${neuPct}%` }} />}
-                          {negPct > 0 && <div className="bg-red-400 transition-all" style={{ width: `${negPct}%` }} />}
-                        </div>
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span className="text-emerald-600 font-medium">{posPct}% positif</span>
-                          <span className="text-yellow-600 font-medium">{neuPct}% neutre</span>
-                          <span className="text-red-500 font-medium">{negPct}% negatif</span>
-                        </div>
+                        <span className="text-sm font-semibold text-foreground w-12 text-right">{cScore}</span>
                       </div>
                     );
                   })}
               </div>
+
+              {/* Detail by axis */}
+              {competitors.length > 0 && (
+                <div className="mt-6 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 pr-4 text-xs font-semibold text-muted-foreground">Concurrent</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Total</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Alignement</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Fraicheur</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Presence</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Competitivite</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Videos</th>
+                        <th className="text-center py-2 px-3 text-xs font-semibold text-muted-foreground">Citations</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {score && (
+                        <tr className="border-b border-border/50 bg-violet-50/50">
+                          <td className="py-2.5 pr-4 font-bold text-violet-700">
+                            Votre marque <span className="text-[9px] bg-violet-100 rounded px-1 py-0.5">vous</span>
+                          </td>
+                          <td className="text-center py-2.5 px-3 font-bold text-violet-700">{score.total}</td>
+                          <td className="text-center py-2.5 px-3">{score.alignment}</td>
+                          <td className="text-center py-2.5 px-3">{score.freshness}</td>
+                          <td className="text-center py-2.5 px-3">{score.presence}</td>
+                          <td className="text-center py-2.5 px-3">{score.competitivity}</td>
+                          <td className="text-center py-2.5 px-3">{brandChannel?.video_count || 0}</td>
+                          <td className="text-center py-2.5 px-3">-</td>
+                        </tr>
+                      )}
+                      {competitors.map((c: any, i: number) => (
+                        <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="py-2.5 pr-4 font-medium text-foreground">{c.name}</td>
+                          <td className="text-center py-2.5 px-3 font-semibold">{c.score?.total || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.score?.alignment || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.score?.freshness || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.score?.presence || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.score?.competitivity || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.video_count || 0}</td>
+                          <td className="text-center py-2.5 px-3">{c.citations || 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── Section 6: Tendances temporelles ── */}
-          {trendsData && trendsData.trends.length > 1 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-violet-500" />
-                Tendances de visibilite
-              </h2>
-              <TrendChart
-                data={trendsData.trends}
-                competitors={trendsData.competitors}
-                brandName={trendsData.brand_name}
-                aiFilters={aiFilters}
-              />
-            </div>
-          )}
-
-          {/* ── Section 7: Mots-cles manquants ── */}
-          {brandMissing && brandMissing.keywords.length > 0 && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-              <h2 className="text-base font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Mots-cles ou {brandName} est absent
-              </h2>
-              <p className="text-sm text-amber-700 mb-3">
-                {brandName} n&apos;est mentionne par aucun moteur IA sur ces requetes. Travaillez votre presence sur ces sujets.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {brandMissing.keywords.map(kw => (
-                  <span key={kw} className="inline-flex items-center rounded-lg bg-amber-100 border border-amber-200 px-3 py-1.5 text-xs font-medium text-amber-800">
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Section 8: Analyse IA (diagnostic) ── */}
-          {insights.ai_analysis ? (
+          {/* ── Section 5: Diagnostic IA ── */}
+          {diagnostic && (
             <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6 space-y-5">
               <h2 className="text-base font-semibold text-violet-800 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
-                Diagnostic IA — Visibilite GEO
+                Diagnostic IA — Strategie VGEO
               </h2>
-              <p className="text-sm text-violet-900 leading-relaxed">{insights.ai_analysis.diagnostic}</p>
+              <p className="text-sm text-violet-900 leading-relaxed">{diagnostic}</p>
 
-              {insights.ai_analysis.priorities?.length > 0 && (
+              {/* Forces & Faiblesses */}
+              {(forces.length > 0 || faiblesses.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {forces.length > 0 && (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+                      <h3 className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Forces
+                      </h3>
+                      <ul className="space-y-1.5">
+                        {forces.map((f: string, i: number) => (
+                          <li key={i} className="text-xs text-emerald-800 flex items-start gap-1.5">
+                            <span className="shrink-0 mt-0.5">+</span> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {faiblesses.length > 0 && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+                      <h3 className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <XCircle className="h-3.5 w-3.5" /> Faiblesses
+                      </h3>
+                      <ul className="space-y-1.5">
+                        {faiblesses.map((f: string, i: number) => (
+                          <li key={i} className="text-xs text-red-800 flex items-start gap-1.5">
+                            <span className="shrink-0 mt-0.5">-</span> {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Strategy priorities */}
+              {strategy.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-3">Priorites</h3>
+                  <h3 className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-3">Priorites strategiques</h3>
                   <div className="space-y-2">
-                    {insights.ai_analysis.priorities.map((p, i) => (
+                    {strategy.map((s: any, i: number) => (
                       <div key={i} className="rounded-xl bg-white/80 border border-violet-100 p-4">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-semibold text-violet-900">{p.action}</span>
+                          <span className="text-sm font-semibold text-violet-900">{s.action}</span>
                           <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                            p.impact === "high" ? "bg-red-100 text-red-700" : p.impact === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
-                          }`}>Impact {p.impact}</span>
+                            s.impact === "high" ? "bg-red-100 text-red-700" : s.impact === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                          }`}>Impact {s.impact}</span>
                           <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                            p.effort === "low" ? "bg-green-100 text-green-700" : p.effort === "medium" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                          }`}>Effort {p.effort}</span>
+                            s.effort === "low" ? "bg-green-100 text-green-700" : s.effort === "medium" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                          }`}>Effort {s.effort}</span>
                         </div>
-                        <p className="text-xs text-violet-800/80">{p.detail}</p>
+                        <p className="text-xs text-violet-800/80">{s.detail}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-
-              {insights.ai_analysis.quick_wins?.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-2">Quick wins</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {insights.ai_analysis.quick_wins.map((qw, i) => (
-                      <span key={i} className="inline-flex items-center rounded-lg bg-white/80 border border-violet-200 px-3 py-1.5 text-xs font-medium text-violet-800">
-                        {qw}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {insights.ai_analysis.benchmark_insight && (
-                <div className="rounded-lg bg-indigo-100/60 border border-indigo-200 px-4 py-3 text-xs text-indigo-800">
-                  <span className="font-semibold">Benchmark :</span> {insights.ai_analysis.benchmark_insight}
-                </div>
-              )}
             </div>
-          ) : insights.recommendations.length > 0 ? (
-            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
-              <h2 className="text-base font-semibold text-violet-800 mb-4 flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Recommandations VGEO
+          )}
+
+          {/* ── Section 6: Actions recommandees ── */}
+          {actions.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500" />
+                Actions recommandees
               </h2>
-              <div className="space-y-3">
-                {insights.recommendations.map((rec, i) => (
-                  <div key={i} className="rounded-xl bg-white/80 border border-violet-100 p-4 text-sm text-violet-900">
-                    {rec}
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {actions.map((a: any, i: number) => {
+                  const priorityConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
+                    quick_win: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", label: "Quick Win" },
+                    moyen_terme: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", label: "Moyen terme" },
+                    long_terme: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", label: "Long terme" },
+                  };
+                  const cfg = priorityConfig[a.priority] || priorityConfig.moyen_terme;
+                  return (
+                    <div key={i} className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.text} bg-white/60 border ${cfg.border}`}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-foreground mb-1">{a.title}</h4>
+                      <p className="text-xs text-muted-foreground">{a.description}</p>
+                      {a.impact_estimate && (
+                        <p className="text-[10px] text-violet-600 mt-2 font-medium">
+                          Impact estime : {a.impact_estimate}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          ) : null}
+          )}
         </>
       ) : null}
     </div>
@@ -587,168 +583,30 @@ export default function VGeoPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Header
 // ---------------------------------------------------------------------------
-
-function VGeoHeader({ handleTrack, tracking, platforms }: {
-  handleTrack: () => void;
-  tracking: boolean;
-  platforms: string[];
-}) {
+function VGeoHeader({ handleAnalyze, analyzing }: { handleAnalyze: () => void; analyzing: boolean }) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200/50">
-          <Eye className="h-5 w-5 text-white" />
+          <Youtube className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground">VGEO — Visibilite IA</h1>
-          <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
-            Suivi de presence dans
-            {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map((p, i, arr) => (
-              <span key={p} className="inline-flex items-center gap-1">
-                {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-4 w-4 rounded-sm object-contain" />}
-                <span className="font-medium text-foreground/70">{LLM_CONFIG[p]?.label || p}</span>
-                {i < arr.length - 1 && <span className="text-muted-foreground/50">,</span>}
-              </span>
-            ))}
+          <h1 className="text-xl font-bold text-foreground">VGEO — Video GEO</h1>
+          <p className="text-sm text-muted-foreground">
+            Optimisez votre YouTube pour les moteurs IA
           </p>
         </div>
       </div>
       <button
-        onClick={handleTrack}
-        disabled={tracking}
+        onClick={handleAnalyze}
+        disabled={analyzing}
         className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-200/50 hover:shadow-xl hover:shadow-violet-300/50 transition-all disabled:opacity-50"
       >
-        <RefreshCw className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`} />
-        {tracking ? "Analyse en cours..." : "Rafraichir"}
+        <RefreshCw className={`h-4 w-4 ${analyzing ? "animate-spin" : ""}`} />
+        {analyzing ? "Analyse en cours..." : "Nouvelle analyse"}
       </button>
-    </div>
-  );
-}
-
-function HeroCard({ label, value, subtitle, icon: Icon, gradient, shadow }: {
-  label: string;
-  value: string;
-  subtitle: string;
-  icon: any;
-  gradient: string;
-  shadow: string;
-}) {
-  return (
-    <div className={`rounded-xl bg-gradient-to-br ${gradient} px-4 py-3 text-white shadow-lg ${shadow}`}>
-      <div className="flex items-center gap-2 mb-1 opacity-90">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="text-[10px] font-medium uppercase tracking-wider">{label}</span>
-      </div>
-      <p className="text-xl font-bold leading-tight">{value}</p>
-      <p className="text-[11px] opacity-80 mt-0.5">{subtitle}</p>
-    </div>
-  );
-}
-
-function TrendChart({ data, competitors, brandName, aiFilters }: {
-  data: Record<string, any>[];
-  competitors: { id: number; name: string }[];
-  brandName: string | null;
-  aiFilters: Record<string, any> | null;
-}) {
-  // Filter competitors if AI filter active
-  const displayComps = useMemo(() => {
-    if (!aiFilters?.competitor_name?.length) return competitors;
-    const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
-    return competitors.filter(c => names.some((n: string) => c.name.toLowerCase().includes(n)));
-  }, [competitors, aiFilters]);
-
-  if (data.length < 2 || displayComps.length === 0) {
-    return <p className="text-sm text-muted-foreground">Pas assez de donnees pour afficher les tendances (minimum 2 points).</p>;
-  }
-
-  // Find max value for Y axis
-  const allValues = data.flatMap(d => displayComps.map(c => (d[c.name] as number) || 0));
-  const maxVal = Math.max(...allValues, 10);
-
-  // Simple SVG line chart
-  const chartW = 800;
-  const chartH = 250;
-  const padL = 50;
-  const padR = 20;
-  const padT = 20;
-  const padB = 40;
-  const plotW = chartW - padL - padR;
-  const plotH = chartH - padT - padB;
-
-  const xScale = (i: number) => padL + (i / (data.length - 1)) * plotW;
-  const yScale = (v: number) => padT + plotH - (v / maxVal) * plotH;
-
-  return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full max-w-4xl" preserveAspectRatio="xMidYMid meet">
-        {/* Y axis grid */}
-        {[0, 25, 50, 75, 100].filter(v => v <= maxVal * 1.1).map(v => (
-          <g key={v}>
-            <line x1={padL} y1={yScale(v)} x2={chartW - padR} y2={yScale(v)} stroke="#e5e7eb" strokeDasharray="4,4" />
-            <text x={padL - 8} y={yScale(v) + 4} textAnchor="end" className="text-[10px] fill-gray-400">{v}%</text>
-          </g>
-        ))}
-
-        {/* X axis labels */}
-        {data.map((d, i) => {
-          const show = data.length <= 10 || i % Math.ceil(data.length / 8) === 0 || i === data.length - 1;
-          if (!show) return null;
-          return (
-            <text key={i} x={xScale(i)} y={chartH - 8} textAnchor="middle" className="text-[9px] fill-gray-500">
-              {String(d.date).slice(5)}
-            </text>
-          );
-        })}
-
-        {/* Lines */}
-        {displayComps.map((comp, ci) => {
-          const isBrand = comp.name === brandName;
-          const color = isBrand ? "#7c3aed" : COMP_COLORS[ci % COMP_COLORS.length];
-          const points = data.map((d, i) => `${xScale(i)},${yScale((d[comp.name] as number) || 0)}`).join(" ");
-          return (
-            <g key={comp.id}>
-              <polyline
-                points={points}
-                fill="none"
-                stroke={color}
-                strokeWidth={isBrand ? 3 : 2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.85}
-              />
-              {/* Dots */}
-              {data.map((d, i) => (
-                <circle
-                  key={i}
-                  cx={xScale(i)}
-                  cy={yScale((d[comp.name] as number) || 0)}
-                  r={isBrand ? 4 : 3}
-                  fill={color}
-                  opacity={0.9}
-                />
-              ))}
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 mt-3 justify-center">
-        {displayComps.map((comp, ci) => {
-          const isBrand = comp.name === brandName;
-          const color = isBrand ? "#7c3aed" : COMP_COLORS[ci % COMP_COLORS.length];
-          return (
-            <span key={comp.id} className={`inline-flex items-center gap-1.5 text-xs ${isBrand ? "font-bold" : "font-medium"}`}>
-              <span className="inline-block w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              {comp.name}
-              {isBrand && <span className="text-[9px] text-violet-600 bg-violet-100 rounded px-1 py-0.5">vous</span>}
-            </span>
-          );
-        })}
-      </div>
     </div>
   );
 }

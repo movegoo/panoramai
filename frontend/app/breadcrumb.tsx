@@ -25,6 +25,7 @@ const PAGE_META: Record<string, { label: string; icon: React.ElementType; parent
   "/ads": { label: "Publicités", icon: Megaphone, parent: "Veille" },
   "/social": { label: "Réseaux sociaux", icon: Activity, parent: "Veille" },
   "/apps": { label: "Applications", icon: Smartphone, parent: "Veille" },
+  "/vgeo": { label: "Video GEO", icon: Activity, parent: "Veille" },
   "/account": { label: "Mon enseigne", icon: Settings, parent: "Paramètres" },
 };
 
@@ -88,7 +89,7 @@ export function Breadcrumb() {
           </button>
 
           {open && advertisers.length > 0 && (
-            <div className="absolute right-0 top-full mt-1 w-64 rounded-lg border border-border bg-card shadow-lg z-50 py-1">
+            <div className="absolute right-0 top-full mt-1 w-64 max-h-[300px] overflow-y-auto rounded-lg border border-border bg-card shadow-lg z-50 py-1">
               <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Mes enseignes
               </div>

@@ -146,10 +146,18 @@ CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
 - "recommended": bool — uniquement les marques recommandées
 - "text_search": str — recherche textuelle libre
 """ + _COMMON_RULES,
-}
 
-# Alias for the VGEO page (same context as geo-tracking)
-PAGE_PROMPTS["vgeo"] = PAGE_PROMPTS["geo-tracking"]
+    "vgeo": """Tu es un assistant qui traduit des requetes en langage naturel en filtres JSON structures pour filtrer des donnees VGEO (Video GEO — strategie YouTube pour visibilite IA).
+
+CHAMPS FILTRABLES (retourne UNIQUEMENT ceux qui sont pertinents) :
+
+- "classification": [str] — classification video HELP/HUB/HERO (ex: ["HELP", "HUB", "HERO"])
+- "competitor_name": [str] — noms de concurrents
+- "platform": [str] — moteurs IA (ex: ["claude", "gemini", "chatgpt", "mistral"])
+- "keyword": [str] — mots-cles dans les titres ou requetes
+- "text_search": str — recherche textuelle libre
+""" + _COMMON_RULES,
+}
 
 # Legacy constant for backwards compatibility
 FILTER_SYSTEM_PROMPT = PAGE_PROMPTS["ads"]

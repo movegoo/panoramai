@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Text, ForeignKey, Boolean, BigInteger
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Text, ForeignKey, Boolean, BigInteger, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -631,6 +631,21 @@ class SystemSetting(Base):
     key = Column(String(100), primary_key=True)
     value = Column(Text, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class VgeoReport(Base):
+    """VGEO (Video GEO) analysis report."""
+    __tablename__ = "vgeo_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    advertiser_id = Column(Integer, ForeignKey("advertisers.id"), nullable=False, index=True)
+    score_total = Column(Float)
+    score_alignment = Column(Float)
+    score_freshness = Column(Float)
+    score_presence = Column(Float)
+    score_competitivity = Column(Float)
+    report_data = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class PromptTemplate(Base):

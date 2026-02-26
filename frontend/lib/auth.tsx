@@ -10,7 +10,6 @@ import {
   setCurrentAdvertiserId,
   clearCurrentAdvertiserId,
 } from "./api";
-import { invalidateAllCache } from "./use-api";
 
 const MS_REMOTE_AUTH_URL = (process.env.NEXT_PUBLIC_MS_REMOTE_AUTH_URL || "https://app.mobsuccess.com/auth").trim();
 
@@ -90,8 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function switchAdvertiser(id: number) {
     setCurrentAdvertiserId(id);
     setCurrentAdvId(id);
-    // Invalidate SWR cache so all pages refetch with new advertiser
-    invalidateAllCache();
+    window.location.reload();
   }
 
   return (

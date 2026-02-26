@@ -1536,6 +1536,18 @@ export const socialContentAPI = {
     fetchAPI<ContentInsights>(`/social-content/insights${platform ? `?platform=${platform}` : ""}`),
 };
 
+// VGEO (Video GEO) API
+export const vgeoAPI = {
+  analyze: () =>
+    fetchAPI<any>("/vgeo/analyze", { method: "POST" }),
+
+  getReport: () =>
+    fetchAPI<any>("/vgeo/report"),
+
+  getComparison: () =>
+    fetchAPI<any>("/vgeo/comparison"),
+};
+
 // Smart Filter API (global, multi-page)
 export const smartFilterAPI = {
   filter: (query: string, page: string) =>
