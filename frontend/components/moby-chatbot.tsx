@@ -111,8 +111,9 @@ export function MobyChatbot() {
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white shrink-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-              <span className="text-lg">🐋</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/moby-avatar.png" alt="Moby" className="h-7 w-7 object-contain" />
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-sm leading-none">Moby</h3>
@@ -130,7 +131,8 @@ export function MobyChatbot() {
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-                <span className="text-4xl">🐋</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/moby-avatar.png" alt="Moby" className="h-16 w-16 object-contain" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Bonjour ! Je suis Moby</p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -265,8 +267,9 @@ export function MobyChatbot() {
             {showPulse && (
               <div className="absolute inset-0 rounded-full bg-violet-500/30 animate-ping" />
             )}
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-200 cursor-pointer">
-              <span className="text-2xl">🐋</span>
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-110 transition-all duration-200 cursor-pointer overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/moby-avatar.png" alt="Moby" className="h-11 w-11 object-contain" />
             </div>
           </div>
         </button>
