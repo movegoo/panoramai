@@ -552,36 +552,59 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo, brandName }: { ad: AdW
           </div>
         </a>
       ) : (
-        <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/30 flex flex-col items-center justify-center gap-2 relative">
-          {imgError || ad.creative_url?.includes("tiktokcdn") ? (
-            <div className="flex flex-col items-center gap-1 text-muted-foreground/30">
-              <Play className="h-8 w-8" />
-              <span className="text-[9px] uppercase tracking-wider font-medium">Vidéo</span>
-            </div>
-          ) : <Eye className="h-8 w-8 text-muted-foreground/20" />}
-          <div className="flex items-center gap-2">
-            {advertiserLogo && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={advertiserLogo} alt="" className="h-6 w-6 rounded-full object-cover" />
-            )}
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-              {ad.competitor_name}
-              {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
-            </span>
-          </div>
-          {/* Source platform badge */}
-          <div className="absolute top-3 left-3">
-            {(() => {
-              const src = getSourcePlatform(ad);
-              return (
-                <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border ${src.bg} ${src.color}`}>
-                  {src.icon}
-                  {src.label}
+        <a href={linkHref} target="_blank" rel="noopener noreferrer" className="block">
+          <div className="aspect-[4/3] bg-gradient-to-br from-slate-800 to-slate-900 flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+            {/* Background pattern for video */}
+            {(ad.display_format === "VIDEO" || imgError || ad.creative_url?.includes("tiktokcdn")) ? (
+              <>
+                <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle, #fff 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm border border-white/20 group-hover:bg-white/20 transition-colors">
+                  <Play className="h-6 w-6 text-white ml-0.5" />
+                </div>
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-white/60">
+                  {ad.display_format === "VIDEO" ? "Vidéo" : "Contenu média"}
                 </span>
-              );
-            })()}
+                <span className="text-[10px] text-white/40">
+                  Voir sur Google Transparency
+                </span>
+              </>
+            ) : (
+              <Eye className="h-8 w-8 text-white/20" />
+            )}
+            {/* Badges overlay */}
+            <div className="absolute top-3 left-3 flex items-center gap-1.5">
+              {(() => {
+                const src = getSourcePlatform(ad);
+                return (
+                  <span className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border ${src.bg} ${src.color}`}>
+                    {src.icon}
+                    {src.label}
+                  </span>
+                );
+              })()}
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-black/30 text-white">
+                {FORMAT_LABELS[ad.display_format || ""]?.label || ad.display_format || ad.platform}
+              </span>
+            </div>
+            {/* Status dot */}
+            <div className="absolute top-3 right-3">
+              <span className={`relative flex h-2.5 w-2.5 rounded-full ${ad.is_active ? "bg-emerald-400" : "bg-gray-400"}`}>
+                {ad.is_active && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />}
+              </span>
+            </div>
+            {/* Advertiser badge */}
+            <div className="absolute bottom-3 left-3 flex items-center gap-2">
+              {advertiserLogo && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={advertiserLogo} alt="" className="h-7 w-7 rounded-full object-cover border-2 border-white/60 shadow-sm" />
+              )}
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-black/40 text-white">
+                {ad.competitor_name}
+                {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
+              </span>
+            </div>
           </div>
-        </div>
+        </a>
       )}
 
       {/* Content */}
