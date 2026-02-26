@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Sparkles, RefreshCw, Search, TrendingUp, BarChart3, AlertTriangle, Eye, Zap, Bot } from "lucide-react";
 import { geoTrackingAPI, GeoInsights, GeoQueryResult } from "@/lib/api";
 import { ExportMenu } from "@/components/export-menu";
 import { useAPI } from "@/lib/use-api";
+import { SmartFilter } from "@/components/smart-filter";
 
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
@@ -65,6 +66,8 @@ function getCellColor(value: number, allValues: number[]) {
 export default function GeoTrackingPage() {
   const [tracking, setTracking] = useState(false);
   const [trackResult, setTrackResult] = useState<string | null>(null);
+  const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
+  const [aiInterpretation, setAiInterpretation] = useState("");
 
   const { data: insights, isLoading: loadingInsights, mutate: refreshInsights } = useAPI<GeoInsights>("/geo-tracking/insights");
   const { data: resData, isLoading: loadingResults, mutate: refreshResults } = useAPI<{ queries: GeoQueryResult[]; last_tracked: string | null }>("/geo-tracking/results");
@@ -72,6 +75,26 @@ export default function GeoTrackingPage() {
   const loading = loadingInsights || loadingResults;
   const results = resData?.queries || [];
   const lastTracked = resData?.last_tracked || insights?.last_tracked || null;
+
+  const filteredResults = useMemo(() => {
+    if (!aiFilters || !results.length) return results;
+    let filtered = [...results];
+    if (aiFilters.keyword?.length) {
+      const kws = aiFilters.keyword.map((k: string) => k.toLowerCase());
+      filtered = filtered.filter((r: any) => kws.some((k: string) => r.keyword.toLowerCase().includes(k)));
+    }
+    if (aiFilters.text_search) {
+      const q = aiFilters.text_search.toLowerCase();
+      filtered = filtered.filter((r: any) => r.keyword.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [results, aiFilters]);
+
+  const filteredSov = useMemo(() => {
+    if (!aiFilters?.competitor_name?.length || !insights?.share_of_voice) return insights?.share_of_voice || [];
+    const names = aiFilters.competitor_name.map((n: string) => n.toLowerCase());
+    return insights.share_of_voice.filter((s: any) => names.some((n: string) => s.competitor.toLowerCase().includes(n)));
+  }, [insights?.share_of_voice, aiFilters]);
 
   async function handleTrack() {
     setTracking(true);
@@ -148,6 +171,13 @@ export default function GeoTrackingPage() {
           {tracking ? "Analyse en cours..." : "Rafraichir la visibilite"}
         </button>
       </div>
+
+      <SmartFilter
+        page="geo-tracking"
+        placeholder="Filtrer la visibilite IA... (ex: Leclerc sur ChatGPT, sentiment positif)"
+        onFilter={(filters, interpretation) => { setAiFilters(filters); setAiInterpretation(interpretation); }}
+        onClear={() => { setAiFilters(null); setAiInterpretation(""); }}
+      />
 
       {/* Track result banner */}
       {trackResult && (
@@ -245,9 +275,9 @@ export default function GeoTrackingPage() {
               Part de voix IA
             </h2>
             <div className="space-y-3">
-              {insights.share_of_voice.map((s, i) => {
+              {filteredSov.map((s, i) => {
                 const isBrand = s.competitor_id === brandId;
-                const rc = getRankColor(i, insights.share_of_voice.length);
+                const rc = getRankColor(i, filteredSov.length);
                 const barColors: Record<string, string> = {
                   "text-emerald-700": "bg-emerald-500",
                   "text-yellow-700": "bg-yellow-500",
@@ -383,7 +413,7 @@ export default function GeoTrackingPage() {
               <Search className="h-4 w-4 text-teal-500" />
               Heatmap : mentions par mot-cle
             </h2>
-            {results.length > 0 && competitorNames.length > 0 ? (
+            {filteredResults.length > 0 && competitorNames.length > 0 ? (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
@@ -402,7 +432,7 @@ export default function GeoTrackingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((q) => {
+                  {filteredResults.map((q) => {
                     // Build mention status for each competitor across all platforms
                     const statusMap: Record<number, { mentioned: boolean; recommended: boolean }> = {};
                     competitorNames.forEach(c => { statusMap[c.id] = { mentioned: false, recommended: false }; });
