@@ -1559,6 +1559,7 @@ export default function AdsPage() {
   const [brandName, setBrandName] = useState<string>("");
   const [analyzingCreatives, setAnalyzingCreatives] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<{ message?: string; analyzed: number; errors: number; remaining: number } | null>(null);
+  const [creativeCompetitorId, setCreativeCompetitorId] = useState<number | null>(null);
 
   // AI Smart Filter
   const [aiQuery, setAiQuery] = useState("");
@@ -1583,6 +1584,12 @@ export default function AdsPage() {
       const result = await creativeAPI.smartFilter(q);
       setAiFilters(result.filters);
       setAiInterpretation(result.interpretation);
+      // Auto-set creative competitor filter when AI filter targets a specific competitor
+      if (result.filters.competitor_name && Array.isArray(result.filters.competitor_name) && result.filters.competitor_name.length === 1) {
+        const targetName = result.filters.competitor_name[0].toLowerCase();
+        const match = competitors.find(c => c.name.toLowerCase().includes(targetName));
+        if (match) setCreativeCompetitorId(match.id);
+      }
     } catch (e) {
       console.error("Smart filter error:", e);
       setAiFilters({ text_search: q });
@@ -1596,6 +1603,7 @@ export default function AdsPage() {
     setAiQuery("");
     setAiFilters(null);
     setAiInterpretation("");
+    setCreativeCompetitorId(null);
   }
 
   function deduplicateAds(ads: (Ad & { competitor_name: string })[]) {
@@ -1614,7 +1622,10 @@ export default function AdsPage() {
   // Snapchat masqué
   const { data: swrComps } = useAPI<any[]>("/competitors/?include_brand=true");
   const { data: swrBrand } = useAPI<any>("/brand/profile");
-  const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>("/creative/insights");
+  const creativeInsightsUrl = creativeCompetitorId
+    ? `/creative/insights?competitor_id=${creativeCompetitorId}`
+    : "/creative/insights";
+  const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>(creativeInsightsUrl);
   const { data: freshness } = useAPI<FreshnessData>("/freshness");
 
   // Merge SWR data into state when available
@@ -2024,7 +2035,7 @@ export default function AdsPage() {
           || (ad.link_description || "").toLowerCase().includes(q);
         if (!match) return false;
       }
-      // AI Smart Filter
+      // AI Smart Filter — use OR logic: structured filters OR text search across all fields
       if (aiFilters) {
         const f = aiFilters;
         const includes = (field: string | string[] | undefined | null, keywords: string[]): boolean => {
@@ -2032,30 +2043,54 @@ export default function AdsPage() {
           const text = (Array.isArray(field) ? field.join(" ") : String(field)).toLowerCase();
           return keywords.some(kw => text.includes(kw.toLowerCase()));
         };
-        if (f.products_contain && !includes((ad as any).products_detected, f.products_contain)) return false;
-        if (f.tags_contain && !includes((ad as any).creative_tags, f.tags_contain)) return false;
-        if (f.product_category && !(f.product_category as string[]).some((c: string) => (ad.product_category || "").toLowerCase().includes(c.toLowerCase()))) return false;
-        if (f.creative_concept && !(f.creative_concept as string[]).some((c: string) => (ad.creative_concept || "").toLowerCase().includes(c.toLowerCase()))) return false;
-        if (f.creative_tone && !(f.creative_tone as string[]).some((t: string) => (ad.creative_tone || "").toLowerCase().includes(t.toLowerCase()))) return false;
-        if (f.ad_objective && !(f.ad_objective as string[]).some((o: string) => (ad.ad_objective || "").toLowerCase().includes(o.toLowerCase()))) return false;
-        if (f.display_format && !(f.display_format as string[]).some((fmt: string) => (ad.display_format || "").toUpperCase() === fmt.toUpperCase())) return false;
-        if (f.platform && !(f.platform as string[]).some((p: string) => (ad.platform || "").toLowerCase().includes(p.toLowerCase()))) return false;
-        if (f.seasonal_event && !(f.seasonal_event as string[]).some((s: string) => (ad.seasonal_event || "").toLowerCase().includes(s.toLowerCase()))) return false;
-        if (f.promo_type && !(f.promo_type as string[]).some((p: string) => (ad.promo_type || "").toLowerCase().includes(p.toLowerCase()))) return false;
-        if (f.creative_has_face !== undefined && ad.creative_has_face !== f.creative_has_face) return false;
-        if (f.creative_has_product !== undefined && ad.creative_has_product !== f.creative_has_product) return false;
-        if (f.price_visible !== undefined && ad.price_visible !== f.price_visible) return false;
-        if (f.creative_score_min && (ad.creative_score || 0) < f.creative_score_min) return false;
-        if (f.competitor_name && !(f.competitor_name as string[]).some((n: string) => ad.competitor_name.toLowerCase().includes(n.toLowerCase()))) return false;
-        if (f.target_audience_contains && !includes((ad as any).target_audience, f.target_audience_contains)) return false;
-        if (f.is_active !== undefined && ad.is_active !== f.is_active) return false;
+
+        // Collect all keywords from AI filters for broad text fallback
+        const allKeywords: string[] = [];
+        for (const [, v] of Object.entries(f)) {
+          if (Array.isArray(v)) allKeywords.push(...v.map((s: any) => String(s).toLowerCase()));
+          else if (typeof v === "string" && v.length > 2) allKeywords.push(v.toLowerCase());
+        }
+
+        // Structured matching (AND between filter types)
+        let structuredMatch = true;
+        if (f.products_contain && !includes((ad as any).products_detected, f.products_contain)) structuredMatch = false;
+        if (f.tags_contain && !includes((ad as any).creative_tags, f.tags_contain)) structuredMatch = false;
+        if (f.product_category && !(f.product_category as string[]).some((c: string) => (ad.product_category || "").toLowerCase().includes(c.toLowerCase()))) structuredMatch = false;
+        if (f.creative_concept && !(f.creative_concept as string[]).some((c: string) => (ad.creative_concept || "").toLowerCase().includes(c.toLowerCase()))) structuredMatch = false;
+        if (f.creative_tone && !(f.creative_tone as string[]).some((t: string) => (ad.creative_tone || "").toLowerCase().includes(t.toLowerCase()))) structuredMatch = false;
+        if (f.ad_objective && !(f.ad_objective as string[]).some((o: string) => (ad.ad_objective || "").toLowerCase().includes(o.toLowerCase()))) structuredMatch = false;
+        if (f.display_format && !(f.display_format as string[]).some((fmt: string) => (ad.display_format || "").toUpperCase() === fmt.toUpperCase())) structuredMatch = false;
+        if (f.platform && !(f.platform as string[]).some((p: string) => (ad.platform || "").toLowerCase().includes(p.toLowerCase()))) structuredMatch = false;
+        if (f.seasonal_event && !(f.seasonal_event as string[]).some((s: string) => (ad.seasonal_event || "").toLowerCase().includes(s.toLowerCase()))) structuredMatch = false;
+        if (f.promo_type && !(f.promo_type as string[]).some((p: string) => (ad.promo_type || "").toLowerCase().includes(p.toLowerCase()))) structuredMatch = false;
+        if (f.creative_has_face !== undefined && ad.creative_has_face !== f.creative_has_face) structuredMatch = false;
+        if (f.creative_has_product !== undefined && ad.creative_has_product !== f.creative_has_product) structuredMatch = false;
+        if (f.price_visible !== undefined && ad.price_visible !== f.price_visible) structuredMatch = false;
+        if (f.creative_score_min && (ad.creative_score || 0) < f.creative_score_min) structuredMatch = false;
+        if (f.competitor_name && !(f.competitor_name as string[]).some((n: string) => ad.competitor_name.toLowerCase().includes(n.toLowerCase()))) structuredMatch = false;
+        if (f.target_audience_contains && !includes((ad as any).target_audience, f.target_audience_contains)) structuredMatch = false;
+        if (f.is_active !== undefined && ad.is_active !== f.is_active) structuredMatch = false;
         if (f.text_search) {
           const q = (f.text_search as string).toLowerCase();
           const match = (ad.title || "").toLowerCase().includes(q)
             || (ad.ad_text || "").toLowerCase().includes(q)
             || (ad.page_name || "").toLowerCase().includes(q)
             || (ad.creative_summary || "").toLowerCase().includes(q);
-          if (!match) return false;
+          if (!match) structuredMatch = false;
+        }
+
+        // Broad text fallback: if structured filters don't match, check all text fields against all keywords
+        if (!structuredMatch && allKeywords.length > 0) {
+          const allText = [
+            ad.title, ad.ad_text, ad.page_name, ad.competitor_name,
+            ad.product_category, ad.creative_concept, ad.creative_tone,
+            ad.creative_summary, ad.display_format, ad.seasonal_event,
+            (ad as any).products_detected, (ad as any).creative_tags,
+          ].filter(Boolean).map(v => (Array.isArray(v) ? v.join(" ") : String(v)).toLowerCase()).join(" ");
+          const broadMatch = allKeywords.some(kw => allText.includes(kw));
+          if (!broadMatch) return false;
+        } else if (!structuredMatch) {
+          return false;
         }
       }
       return true;
@@ -2985,18 +3020,30 @@ export default function AdsPage() {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAnalyzeCreatives}
-            disabled={analyzingCreatives}
-            className="gap-2 text-xs"
-          >
-            {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {analyzingCreatives
-              ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
-              : "Relancer l'analyse"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={creativeCompetitorId ?? ""}
+              onChange={(e) => setCreativeCompetitorId(e.target.value ? Number(e.target.value) : null)}
+              className="h-8 rounded-lg border bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            >
+              <option value="">Tous les concurrents</option>
+              {competitors.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}{c.is_brand ? " (vous)" : ""}</option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAnalyzeCreatives}
+              disabled={analyzingCreatives}
+              className="gap-2 text-xs"
+            >
+              {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {analyzingCreatives
+                ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
+                : "Relancer l'analyse"}
+            </Button>
+          </div>
         </div>
 
         {analyzeResult && (
