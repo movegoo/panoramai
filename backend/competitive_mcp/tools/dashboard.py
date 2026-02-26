@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from competitive_mcp.db import (
     get_session, get_all_competitors,
-    Competitor, Ad, InstagramData, TikTokData, YouTubeData, SnapchatData, AppData,
+    Competitor, Ad, InstagramData, TikTokData, YouTubeData, SnapchatData, AppData, StoreLocation,
 )
 from competitive_mcp.formatting import format_number, format_rating, format_percent
 
@@ -53,6 +53,25 @@ def get_dashboard_overview(days: int = 7) -> str:
             .group_by(Ad.competitor_id).all()
         )
 
+        # GMB store stats per competitor
+        gmb_stats = {}
+        gmb_rows = db.query(
+            StoreLocation.competitor_id,
+            func.count(StoreLocation.id),
+            func.avg(StoreLocation.google_rating),
+            func.avg(StoreLocation.gmb_score),
+            func.sum(StoreLocation.google_reviews_count),
+        ).filter(
+            StoreLocation.competitor_id.in_(comp_ids),
+        ).group_by(StoreLocation.competitor_id).all()
+        for cid, cnt, avg_rat, avg_sc, total_rev in gmb_rows:
+            gmb_stats[cid] = {
+                "stores": cnt,
+                "avg_rating": round(avg_rat, 2) if avg_rat else None,
+                "avg_score": round(avg_sc, 1) if avg_sc else None,
+                "total_reviews": int(total_rev) if total_rev else 0,
+            }
+
         actors = []
         for comp in competitors:
             ps = ps_map.get(comp.id)
@@ -74,6 +93,8 @@ def get_dashboard_overview(days: int = 7) -> str:
 
             score = _calc_score(avg_rating, ps.downloads_numeric if ps else None, total_social or None)
 
+            gmb = gmb_stats.get(comp.id, {})
+
             actors.append({
                 "name": comp.name,
                 "is_brand": bool(comp.is_brand),
@@ -84,6 +105,10 @@ def get_dashboard_overview(days: int = 7) -> str:
                 "ig": ig.followers if ig else None,
                 "tt": tt.followers if tt else None,
                 "yt": yt.subscribers if yt else None,
+                "gmb_stores": gmb.get("stores"),
+                "gmb_rating": gmb.get("avg_rating"),
+                "gmb_score": gmb.get("avg_score"),
+                "gmb_reviews": gmb.get("total_reviews"),
             })
 
         actors.sort(key=lambda x: x["score"], reverse=True)
@@ -132,6 +157,22 @@ def get_dashboard_overview(days: int = 7) -> str:
         if ads_actors:
             leader = max(ads_actors, key=lambda x: x["ads"])
             lines.append(f"- **Publicités** : {leader['name']} ({leader['ads']} pubs)")
+
+        # GMB / Magasins section
+        gmb_actors = [a for a in actors if a["gmb_stores"]]
+        if gmb_actors:
+            lines.append("")
+            lines.append("## Google My Business (magasins)")
+            gmb_actors.sort(key=lambda x: (x["gmb_score"] or 0), reverse=True)
+            for a in gmb_actors:
+                score_str = f"Score {a['gmb_score']:.0f}/100" if a["gmb_score"] else "Score N/A"
+                rating_str = format_rating(a["gmb_rating"])
+                marker = " ⭐" if a["is_brand"] else ""
+                lines.append(
+                    f"- **{a['name']}**{marker} — {score_str} | "
+                    f"Note {rating_str} | {format_number(a['gmb_reviews'])} avis | "
+                    f"{a['gmb_stores']} magasins"
+                )
 
         return "\n".join(lines)
     finally:

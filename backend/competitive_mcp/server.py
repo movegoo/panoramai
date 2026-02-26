@@ -1,4 +1,4 @@
-"""Entry point MCP — Registration des 12 tools."""
+"""Entry point MCP — Registration des 13 tools."""
 import os
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -225,6 +225,22 @@ def get_store_locations(
         department: Filtrer par département (ex: "75", "59", "13") (optionnel)
     """
     from competitive_mcp.tools.stores import get_store_locations as _impl
+    return _impl(competitor_name=competitor_name, department=department)
+
+
+# ─── 13. GMB Scoring ────────────────────────────────────────────
+@mcp.tool()
+def get_gmb_scoring(
+    competitor_name: str | None = None,
+    department: str | None = None,
+) -> str:
+    """Scoring Google My Business : note moyenne, avis, score composite (0-100), classement national.
+
+    Args:
+        competitor_name: Filtrer par concurrent (optionnel)
+        department: Filtrer par département (ex: "75", "13") (optionnel)
+    """
+    from competitive_mcp.tools.gmb import get_gmb_scoring as _impl
     return _impl(competitor_name=competitor_name, department=department)
 
 

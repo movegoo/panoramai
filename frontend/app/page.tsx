@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   watchAPI,
   brandAPI,
+  geoAPI,
   DashboardData,
   DashboardCompetitor,
   RankingCategory,
@@ -11,6 +12,7 @@ import {
   SectorData,
   CompetitorSuggestionData,
   SetupResponseData,
+  GmbScoringData,
 } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
@@ -55,6 +57,7 @@ import {
   Sparkles,
   Info,
   X,
+  MapPin,
 } from "lucide-react";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
@@ -657,6 +660,12 @@ export default function DashboardPage() {
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [periodDays, setPeriodDays] = useState<PeriodDays>(7);
   const [showAllAdvertisers, setShowAllAdvertisers] = useState(false);
+  const [gmbData, setGmbData] = useState<GmbScoringData | null>(null);
+
+  // Fetch GMB scoring data
+  useEffect(() => {
+    geoAPI.getGmbScoring().then(setGmbData).catch(() => {});
+  }, []);
 
   // SWR-cached dashboard fetch — survives page navigation
   const { data: swrData, error: swrError, isLoading: loading, mutate: refreshDashboard } = useAPI<DashboardData>(
@@ -1167,6 +1176,68 @@ export default function DashboardPage() {
           </div>{/* end ad intelligence grid */}
         </div>
       </div>
+
+      {/* ── GMB / Google My Business ─────────────────── */}
+      {gmbData && gmbData.competitors.length > 0 && (
+        <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="px-4 py-2.5 border-b bg-muted/20 flex items-center gap-2">
+            <MapPin className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Google My Business
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 ml-auto">
+              {gmbData.total_stores.toLocaleString()} magasins &middot; Moyenne marché {gmbData.market_avg_rating.toFixed(1)}/5
+            </span>
+          </div>
+          {/* KPI row */}
+          <div className="grid grid-cols-4 gap-px bg-border/40">
+            <div className="bg-card px-4 py-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">{gmbData.market_avg_score > 0 ? Math.round(gmbData.market_avg_score) : "—"}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Score moyen</div>
+            </div>
+            <div className="bg-card px-4 py-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">{gmbData.market_avg_rating > 0 ? gmbData.market_avg_rating.toFixed(1) : "—"}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Note /5</div>
+            </div>
+            <div className="bg-card px-4 py-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">{gmbData.total_reviews > 0 ? formatNumber(gmbData.total_reviews) : "—"}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Avis total</div>
+            </div>
+            <div className="bg-card px-4 py-3 text-center">
+              <div className="text-2xl font-bold tabular-nums">{gmbData.total_stores.toLocaleString()}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-widest">Magasins</div>
+            </div>
+          </div>
+          {/* Competitor ranking */}
+          <div className="divide-y">
+            {gmbData.competitors.slice(0, 8).map((c, i) => {
+              const isYou = data?.brand_name && c.competitor_name.toLowerCase() === data.brand_name.toLowerCase();
+              const scoreColor = (c.avg_score || 0) >= 80 ? "text-emerald-600" : (c.avg_score || 0) >= 60 ? "text-amber-600" : "text-red-500";
+              return (
+                <div key={c.competitor_id} className={`flex items-center gap-3 px-4 py-2 ${isYou ? "bg-violet-50/50" : "hover:bg-muted/20"} transition-colors`}>
+                  <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i + 1}</span>
+                  {c.logo_url ? (
+                    <img src={c.logo_url} alt="" className="h-6 w-6 rounded-full object-contain border" />
+                  ) : (
+                    <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">{c.competitor_name.charAt(0)}</div>
+                  )}
+                  <span className={`text-sm font-medium flex-1 ${isYou ? "text-violet-700 font-semibold" : ""}`}>
+                    {c.competitor_name}
+                    {isYou && <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full font-semibold">VOUS</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{c.stores_count} mag.</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{c.avg_rating ? c.avg_rating.toFixed(1) : "—"}/5</span>
+                  <span className={`text-sm font-bold tabular-nums ${scoreColor}`}>{c.avg_score ? Math.round(c.avg_score) : "—"}</span>
+                  {/* Progress bar */}
+                  <div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className={`h-full rounded-full ${(c.avg_score || 0) >= 80 ? "bg-emerald-500" : (c.avg_score || 0) >= 60 ? "bg-amber-500" : "bg-red-400"}`} style={{ width: `${c.avg_score || 0}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Insights strip ─────────────────────────────── */}
       {insights.length > 0 && (

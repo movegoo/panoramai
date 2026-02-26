@@ -72,12 +72,21 @@ def get_store_locations(
             StoreLocation.google_rating.desc().nullslast()
         ).all()
 
+        # GMB score stats
+        avg_score = query.with_entities(
+            func.avg(StoreLocation.gmb_score)
+        ).filter(StoreLocation.gmb_score.isnot(None)).scalar()
+        if avg_score:
+            lines.append(f"**Score GMB moyen** : {avg_score:.0f}/100")
+            lines.append("")
+
         if stores:
             lines.append(f"## Détail ({len(stores)} magasins)")
             for s in stores:
                 rating_str = f" — {format_rating(s.google_rating)}" if s.google_rating else ""
                 reviews_str = f" ({s.google_reviews_count} avis)" if s.google_reviews_count else ""
-                lines.append(f"- **{s.name}** — {s.city or 'N/A'} ({s.department or 'N/A'}){rating_str}{reviews_str}")
+                score_str = f" [Score GMB: {s.gmb_score}/100]" if s.gmb_score else ""
+                lines.append(f"- **{s.name}** — {s.city or 'N/A'} ({s.department or 'N/A'}){rating_str}{reviews_str}{score_str}")
 
         return "\n".join(lines)
     finally:
