@@ -930,21 +930,19 @@ class DataCollectionScheduler:
             logger.info(f"Social collection done: {total_new} new posts from {len(competitors)} competitors")
 
             # ── Phase 2: AI analysis on unanalyzed posts ──
-            unanalyzed = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None)).all()
-            comp_names = {}
-            for post in unanalyzed:
-                if post.competitor_id not in comp_names:
-                    comp = db.query(Competitor).get(post.competitor_id)
-                    comp_names[post.competitor_id] = comp.name if comp else ""
+            # First reset previous failures (analyzed but score=0 = failed)
+            failed = db.query(SocialPost).filter(
+                SocialPost.content_analyzed_at.isnot(None),
+                SocialPost.content_engagement_score == 0,
+            ).all()
+            for post in failed:
+                post.content_analyzed_at = None
+                post.content_engagement_score = None
+                post.content_analysis = None
+            if failed:
+                db.commit()
+                logger.info(f"Reset {len(failed)} failed social analyses for retry")
 
-            # Reset previous failures (analyzed but score=0 = failed)
-            for post in unanalyzed:
-                if post.content_analyzed_at and post.content_engagement_score == 0:
-                    post.content_analyzed_at = None
-                    post.content_engagement_score = None
-                    post.content_analysis = None
-            db.commit()
-            # Re-query after reset
             unanalyzed = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None)).all()
             comp_names = {}
             for post in unanalyzed:
