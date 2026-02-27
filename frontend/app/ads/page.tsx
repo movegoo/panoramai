@@ -2418,6 +2418,88 @@ export default function AdsPage() {
         </div>
       )}
 
+      {/* ── Budget + Creative Intelligence (side by side) ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+      {/* ── Budget by channel donut ─────────────── */}
+      {stats.totalSpendMax > 0 && stats.bySource.size > 0 && (() => {
+        const donutData = Array.from(stats.bySource.entries())
+          .map(([src, d]) => ({
+            name: SOURCE_CONFIG[src]?.label || src,
+            value: Math.round((d.spendMin + d.spendMax) / 2),
+            color: SOURCE_CONFIG[src]?.color || "#94a3b8",
+            count: d.count,
+            min: d.spendMin,
+            max: d.spendMax,
+          }))
+          .filter(d => d.value > 0)
+          .sort((a, b) => b.value - a.value);
+        if (donutData.length === 0) return null;
+        const total = donutData.reduce((s, d) => s + d.value, 0);
+        return (
+          <div className="rounded-xl border bg-card p-5">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900">
+                <PieChart className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-[12px] font-semibold text-foreground">Budget par canal</h3>
+                <p className="text-[10px] text-muted-foreground">Estimation basée sur le CPM par levier{filterAdvertisers.size > 0 ? ` · ${filterAdvertisers.size} annonceur${filterAdvertisers.size > 1 ? "s" : ""} sélectionné${filterAdvertisers.size > 1 ? "s" : ""}` : ""}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="w-36 h-36 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPie>
+                    <Pie
+                      data={donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={38}
+                      outerRadius={65}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {donutData.map((d, i) => (
+                        <Cell key={i} fill={d.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip
+                      formatter={(value: number) => `${formatNumber(value)} €`}
+                      contentStyle={{ borderRadius: "0.75rem", fontSize: "12px", border: "1px solid var(--border)" }}
+                    />
+                  </RechartsPie>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-2.5">
+                {donutData.map(d => {
+                  const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
+                  return (
+                    <div key={d.name} className="flex items-center gap-3">
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium">{d.name}</span>
+                          <span className="text-xs font-bold tabular-nums">{pct}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted mt-1 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: d.color }} />
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <span className="text-[10px] text-muted-foreground">{d.count} pub{d.count > 1 ? "s" : ""}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{formatNumber(d.min)}–{formatNumber(d.max)} €</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Creative Intelligence ─────────────────── */}
       <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between border-b">
@@ -2806,6 +2888,8 @@ export default function AdsPage() {
         )}
       </div>
 
+      </div>{/* end grid Budget + Creative Intelligence */}
+
       {/* ── Channel pills ─────────────────────── */}
       {availableSources.entries.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -2842,86 +2926,6 @@ export default function AdsPage() {
           })}
         </div>
       )}
-
-      {/* ── Budget by channel donut ─────────────── */}
-      {stats.totalSpendMax > 0 && stats.bySource.size > 0 && (() => {
-        const donutData = Array.from(stats.bySource.entries())
-          .map(([src, d]) => ({
-            name: SOURCE_CONFIG[src]?.label || src,
-            value: Math.round((d.spendMin + d.spendMax) / 2),
-            color: SOURCE_CONFIG[src]?.color || "#94a3b8",
-            count: d.count,
-            min: d.spendMin,
-            max: d.spendMax,
-          }))
-          .filter(d => d.value > 0)
-          .sort((a, b) => b.value - a.value);
-        if (donutData.length === 0) return null;
-        const total = donutData.reduce((s, d) => s + d.value, 0);
-        return (
-          <div className="rounded-xl border bg-card p-5">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900">
-                <PieChart className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-[12px] font-semibold text-foreground">Budget par canal</h3>
-                <p className="text-[10px] text-muted-foreground">Estimation basée sur le CPM par levier{filterAdvertisers.size > 0 ? ` · ${filterAdvertisers.size} annonceur${filterAdvertisers.size > 1 ? "s" : ""} sélectionné${filterAdvertisers.size > 1 ? "s" : ""}` : ""}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="w-36 h-36 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsPie>
-                    <Pie
-                      data={donutData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={38}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {donutData.map((d, i) => (
-                        <Cell key={i} fill={d.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip
-                      formatter={(value: number) => `${formatNumber(value)} €`}
-                      contentStyle={{ borderRadius: "0.75rem", fontSize: "12px", border: "1px solid var(--border)" }}
-                    />
-                  </RechartsPie>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex-1 space-y-2.5">
-                {donutData.map(d => {
-                  const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
-                  return (
-                    <div key={d.name} className="flex items-center gap-3">
-                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium">{d.name}</span>
-                          <span className="text-xs font-bold tabular-nums">{pct}%</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-muted mt-1 overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: d.color }} />
-                        </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="text-[10px] text-muted-foreground">{d.count} pub{d.count > 1 ? "s" : ""}</span>
-                          <span className="text-[10px] text-muted-foreground tabular-nums">{formatNumber(d.min)}–{formatNumber(d.max)} €</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
 
       {/* ── Filters (collapsible, closed by default) ─ */}
       <div className="rounded-xl border bg-card overflow-hidden">
