@@ -100,11 +100,21 @@ def snapshot_active_ads(db: Session):
 
 
 def _create_signal(db: Session, comp: Competitor, **kwargs) -> dict:
-    """Create a signal and return its dict representation."""
+    """Create a signal and return its dict representation.
+
+    Brand signals (is_brand=True) are always downgraded to 'info' severity
+    since changes in our own brand are expected, not alarming.
+    """
+    is_brand = getattr(comp, "is_brand", False) or False
+    severity = kwargs.get("severity", "info")
+    if is_brand:
+        severity = "info"  # Own brand signals are never critical/warning
+    kwargs["severity"] = severity
+
     signal = Signal(
         competitor_id=comp.id,
         advertiser_id=comp.advertiser_id,
-        is_brand=getattr(comp, "is_brand", False) or False,
+        is_brand=is_brand,
         **kwargs,
     )
     db.add(signal)
@@ -112,7 +122,7 @@ def _create_signal(db: Session, comp: Competitor, **kwargs) -> dict:
     return {
         "competitor": comp.name,
         "type": kwargs.get("signal_type"),
-        "severity": kwargs.get("severity"),
+        "severity": severity,
         "title": kwargs.get("title"),
     }
 
