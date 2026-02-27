@@ -1110,24 +1110,6 @@ export default function FranceMap() {
 
   return (
     <div className="space-y-4">
-      {/* Header with title and quick actions */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Analyse géographique
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Explorez les zones de chalandise et données socio-démographiques
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full">
-            <Info className="h-3 w-3" />
-            <span>Données: INSEE, data.gouv.fr, geo.api.gouv.fr, OSM</span>
-          </div>
-        </div>
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Carte principale */}
         <div className="lg:col-span-2 space-y-3">
@@ -1506,17 +1488,17 @@ export default function FranceMap() {
           ) : !zoneAnalysis ? (
             /* Empty state - Engaging onboarding */
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-6 text-white">
+              <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border-b border-violet-100 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
-                    <Sparkles className="h-6 w-6" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
+                    <Sparkles className="h-5 w-5 text-violet-600" />
                   </div>
                   <div>
-                    <div className="font-semibold text-lg">Bienvenue</div>
-                    <div className="text-sm opacity-90">Commencez votre analyse</div>
+                    <div className="font-semibold text-lg text-foreground">Bienvenue</div>
+                    <div className="text-sm text-muted-foreground">Commencez votre analyse</div>
                   </div>
                 </div>
-                <p className="text-sm opacity-90 leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   Explorez les données socio-démographiques, la mobilité et les loyers
                   pour toute zone en France.
                 </p>
