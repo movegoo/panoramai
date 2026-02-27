@@ -2763,7 +2763,7 @@ export default function AdsPage() {
                   </div>
                   <div>
                     <h4 className="text-[13px] font-semibold">Signaux Intelligence</h4>
-                    <p className="text-[10px] text-muted-foreground">{creativeInsights.signals.length} signal{creativeInsights.signals.length > 1 ? "x" : ""} détecté{creativeInsights.signals.length > 1 ? "s" : ""}</p>
+                    <p className="text-[10px] text-muted-foreground">{creativeInsights.signals.length} signal{creativeInsights.signals.length > 1 ? "aux" : ""} détecté{creativeInsights.signals.length > 1 ? "s" : ""}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
