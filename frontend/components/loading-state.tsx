@@ -1,3 +1,5 @@
+"use client";
+
 interface LoadingStateProps {
   message?: string;
   className?: string;

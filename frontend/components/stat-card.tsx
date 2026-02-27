@@ -1,3 +1,5 @@
+"use client";
+
 import { TrendingUp, TrendingDown, type LucideIcon } from "lucide-react";
 
 interface StatCardProps {
