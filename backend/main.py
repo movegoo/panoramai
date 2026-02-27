@@ -392,11 +392,8 @@ async def _deferred_startup():
     except Exception as e:
         logger.error(f"Social handles patch failed (non-fatal): {e}")
 
-    # Auto-enrich competitors that have handles but 0 data records
-    try:
-        await _enrich_empty_competitors()
-    except Exception as e:
-        logger.error(f"Empty competitor enrichment failed (non-fatal): {e}")
+    # Auto-enrich moved to daily scheduler to avoid burning API credits on every deploy
+    # The scheduler runs at 02:00 and handles enrichment there
 
     try:
         await scheduler.start()
@@ -404,8 +401,7 @@ async def _deferred_startup():
     except Exception as e:
         logger.error(f"Scheduler start failed (non-fatal): {e}")
 
-    # BANCO: now streams from disk (~5MB peak), safe for Railway
-    asyncio.create_task(_enrich_missing_stores())
+    # Store enrichment moved to daily scheduler to avoid API calls on every deploy
 
 
 @asynccontextmanager
