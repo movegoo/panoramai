@@ -46,6 +46,9 @@ import {
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
 
 type Store = "playstore" | "appstore";
 type RankingView = "rating" | "reviews" | "downloads";
@@ -323,59 +326,39 @@ export default function AppsPage() {
     : null;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          <span className="text-sm text-muted-foreground">Chargement des applications...</span>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Chargement des applications..." />;
   }
 
   if (competitors.length === 0) {
     return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
-            <Smartphone className="h-5 w-5 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Applications</h1>
-            <p className="text-[13px] text-muted-foreground">Play Store & App Store</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
-              <Smartphone className="h-7 w-7 text-violet-400" />
-            </div>
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-1">Aucun concurrent configur&eacute;</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">Ajoutez des concurrents avec des IDs Play Store ou App Store.</p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader
+          icon={Smartphone}
+          title="Applications"
+          subtitle="Play Store & App Store"
+        />
+        <EmptyState
+          icon={Smartphone}
+          title="Aucun concurrent configuré"
+          description="Ajoutez des concurrents avec des IDs Play Store ou App Store."
+        />
       </div>
     );
   }
 
   return (
     <PageGate page="apps"><div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
-            <Smartphone className="h-5 w-5 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Applications</h1>
-            <p className="text-[13px] text-muted-foreground">Comparaison multi-stores</p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
-          <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-          Rafra&icirc;chir
-        </Button>
-      </div>
+      <PageHeader
+        icon={Smartphone}
+        title="Applications"
+        subtitle="Comparaison multi-stores"
+        actions={
+          <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
+            <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+            Rafraîchir
+          </Button>
+        }
+      />
 
       <SmartFilter
         page="apps"
@@ -386,7 +369,7 @@ export default function AppsPage() {
 
       {/* Cross-Store Overview */}
       {filteredCrossStore.length > 0 && (
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
+        <div className="rounded-xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <Crown className="h-4.5 w-4.5 text-amber-400" />
@@ -474,7 +457,7 @@ export default function AppsPage() {
 
       {/* ═══════════════ ASO Analysis Section ═══════════════ */}
       {asoLoading ? (
-        <div className="rounded-2xl border bg-card p-6">
+        <div className="rounded-xl border bg-card p-6">
           <div className="flex items-center gap-3">
             <div className="h-5 w-5 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
             <span className="text-sm text-muted-foreground">Analyse ASO en cours...</span>
@@ -513,9 +496,9 @@ export default function AppsPage() {
       </div>
 
       {currentComparison.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
               <Smartphone className="h-7 w-7 text-violet-400" />
             </div>
           </div>
@@ -636,7 +619,7 @@ export default function AppsPage() {
           </div>
 
           {/* Detailed Table */}
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
@@ -803,7 +786,7 @@ export default function AppsPage() {
             if (recs.length === 0) return null;
 
             return (
-              <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
+              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
                 <h2 className="text-base font-semibold text-violet-800 mb-4 flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
                   Recommandations Applications
@@ -873,7 +856,7 @@ export default function AppsPage() {
 
           {/* Changelog */}
           {latestData?.changelog && (
-            <div className="rounded-2xl border bg-card p-5 space-y-3">
+            <div className="rounded-xl border bg-card p-5 space-y-3">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
                   <RefreshCw className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
@@ -886,7 +869,7 @@ export default function AppsPage() {
 
           {/* History */}
           {appData.length > 1 && (
-            <div className="rounded-2xl border bg-card overflow-hidden">
+            <div className="rounded-xl border bg-card overflow-hidden">
               <div className="px-5 py-3 bg-muted/20 border-b flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800">
@@ -1028,7 +1011,7 @@ function AsoSection({ data, brandName }: { data: any; brandName: string | null }
   return (
     <div className="space-y-3">
       {/* ASO Comparison Matrix (merged header + table) */}
-      <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-4 py-2.5 border-b bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Target className="h-3.5 w-3.5 text-white" />
