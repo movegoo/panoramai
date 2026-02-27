@@ -738,6 +738,14 @@ async def trigger_geo_tracking():
     return {"message": "GEO tracking lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scheduler/run-vgeo")
+async def trigger_vgeo_analysis():
+    """Déclenche l'analyse VGEO (Video GEO) pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_vgeo_analysis())
+    return {"message": "VGEO analysis lancée en background", "timestamp": datetime.utcnow().isoformat()}
+
+
 @app.post("/api/scheduler/run-trends")
 async def trigger_google_trends():
     """Déclenche la collecte Google Trends pour toutes les enseignes."""
@@ -754,9 +762,17 @@ async def trigger_google_news():
     return {"message": "Google News lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scheduler/run-aso")
+async def trigger_aso_analysis():
+    """Déclenche l'analyse ASO (App Store Optimization) pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_aso_analysis())
+    return {"message": "ASO analysis lancée en background", "timestamp": datetime.utcnow().isoformat()}
+
+
 @app.post("/api/scheduler/run-all")
 async def trigger_all_enrichment():
-    """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + trends + news."""
+    """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO."""
     import asyncio
 
     async def _run_all():
@@ -766,8 +782,10 @@ async def trigger_all_enrichment():
         await scheduler.daily_social_analysis()
         await scheduler.daily_seo_tracking()
         await scheduler.daily_geo_tracking()
+        await scheduler.daily_vgeo_analysis()
         await scheduler.daily_google_trends()
         await scheduler.daily_google_news()
+        await scheduler.daily_aso_analysis()
 
     asyncio.create_task(_run_all())
-    return {"message": "Enrichissement complet lancé en background (collecte + signaux + creative + social + SEO + GEO + trends + news)", "timestamp": datetime.utcnow().isoformat()}
+    return {"message": "Enrichissement complet lancé en background (collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO)", "timestamp": datetime.utcnow().isoformat()}

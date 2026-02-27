@@ -1285,6 +1285,270 @@ class DataCollectionScheduler:
         finally:
             db.close()
 
+    async def daily_vgeo_analysis(self):
+        """Run VGEO (Video GEO) analysis for ALL active advertisers automatically."""
+        logger.info(f"Starting daily VGEO analysis at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor, VgeoReport
+            from services.vgeo_analyzer import vgeo_analyzer
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_reports = 0
+
+            for adv in advertisers:
+                # Verify advertiser has competitors
+                has_competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .first()
+                )
+                if not has_competitors:
+                    continue
+
+                logger.info(f"VGEO analysis: {adv.company_name}")
+
+                try:
+                    result = await vgeo_analyzer.analyze(adv.id, db)
+
+                    report = VgeoReport(
+                        advertiser_id=adv.id,
+                        score_total=result["score"]["total"],
+                        score_alignment=result["score"]["alignment"],
+                        score_freshness=result["score"]["freshness"],
+                        score_presence=result["score"]["presence"],
+                        score_competitivity=result["score"]["competitivity"],
+                        report_data=result,
+                    )
+                    db.add(report)
+                    db.commit()
+                    total_reports += 1
+                    logger.info(f"VGEO analysis done for {adv.company_name}: score {result['score']['total']}/100")
+                except Exception as e:
+                    logger.error(f"VGEO analysis failed for {adv.company_name}: {e}")
+                    db.rollback()
+
+            logger.info(f"Daily VGEO analysis complete: {total_reports} reports for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily VGEO analysis failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_aso_analysis(self):
+        """Run ASO scoring for ALL active advertisers' competitors with app store IDs."""
+        import asyncio
+        import json
+        import math
+
+        logger.info(f"Starting daily ASO analysis at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor
+            from sqlalchemy import desc
+            from routers.aso import (
+                WEIGHTS,
+                _enrich_playstore,
+                _enrich_appstore,
+                _compute_metadata_score,
+                _compute_visual_score,
+                _compute_rating_score,
+                _compute_reviews_score,
+                _compute_freshness_score,
+            )
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_scored = 0
+
+            for adv in advertisers:
+                competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .all()
+                )
+
+                # Filter to only competitors with app store IDs
+                app_competitors = [
+                    c for c in competitors
+                    if c.playstore_app_id or c.appstore_app_id
+                ]
+                if not app_competitors:
+                    continue
+
+                logger.info(f"ASO analysis: {adv.company_name} — {len(app_competitors)} competitors with app IDs")
+
+                # First pass: get latest DB data and max reviews for normalization
+                max_reviews_ps = 1
+                max_reviews_as = 1
+                competitor_db_data = {}
+
+                for comp in app_competitors:
+                    ps_latest = None
+                    as_latest = None
+                    if comp.playstore_app_id:
+                        ps_latest = (
+                            db.query(AppData)
+                            .filter(AppData.competitor_id == comp.id, AppData.store == "playstore")
+                            .order_by(desc(AppData.recorded_at))
+                            .first()
+                        )
+                        if ps_latest and ps_latest.reviews_count:
+                            max_reviews_ps = max(max_reviews_ps, ps_latest.reviews_count)
+                    if comp.appstore_app_id:
+                        as_latest = (
+                            db.query(AppData)
+                            .filter(AppData.competitor_id == comp.id, AppData.store == "appstore")
+                            .order_by(desc(AppData.recorded_at))
+                            .first()
+                        )
+                        if as_latest and as_latest.reviews_count:
+                            max_reviews_as = max(max_reviews_as, as_latest.reviews_count)
+                    competitor_db_data[comp.id] = (ps_latest, as_latest)
+
+                # Live enrichment (parallel)
+                loop = asyncio.get_event_loop()
+
+                async def enrich_competitor(comp):
+                    ps_extra = {}
+                    as_extra = {}
+                    tasks = []
+                    if comp.playstore_app_id:
+                        tasks.append(("ps", loop.run_in_executor(None, _enrich_playstore, comp.playstore_app_id)))
+                    if comp.appstore_app_id:
+                        tasks.append(("as", _enrich_appstore(comp.appstore_app_id)))
+
+                    for label, task in tasks:
+                        try:
+                            result = await asyncio.wait_for(task, timeout=15)
+                            if label == "ps":
+                                ps_extra = result
+                            else:
+                                as_extra = result
+                        except (asyncio.TimeoutError, Exception) as e:
+                            logger.warning(f"ASO enrichment timeout for {comp.name} ({label}): {e}")
+
+                    return comp.id, ps_extra, as_extra
+
+                enrichment_tasks = [enrich_competitor(comp) for comp in app_competitors]
+                enrichment_results = await asyncio.gather(*enrichment_tasks, return_exceptions=True)
+
+                enrichment_map = {}
+                for r in enrichment_results:
+                    if isinstance(r, tuple):
+                        enrichment_map[r[0]] = (r[1], r[2])
+
+                # Second pass: compute and cache scores
+                competitor_scores = []
+                for comp in app_competitors:
+                    ps_latest, as_latest = competitor_db_data.get(comp.id, (None, None))
+                    ps_extra, as_extra = enrichment_map.get(comp.id, ({}, {}))
+
+                    entry = {
+                        "competitor_id": comp.id,
+                        "competitor_name": comp.name,
+                    }
+                    scores_list = []
+
+                    # Play Store ASO
+                    if ps_latest:
+                        metadata = _compute_metadata_score(
+                            title=ps_latest.app_name or "",
+                            description=ps_latest.description or "",
+                            changelog=ps_latest.changelog,
+                            short_desc=ps_extra.get("short_description", ""),
+                            store="playstore",
+                        )
+                        visual = _compute_visual_score(
+                            screenshot_urls=ps_extra.get("screenshot_urls", []),
+                            video_url=ps_extra.get("video_url"),
+                            header_image=ps_extra.get("header_image"),
+                            icon_url=ps_extra.get("icon_url"),
+                            store="playstore",
+                        )
+                        rating = _compute_rating_score(ps_latest.rating, ps_extra.get("histogram"))
+                        reviews = _compute_reviews_score(ps_latest.reviews_count, max_reviews_ps)
+                        freshness = _compute_freshness_score(ps_latest.last_updated)
+
+                        ps_total = (
+                            metadata["total"] * WEIGHTS["metadata"]
+                            + visual["total"] * WEIGHTS["visual"]
+                            + rating["total"] * WEIGHTS["rating"]
+                            + reviews["total"] * WEIGHTS["reviews"]
+                            + freshness["total"] * WEIGHTS["freshness"]
+                        )
+
+                        entry["playstore"] = {
+                            "aso_score": round(ps_total, 1),
+                            "metadata_score": metadata["total"],
+                            "visual_score": visual["total"],
+                            "rating_score": rating["total"],
+                            "reviews_score": reviews["total"],
+                            "freshness_score": freshness["total"],
+                            "rating": ps_latest.rating,
+                            "reviews_count": ps_latest.reviews_count,
+                        }
+                        scores_list.append(ps_total)
+
+                    # App Store ASO
+                    if as_latest:
+                        metadata = _compute_metadata_score(
+                            title=as_latest.app_name or "",
+                            description=as_latest.description or "",
+                            changelog=as_latest.changelog,
+                            store="appstore",
+                        )
+                        visual = _compute_visual_score(
+                            screenshot_urls=as_extra.get("screenshot_urls", []),
+                            video_url=None,
+                            icon_url=as_extra.get("icon_url"),
+                            store="appstore",
+                        )
+                        rating = _compute_rating_score(as_latest.rating)
+                        reviews = _compute_reviews_score(as_latest.reviews_count, max_reviews_as)
+                        freshness = _compute_freshness_score(as_latest.last_updated)
+
+                        as_total = (
+                            metadata["total"] * WEIGHTS["metadata"]
+                            + visual["total"] * WEIGHTS["visual"]
+                            + rating["total"] * WEIGHTS["rating"]
+                            + reviews["total"] * WEIGHTS["reviews"]
+                            + freshness["total"] * WEIGHTS["freshness"]
+                        )
+
+                        entry["appstore"] = {
+                            "aso_score": round(as_total, 1),
+                            "metadata_score": metadata["total"],
+                            "visual_score": visual["total"],
+                            "rating_score": rating["total"],
+                            "reviews_score": reviews["total"],
+                            "freshness_score": freshness["total"],
+                            "rating": as_latest.rating,
+                            "reviews_count": as_latest.reviews_count,
+                        }
+                        scores_list.append(as_total)
+
+                    entry["aso_score_avg"] = round(sum(scores_list) / len(scores_list), 1) if scores_list else 0
+                    competitor_scores.append(entry)
+                    total_scored += 1
+
+                # Sort and log results
+                competitor_scores.sort(key=lambda x: x["aso_score_avg"], reverse=True)
+                if competitor_scores:
+                    logger.info(
+                        f"ASO analysis done for {adv.company_name}: "
+                        f"{len(competitor_scores)} competitors scored, "
+                        f"top={competitor_scores[0]['competitor_name']}({competitor_scores[0]['aso_score_avg']})"
+                    )
+
+            logger.info(f"Daily ASO analysis complete: {total_scored} total competitors scored for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily ASO analysis failed: {e}")
+        finally:
+            db.close()
+
     async def weekly_market_data_refresh(self):
         """Refresh market data from data.gouv.fr."""
         logger.info(f"Starting weekly market data refresh at {datetime.utcnow()}")
