@@ -255,7 +255,7 @@ export default function AdsOverviewPage() {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium truncate">{c.name}</span>
+                          <span className="text-sm font-medium truncate">{c.name}{c.is_brand && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
                           <span className="text-xs text-muted-foreground ml-2 shrink-0">
                             {c.total_ads} pubs &middot; {c.sov_pct}%
                           </span>
@@ -410,7 +410,7 @@ export default function AdsOverviewPage() {
                               </div>
                             )}
                             <div>
-                              <span className="font-medium">{c.name}</span>
+                              <span className="font-medium">{c.name}{c.is_brand && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
                               {c.pages && c.pages.length > 1 && (
                                 <p className="text-[10px] text-muted-foreground">
                                   {c.pages.length} pages

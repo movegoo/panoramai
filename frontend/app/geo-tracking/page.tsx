@@ -385,6 +385,7 @@ export default function GeoTrackingPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-sm font-semibold ${rc.text}`}>
                         #{i + 1} {r.competitor}
+                        {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                       </span>
                     </div>
                     <div className={`text-2xl font-bold ${rc.text}`}>
@@ -529,7 +530,7 @@ export default function GeoTrackingPage() {
                   return (
                     <div key={g.competitor_id}>
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`text-sm font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{g.competitor}</span>
+                        <span className={`text-sm font-medium ${isBrand ? "text-teal-700 font-bold" : "text-foreground"}`}>{g.competitor}{isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
                         <span className={`text-xs font-semibold ${g.gap >= 0 ? "text-emerald-600" : "text-amber-600"}`}>
                           {g.gap > 0 ? "+" : ""}{g.gap} pts
                         </span>

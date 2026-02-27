@@ -173,6 +173,7 @@ export default function SeoPage() {
                   <div key={s.competitor_id} className="flex items-center gap-3">
                     <span className={`w-28 text-sm font-medium truncate ${isBrand ? "text-violet-700 font-bold" : rc.text + " font-medium"}`}>
                       {s.competitor}
+                      {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                     </span>
                     <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -203,6 +204,7 @@ export default function SeoPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className={`text-sm font-semibold ${rc.text}`}>
                         #{i + 1} {a.competitor}
+                        {isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                       </span>
                     </div>
                     <div className={`text-2xl font-bold ${rc.text}`}>
@@ -248,6 +250,7 @@ export default function SeoPage() {
                       {competitorNames.map((name) => (
                         <th key={name} className="text-center py-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           {name}
+                          {name === brandName && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full tracking-wider font-bold normal-case">Vous</span>}
                         </th>
                       ))}
                     </tr>
