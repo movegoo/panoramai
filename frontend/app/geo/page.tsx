@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import FranceMap from "@/components/map/FranceMap";
 import { SmartFilter } from "@/components/smart-filter";
-import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users, Star, MessageSquare, CheckCircle2, ExternalLink, Trophy, ThumbsDown } from "lucide-react";
+import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, Target, Users, Star, MessageSquare, CheckCircle2, ExternalLink, Trophy, ThumbsDown, Phone, Globe } from "lucide-react";
 import { API_BASE, brandAPI, geoAPI, GmbScoringData, GmbScoringCompetitor } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PageGate } from "@/components/page-gate";
@@ -394,19 +394,49 @@ export default function GeoPage() {
                       <div key={s.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-bold text-emerald-600 w-5">{i + 1}</span>
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          {s.thumbnail ? (
+                            <img src={s.thumbnail} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          )}
                           <div className="min-w-0">
                             <div className="text-xs font-medium text-foreground truncate">{s.name}</div>
-                            <div className="text-[10px] text-muted-foreground">{s.city} — {s.competitor_name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {s.city} — {s.competitor_name}
+                              {s.type && <span className="ml-1 text-muted-foreground/70">· {s.type}</span>}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {s.open_state && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                              s.open_state.toLowerCase().includes("open") ? "bg-emerald-100 text-emerald-700" :
+                              s.open_state.toLowerCase().includes("temporarily") ? "bg-orange-100 text-orange-700" :
+                              "bg-red-100 text-red-600"
+                            }`}>
+                              {s.open_state.toLowerCase().includes("open") ? "Ouvert" :
+                               s.open_state.toLowerCase().includes("temporarily") ? "Fermé temp." : "Fermé"}
+                            </span>
+                          )}
+                          {s.price && (
+                            <span className="text-[9px] text-muted-foreground font-medium">{s.price}</span>
+                          )}
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
                             <span className="text-xs font-semibold">{s.rating?.toFixed(1) ?? "—"}</span>
                           </div>
                           <span className="text-[10px] text-muted-foreground">{s.reviews_count?.toLocaleString() ?? "—"} avis</span>
                           <span className={`text-xs font-bold ${getScoreTextColor(s.gmb_score)}`}>{s.gmb_score ?? "—"}</span>
+                          {s.phone && (
+                            <a href={`tel:${s.phone}`} className="text-muted-foreground hover:text-foreground">
+                              <Phone className="h-3 w-3" />
+                            </a>
+                          )}
+                          {s.website && (
+                            <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                              <Globe className="h-3 w-3" />
+                            </a>
+                          )}
                           {s.place_id && (
                             <a
                               href={`https://www.google.com/maps/place/?q=place_id:${s.place_id}`}
@@ -434,19 +464,49 @@ export default function GeoPage() {
                       <div key={s.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs font-bold text-red-500 w-5">{i + 1}</span>
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          {s.thumbnail ? (
+                            <img src={s.thumbnail} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                          )}
                           <div className="min-w-0">
                             <div className="text-xs font-medium text-foreground truncate">{s.name}</div>
-                            <div className="text-[10px] text-muted-foreground">{s.city} — {s.competitor_name}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {s.city} — {s.competitor_name}
+                              {s.type && <span className="ml-1 text-muted-foreground/70">· {s.type}</span>}
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {s.open_state && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                              s.open_state.toLowerCase().includes("open") ? "bg-emerald-100 text-emerald-700" :
+                              s.open_state.toLowerCase().includes("temporarily") ? "bg-orange-100 text-orange-700" :
+                              "bg-red-100 text-red-600"
+                            }`}>
+                              {s.open_state.toLowerCase().includes("open") ? "Ouvert" :
+                               s.open_state.toLowerCase().includes("temporarily") ? "Fermé temp." : "Fermé"}
+                            </span>
+                          )}
+                          {s.price && (
+                            <span className="text-[9px] text-muted-foreground font-medium">{s.price}</span>
+                          )}
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
                             <span className="text-xs font-semibold">{s.rating?.toFixed(1) ?? "—"}</span>
                           </div>
                           <span className="text-[10px] text-muted-foreground">{s.reviews_count?.toLocaleString() ?? "—"} avis</span>
                           <span className={`text-xs font-bold ${getScoreTextColor(s.gmb_score)}`}>{s.gmb_score ?? "—"}</span>
+                          {s.phone && (
+                            <a href={`tel:${s.phone}`} className="text-muted-foreground hover:text-foreground">
+                              <Phone className="h-3 w-3" />
+                            </a>
+                          )}
+                          {s.website && (
+                            <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
+                              <Globe className="h-3 w-3" />
+                            </a>
+                          )}
                           {s.place_id && (
                             <a
                               href={`https://www.google.com/maps/place/?q=place_id:${s.place_id}`}

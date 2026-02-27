@@ -1264,6 +1264,13 @@ async def get_gmb_scoring(
                 "reviews_count": s.google_reviews_count,
                 "gmb_score": s.gmb_score,
                 "place_id": s.google_place_id,
+                "phone": s.google_phone,
+                "website": s.google_website,
+                "open_state": s.google_open_state,
+                "thumbnail": s.google_thumbnail,
+                "hours": s.google_hours,
+                "price": s.google_price,
+                "type": s.google_type,
             }
             for s in sorted_by_score[:3]
         ]
@@ -1278,6 +1285,13 @@ async def get_gmb_scoring(
                 "reviews_count": s.google_reviews_count,
                 "gmb_score": s.gmb_score,
                 "place_id": s.google_place_id,
+                "phone": s.google_phone,
+                "website": s.google_website,
+                "open_state": s.google_open_state,
+                "thumbnail": s.google_thumbnail,
+                "hours": s.google_hours,
+                "price": s.google_price,
+                "type": s.google_type,
             }
             for s in sorted_by_score[-3:][::-1]
         ] if len(sorted_by_score) > 3 else []

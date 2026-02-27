@@ -824,6 +824,14 @@ async def trigger_aso_analysis():
     return {"message": "ASO analysis lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scheduler/run-gmb")
+async def trigger_gmb_enrichment():
+    """Déclenche l'enrichissement GMB (Google My Business) pour tous les magasins."""
+    import asyncio
+    asyncio.create_task(scheduler.weekly_gmb_enrichment())
+    return {"message": "GMB enrichment lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
 @app.post("/api/scheduler/run-all")
 async def trigger_all_enrichment():
     """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO."""

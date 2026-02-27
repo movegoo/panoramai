@@ -1496,6 +1496,13 @@ export interface GmbScoringStore {
   reviews_count: number | null;
   gmb_score: number | null;
   place_id: string | null;
+  phone?: string | null;
+  website?: string | null;
+  open_state?: string | null;
+  thumbnail?: string | null;
+  hours?: string | null;
+  price?: string | null;
+  type?: string | null;
 }
 
 export interface GmbScoringCompetitor {

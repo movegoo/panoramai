@@ -123,6 +123,15 @@ class DataCollectionScheduler:
             replace_existing=True
         )
 
+        # Weekly GMB enrichment (Sundays 7 AM, after daily jobs finish ~06:30)
+        self.scheduler.add_job(
+            self.weekly_gmb_enrichment,
+            CronTrigger(day_of_week="sun", hour=7, minute=0),
+            id="weekly_gmb_enrichment",
+            name="Weekly GMB Enrichment",
+            replace_existing=True
+        )
+
         # Monthly Meta token refresh (1st of each month at 4 AM)
         self.scheduler.add_job(
             self.monthly_meta_token_refresh,
@@ -1707,6 +1716,118 @@ class DataCollectionScheduler:
             logger.info(f"Daily ASO analysis complete: {total_scored} total competitors scored for {len(advertisers)} advertisers")
         except Exception as e:
             logger.error(f"Daily ASO analysis failed: {e}")
+        finally:
+            db.close()
+
+    async def weekly_gmb_enrichment(self):
+        """Enrich stores with Google My Business data (rating, reviews, phone, etc.)."""
+        import asyncio
+        logger.info(f"Starting weekly GMB enrichment at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor, StoreLocation
+            from services.gmb_service import gmb_service
+            from routers.geo import compute_gmb_score
+
+            if not gmb_service.is_configured:
+                logger.warning("GMB service not configured, skipping weekly enrichment")
+                return
+
+            # Get all active advertisers
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            if not advertisers:
+                logger.info("No active advertisers, skipping GMB enrichment")
+                return
+
+            # Collect all competitor IDs across advertisers
+            all_comp_ids = set()
+            for adv in advertisers:
+                comp_ids = [
+                    r[0] for r in db.query(AdvertiserCompetitor.competitor_id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id).all()
+                ]
+                all_comp_ids.update(comp_ids)
+
+            if not all_comp_ids:
+                logger.info("No competitors found, skipping GMB enrichment")
+                return
+
+            # Get competitor name map
+            competitors = db.query(Competitor).filter(
+                Competitor.id.in_(all_comp_ids),
+                (Competitor.is_active == True) | (Competitor.is_active == None),
+            ).all()
+            comp_map = {c.id: c.name for c in competitors}
+
+            # Get BANCO stores not enriched in the last 30 days
+            from datetime import timedelta
+            cutoff = datetime.utcnow() - timedelta(days=30)
+
+            stores = db.query(StoreLocation).filter(
+                StoreLocation.competitor_id.in_(list(comp_map.keys())),
+                StoreLocation.source == "BANCO",
+                (StoreLocation.rating_fetched_at.is_(None)) | (StoreLocation.rating_fetched_at < cutoff),
+            ).limit(200).all()
+
+            if not stores:
+                logger.info("All stores recently enriched, nothing to do")
+                return
+
+            enriched = 0
+            errors = 0
+            skipped = 0
+
+            for store in stores:
+                comp_name = comp_map.get(store.competitor_id, "inconnu")
+
+                try:
+                    result = await gmb_service.enrich_store(
+                        store_name=store.name or "",
+                        brand_name=comp_name,
+                        city=store.city or "",
+                        latitude=store.latitude,
+                        longitude=store.longitude,
+                    )
+
+                    if result.get("success"):
+                        store.google_rating = result.get("rating")
+                        store.google_reviews_count = result.get("reviews_count")
+                        store.google_place_id = result.get("place_id")
+                        store.google_phone = result.get("phone")
+                        store.google_website = result.get("website")
+                        store.google_type = result.get("type")
+                        store.google_thumbnail = result.get("thumbnail")
+                        store.google_open_state = result.get("open_state")
+                        store.google_hours = result.get("hours")
+                        store.google_price = result.get("price")
+                        store.gmb_score = compute_gmb_score(
+                            rating=result.get("rating"),
+                            reviews_count=result.get("reviews_count"),
+                            phone=result.get("phone"),
+                            website=result.get("website"),
+                            hours=result.get("hours"),
+                            thumbnail=result.get("thumbnail"),
+                            gtype=result.get("type"),
+                            open_state=result.get("open_state"),
+                        )
+                        store.rating_fetched_at = datetime.utcnow()
+                        enriched += 1
+                    else:
+                        errors += 1
+                        logger.warning(f"GMB enrichment failed for {comp_name} - {store.city}: {result.get('error')}")
+                except Exception as e:
+                    errors += 1
+                    logger.error(f"GMB enrichment error for store {store.id}: {e}")
+
+                # Rate limit between API calls
+                await asyncio.sleep(1.1)
+
+            db.commit()
+            logger.info(f"Weekly GMB enrichment completed: {enriched} enriched, {errors} errors, {len(stores)} processed")
+
+        except Exception as e:
+            logger.error(f"Weekly GMB enrichment failed: {e}")
         finally:
             db.close()
 
