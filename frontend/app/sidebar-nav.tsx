@@ -61,7 +61,6 @@ const navigation = [
   {
     name: "Veille",
     items: [
-      { name: "Concurrents", href: "/competitors", icon: Users },
       { name: "Publicités", href: "/ads", icon: Megaphone },
       { name: "Part de Voix", href: "/ads-overview", icon: PieChart },
       { name: "Réseaux sociaux", href: "/social", icon: Activity },
@@ -81,6 +80,7 @@ const navigation = [
     name: "Param\u00e8tres",
     items: [
       { name: "Mon enseigne", href: "/account", icon: Settings },
+      { name: "Concurrents", href: "/competitors", icon: Users },
     ],
   },
 ];
