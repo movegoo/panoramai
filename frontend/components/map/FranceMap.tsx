@@ -78,6 +78,9 @@ interface Store {
   latitude: number;
   longitude: number;
   store_type?: string;
+  google_rating?: number;
+  google_reviews_count?: number;
+  postal_code?: string;
 }
 
 interface LayerConfig {
@@ -317,9 +320,16 @@ export default function FranceMap() {
 
     storeList.forEach((store) => {
       if (store.latitude && store.longitude) {
+        let popupHtml = `<b>${store.name}</b><br>${store.city}${store.postal_code ? ` (${store.postal_code})` : ''}`;
+        if (store.google_rating != null) {
+          popupHtml += `<br><span style="font-size:13px">⭐ <b>${store.google_rating}</b>/5</span>`;
+          if (store.google_reviews_count != null) {
+            popupHtml += ` <span style="color:#666;font-size:12px">(${store.google_reviews_count.toLocaleString()} avis)</span>`;
+          }
+        }
         L.marker([store.latitude, store.longitude], { icon: blueIcon })
           .addTo(map)
-          .bindPopup(`<b>${store.name}</b><br>${store.city}`);
+          .bindPopup(popupHtml);
       }
     });
   };
