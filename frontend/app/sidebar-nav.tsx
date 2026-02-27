@@ -97,7 +97,8 @@ export function SidebarNav({ onClose }: { onClose?: () => void }) {
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
-    return pathname.startsWith(href);
+    // Exact match or sub-path (with /) to avoid /ads matching /ads-overview
+    return pathname === href || pathname.startsWith(href + "/");
   }
 
   function toggleSection(name: string) {
