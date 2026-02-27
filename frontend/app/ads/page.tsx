@@ -65,6 +65,8 @@ import { PeriodFilter, PeriodDays, DateRangeFilter } from "@/components/period-f
 import { FreshnessBadge } from "@/components/freshness-badge";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState } from "@/components/loading-state";
 
 /* ─────────────── Platform icons (inline SVG) ─────────────── */
 
@@ -487,7 +489,7 @@ function AdCard({ ad, expanded, onToggle, advertiserLogo, brandName }: { ad: AdW
   const [imgError, setImgError] = useState(false);
   const linkHref = ad.ad_library_url || ad.link_url || ad.creative_url;
   return (
-    <div className={`group relative rounded-2xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200" : ""}`}>
+    <div className={`group relative rounded-xl border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200" : ""}`}>
       {/* Image */}
       {ad.creative_url && !imgError ? (
         <a href={linkHref} target="_blank" rel="noopener noreferrer" className="block">
@@ -1069,7 +1071,7 @@ function DemographicsPanel({ filteredAds }: { filteredAds: AdWithCompetitor[] })
   if (demographics.adsWithData === 0) return null;
 
   return (
-    <div className="rounded-2xl border bg-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-hidden">
       <div className="px-5 py-4 border-b bg-gradient-to-r from-violet-50/50 to-pink-50/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1370,7 +1372,7 @@ function InsightsSection({ filteredAds, stats }: { filteredAds: AdWithCompetitor
   };
 
   return (
-    <div className="rounded-2xl border bg-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-hidden">
       <div className="px-5 py-4 border-b bg-gradient-to-r from-amber-50/50 to-orange-50/50">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200/30">
@@ -1508,7 +1510,7 @@ function CompetitorComparison({ filteredAds, stats, competitors, brandName }: { 
   const maxReach = Math.max(...data.map(c => c.reach), 1);
 
   return (
-    <div className="rounded-2xl border bg-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-hidden">
       <div className="px-5 py-4 border-b bg-gradient-to-r from-violet-50/50 to-indigo-50/50">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-violet-200/30">
@@ -2310,27 +2312,25 @@ export default function AdsPage() {
   return (
     <PageGate page="ads"><div className="space-y-6">
       {/* ── Header ─────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50 shrink-0">
-            <Megaphone className="h-5 w-5 text-violet-600" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">Cockpit Publicitaire</h1>
-            <p className="text-[12px] sm:text-[13px] text-muted-foreground truncate flex items-center gap-2">
-              Meta, TikTok &amp; Google Ads
-              <FreshnessBadge timestamp={freshness?.ads_meta} label="Meta" />
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-          <PeriodFilter selectedDays={periodDays} onDaysChange={handlePeriodChange} />
-          <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2">
-            <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-            Scanner tout
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Megaphone}
+        title="Cockpit Publicitaire"
+        subtitle={
+          <span className="flex items-center gap-2">
+            Meta, TikTok &amp; Google Ads
+            <FreshnessBadge timestamp={freshness?.ads_meta} label="Meta" />
+          </span>
+        }
+        actions={
+          <>
+            <PeriodFilter selectedDays={periodDays} onDaysChange={handlePeriodChange} />
+            <Button variant="outline" size="sm" onClick={handleFetchAll} disabled={fetching} className="gap-2">
+              <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+              Scanner tout
+            </Button>
+          </>
+        }
+      />
 
       {/* ── AI Smart Filter ──────────────────── */}
       <SmartFilter
@@ -2342,7 +2342,7 @@ export default function AdsPage() {
       />
 
       {/* ── KPI Banner ─────────────────────── */}
-      <div className="rounded-2xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-4 sm:px-8 py-5 sm:py-6 text-white relative overflow-hidden">
+      <div className="rounded-xl bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-4 sm:px-8 py-5 sm:py-6 text-white relative overflow-hidden">
         <div className="absolute -top-16 -right-16 h-48 w-48 rounded-full bg-violet-400/[0.05]" />
         <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-indigo-400/[0.04]" />
         <div className="relative grid grid-cols-3 sm:grid-cols-5 gap-4 sm:gap-6">
@@ -2471,7 +2471,7 @@ export default function AdsPage() {
         if (donutData.length === 0) return null;
         const total = donutData.reduce((s, d) => s + d.value, 0);
         return (
-          <div className="rounded-2xl border bg-card p-5">
+          <div className="rounded-xl border bg-card p-5">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900">
                 <PieChart className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
@@ -2536,7 +2536,7 @@ export default function AdsPage() {
 
 
       {/* ── Filters (collapsible, closed by default) ─ */}
-      <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden">
         <button
           onClick={() => setShowFilters(!showFilters)}
           className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
@@ -3035,7 +3035,7 @@ export default function AdsPage() {
       <CompetitorComparison filteredAds={filteredAds} stats={stats} competitors={competitors} brandName={brandName} />
 
       {/* ── Creative Intelligence ─────────────────── */}
-      <div className="rounded-2xl border bg-card overflow-hidden">
+      <div className="rounded-xl border bg-card overflow-hidden">
         <div className="px-5 py-4 flex items-center justify-between border-b">
           <div className="flex items-center gap-2.5">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
@@ -3429,7 +3429,7 @@ export default function AdsPage() {
         const hasMore = sortedAdvertisers.length > PAYER_LIMIT;
         const visibleAdvertisers = showAllPayers ? sortedAdvertisers : sortedAdvertisers.slice(0, PAYER_LIMIT);
         return (
-          <div className="rounded-2xl border bg-card/50 p-5 space-y-4">
+          <div className="rounded-xl border bg-card/50 p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100">
@@ -3510,7 +3510,7 @@ export default function AdsPage() {
       })()}
 
       {/* ── Diffusion & Audience ────── */}
-      <div className="rounded-2xl border bg-card/50 p-5 space-y-4">
+      <div className="rounded-xl border bg-card/50 p-5 space-y-4">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100">
             <Globe className="h-4.5 w-4.5 text-blue-600" />
@@ -3644,9 +3644,9 @@ export default function AdsPage() {
 
       {/* ── Ads Grid ─────────────────────────── */}
       {filteredAds.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
               <Megaphone className="h-7 w-7 text-violet-400" />
             </div>
           </div>
