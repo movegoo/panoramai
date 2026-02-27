@@ -228,7 +228,19 @@ class DataCollectionScheduler:
                 try:
                     from services.meta_ad_library import meta_ad_library
                     if meta_ad_library.is_configured:
-                        meta_ads = await meta_ad_library.get_active_ads(page_id, country="FR")
+                        # Combine main page + child pages for a single API call
+                        page_ids_to_fetch = [page_id]
+                        if competitor.child_page_ids:
+                            try:
+                                child_ids = json.loads(competitor.child_page_ids)
+                                if isinstance(child_ids, list):
+                                    page_ids_to_fetch.extend(str(cid) for cid in child_ids if cid)
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        meta_ads = await meta_ad_library.get_active_ads(
+                            page_ids_to_fetch if len(page_ids_to_fetch) > 1 else page_id,
+                            country="FR",
+                        )
                         if meta_ads:
                             new_count = self._store_meta_api_ads(db, competitor, meta_ads, _parse_date)
                             if new_count >= 0:
