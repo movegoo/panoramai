@@ -173,10 +173,9 @@ export default function AdsOverviewPage() {
       ) : (
         <>
           {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <StatCard icon={Megaphone} iconColor="bg-violet-100 text-violet-600" label="Total pubs" value={formatNumber(totals.total_ads || 0)} sub={`${totals.competitors_count || 0} concurrents`} />
             <StatCard icon={Zap} iconColor="bg-emerald-100 text-emerald-600" label="Pubs actives" value={formatNumber(totals.active_ads || 0)} sub="en cours de diffusion" />
-            <StatCard icon={Euro} iconColor="bg-amber-100 text-amber-600" label="Budget estime total" value={formatBudget(totals.spend_min || 0, totals.spend_max || 0)} sub="estimation CPM 3€" />
             <StatCard icon={Users} iconColor="bg-blue-100 text-blue-600" label="Couverture EU" value={formatNumber(totals.reach || 0)} sub="personnes atteintes" />
           </div>
 
@@ -186,26 +185,7 @@ export default function AdsOverviewPage() {
               title="Part de voix"
               icon={PieChartIcon}
               iconColor="bg-violet-100 text-violet-600"
-              action={
-                <div className="flex items-center gap-1 p-0.5 rounded-full bg-muted border">
-                  <button
-                    onClick={() => setSovMetric("ads")}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                      sovMetric === "ads" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground"
-                    }`}
-                  >
-                    Nombre
-                  </button>
-                  <button
-                    onClick={() => setSovMetric("spend")}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-                      sovMetric === "spend" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground"
-                    }`}
-                  >
-                    Budget
-                  </button>
-                </div>
-              }
+              action={null}
             >
               <p className="text-xs text-muted-foreground mb-4">
                 {sovMetric === "ads"
@@ -404,7 +384,7 @@ export default function AdsOverviewPage() {
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Pubs</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Actives</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Part de voix</th>
-                    <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Budget estime</th>
+                    {/* Budget column hidden */}
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Couverture</th>
                     <th className="pb-3 font-medium text-muted-foreground">Plateformes</th>
                   </tr>
@@ -446,9 +426,7 @@ export default function AdsOverviewPage() {
                             {c.sov_pct}%
                           </span>
                         </td>
-                        <td className="py-3 pr-4 text-right text-xs">
-                          {formatBudget(c.spend_min, c.spend_max)}
-                        </td>
+                        {/* Budget cell hidden */}
                         <td className="py-3 pr-4 text-right">{formatNumber(c.reach)}</td>
                         <td className="py-3">
                           <div className="flex gap-1 flex-wrap">

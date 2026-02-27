@@ -1021,23 +1021,8 @@ export default function DashboardPage() {
             </h2>
             <span className="ml-auto flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground tabular-nums bg-muted px-2 py-0.5 rounded-full">{adI.total_ads} pubs</span>
-              {adI.total_estimated_spend && adI.total_estimated_spend.max > 0 && (
-                <span className="text-[11px] text-emerald-600 tabular-nums bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
-                  {formatNumber(adI.total_estimated_spend.min)}&ndash;{formatNumber(adI.total_estimated_spend.max)}&euro;
-                </span>
-              )}
-              <button
-                onClick={() => setShowBudgetInfo(!showBudgetInfo)}
-                className="text-muted-foreground hover:text-violet-500 transition-colors"
-                title="Comment le budget est estime"
-              >
-                <Info className="h-3.5 w-3.5" />
-              </button>
             </span>
           </div>
-          {showBudgetInfo && (
-            <BudgetInfoPanel onClose={() => setShowBudgetInfo(false)} />
-          )}
 
           {/* Ad intelligence grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1061,14 +1046,7 @@ export default function DashboardPage() {
                         {cs.name}
                         {cs.is_brand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold tabular-nums">{cs.total_ads} pubs</span>
-                        {(cs.estimated_spend_max ?? 0) > 0 && (
-                          <span className="text-[10px] text-emerald-600 tabular-nums bg-emerald-50 px-1.5 py-0.5 rounded-md font-medium">
-                            {formatNumber(cs.estimated_spend_min ?? 0)}&ndash;{formatNumber(cs.estimated_spend_max ?? 0)}&euro;
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-sm font-bold tabular-nums">{cs.total_ads} pubs</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
