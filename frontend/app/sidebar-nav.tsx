@@ -54,7 +54,8 @@ const navigation = [
     name: "Dashboard",
     items: [
       { name: "Vue d\u2019ensemble", href: "/", icon: LayoutDashboard },
-      { name: "Carte & Zones", href: "/geo", icon: Map },
+      { name: "Tendances", href: "/tendances", icon: TrendingUp },
+      { name: "Signaux", href: "/signals", icon: Bell },
     ],
   },
   {
@@ -65,11 +66,15 @@ const navigation = [
       { name: "Part de Voix", href: "/ads-overview", icon: PieChart },
       { name: "Réseaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
+    ],
+  },
+  {
+    name: "Visibilité",
+    items: [
       { name: "SEO", href: "/seo", icon: Globe },
-      { name: "GEO", href: "/geo-tracking", icon: Sparkles },
-      { name: "VGEO", href: "/vgeo", icon: Eye },
-      { name: "Tendances", href: "/tendances", icon: TrendingUp },
-      { name: "Signaux", href: "/signals", icon: Bell },
+      { name: "GEO (IA)", href: "/geo-tracking", icon: Sparkles },
+      { name: "VGEO (Vidéo)", href: "/vgeo", icon: Eye },
+      { name: "Carte & Zones", href: "/geo", icon: Map },
     ],
   },
   {

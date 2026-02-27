@@ -7,6 +7,12 @@ import { ExportMenu } from "@/components/export-menu";
 import { useAPI } from "@/lib/use-api";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { SectionCard } from "@/components/section-card";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
@@ -143,35 +149,28 @@ export default function GeoTrackingPage() {
 
   return (
     <PageGate page="geo_tracking"><div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 shadow-lg shadow-teal-200/50">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Visibilite IA (GEO)</h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-1 flex-wrap">
-              Presence de marque dans
-              {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map((p, i, arr) => (
-                <span key={p} className="inline-flex items-center gap-1">
-                  {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-4 w-4 rounded-sm object-contain" />}
-                  <span className="font-medium text-foreground/70">{LLM_CONFIG[p]?.label || p}</span>
-                  {i < arr.length - 1 && <span className="text-muted-foreground/50">,</span>}
-                </span>
-              ))}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleTrack}
-          disabled={tracking}
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-teal-200/50 hover:shadow-xl hover:shadow-teal-300/50 transition-all disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${tracking ? "animate-spin" : ""}`} />
-          {tracking ? "Analyse en cours..." : "Rafraichir la visibilite"}
-        </button>
-      </div>
+      <PageHeader
+        icon={Sparkles}
+        title="Visibilite IA (GEO)"
+        subtitle={
+          <span className="flex items-center gap-1 flex-wrap">
+            Presence de marque dans
+            {(platforms.length > 0 ? platforms : ["mistral", "claude", "gemini", "chatgpt"]).map((p, i, arr) => (
+              <span key={p} className="inline-flex items-center gap-1">
+                {LLM_CONFIG[p] && <img src={LLM_CONFIG[p].icon} alt={LLM_CONFIG[p].label} className="h-4 w-4 rounded-sm object-contain" />}
+                <span className="font-medium text-foreground/70">{LLM_CONFIG[p]?.label || p}</span>
+                {i < arr.length - 1 && <span className="text-muted-foreground/50">,</span>}
+              </span>
+            ))}
+          </span>
+        }
+        actions={
+          <Button size="sm" onClick={handleTrack} disabled={tracking}>
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${tracking ? "animate-spin" : ""}`} />
+            {tracking ? "Analyse en cours..." : "Rafraichir la visibilite"}
+          </Button>
+        }
+      />
 
       <SmartFilter
         page="geo-tracking"
@@ -188,27 +187,19 @@ export default function GeoTrackingPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <RefreshCw className="h-6 w-6 animate-spin text-teal-500" />
-          <span className="ml-3 text-muted-foreground">Chargement des donnees GEO...</span>
-        </div>
+        <LoadingState message="Chargement des donnees GEO..." />
       ) : !insights || insights.total_queries === 0 || (insights.share_of_voice?.length === 0 && insights.platform_comparison?.length === 0) ? (
-        <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
-          <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100">
-              <Sparkles className="h-6 w-6 text-teal-600" />
-            </div>
-          </div>
-          <h3 className="text-sm font-semibold">Aucune donnee GEO pour cette enseigne</h3>
-          <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Cliquez sur &laquo;&nbsp;Rafraichir la visibilite&nbsp;&raquo; pour lancer l&apos;analyse de visibilite IA sur Mistral, Claude, Gemini et ChatGPT.
-          </p>
-          <button onClick={handleTrack} disabled={tracking}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
-            {tracking ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {tracking ? "Analyse en cours..." : "Lancer l'analyse GEO"}
-          </button>
-        </div>
+        <EmptyState
+          icon={Sparkles}
+          title="Aucune donnee GEO pour cette enseigne"
+          description="Cliquez sur « Rafraichir la visibilite » pour lancer l'analyse de visibilite IA sur Mistral, Claude, Gemini et ChatGPT."
+          action={
+            <Button size="sm" onClick={handleTrack} disabled={tracking}>
+              {tracking ? <RefreshCw className="h-4 w-4 animate-spin mr-1.5" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
+              {tracking ? "Analyse en cours..." : "Lancer l'analyse GEO"}
+            </Button>
+          }
+        />
       ) : (
         <>
           {/* Hero Cards */}
@@ -249,8 +240,8 @@ export default function GeoTrackingPage() {
 
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard label="Requetes analysees" value={insights.total_queries.toString()} icon={Search} color="teal" />
-            <div className="rounded-2xl border border-border bg-card p-4">
+            <StatCard label="Requetes analysees" value={insights.total_queries} icon={Search} iconColor="bg-violet-100 text-violet-600" />
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 shadow-md shadow-cyan-200/50">
                   <Bot className="h-3.5 w-3.5 text-white" />
@@ -265,12 +256,12 @@ export default function GeoTrackingPage() {
                 ))}
               </div>
             </div>
-            <KpiCard label={`Visibilite ${brandName}`} value={brandSov ? `${brandSov.pct}%` : "0%"} icon={Eye} color="emerald" subtitle={brandSov ? `${brandSov.mentions} mentions` : undefined} />
-            <KpiCard label="Derniere analyse" value={formatDate(lastTracked)} icon={Sparkles} color="sky" />
+            <StatCard label={`Visibilite ${brandName}`} value={brandSov ? `${brandSov.pct}%` : "0%"} icon={Eye} iconColor="bg-emerald-100 text-emerald-600" sub={brandSov ? `${brandSov.mentions} mentions` : undefined} />
+            <StatCard label="Derniere analyse" value={formatDate(lastTracked)} icon={Sparkles} iconColor="bg-sky-100 text-sky-600" />
           </div>
 
           {/* Share of Voice IA */}
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-teal-500" />
               Part de voix IA
@@ -311,7 +302,7 @@ export default function GeoTrackingPage() {
           </div>
 
           {/* Platform Comparison */}
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
                 <Bot className="h-4 w-4 text-cyan-500" />
@@ -377,7 +368,7 @@ export default function GeoTrackingPage() {
           </div>
 
           {/* Recommendation Rate */}
-          <div className="rounded-2xl border border-border bg-card p-6">
+          <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Zap className="h-4 w-4 text-teal-500" />
               Taux de recommandation
@@ -409,7 +400,7 @@ export default function GeoTrackingPage() {
           </div>
 
           {/* Heatmap: keyword x competitor */}
-          <div className="rounded-2xl border border-border bg-card p-6 overflow-x-auto">
+          <div className="rounded-xl border border-border bg-card p-6 overflow-x-auto">
             <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Search className="h-4 w-4 text-teal-500" />
               Heatmap : mentions par mot-cle
@@ -508,7 +499,7 @@ export default function GeoTrackingPage() {
 
           {/* Key Criteria */}
           {insights.key_criteria.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
               <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-cyan-500" />
                 Criteres utilises par les IA
@@ -526,7 +517,7 @@ export default function GeoTrackingPage() {
 
           {/* SEO vs GEO */}
           {insights.seo_vs_geo.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
               <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-teal-500" />
                 SEO vs GEO
@@ -566,7 +557,7 @@ export default function GeoTrackingPage() {
 
           {/* Missing Keywords Alert */}
           {brandMissing && brandMissing.keywords.length > 0 && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
               <h2 className="text-base font-semibold text-amber-800 mb-3 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 Mots-cles ou {brandName} est absent des reponses IA
@@ -586,7 +577,7 @@ export default function GeoTrackingPage() {
 
           {/* AI Analysis */}
           {insights.ai_analysis ? (
-            <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-6 space-y-5">
+            <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-6 space-y-5">
               <h2 className="text-base font-semibold text-teal-800 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
                 Diagnostic IA — GEO
@@ -635,7 +626,7 @@ export default function GeoTrackingPage() {
               )}
             </div>
           ) : insights.recommendations.length > 0 ? (
-            <div className="rounded-2xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-6">
+            <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-6">
               <h2 className="text-base font-semibold text-teal-800 mb-4 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
                 Recommandations GEO
@@ -655,30 +646,3 @@ export default function GeoTrackingPage() {
   );
 }
 
-function KpiCard({ label, value, icon: Icon, color, subtitle }: {
-  label: string;
-  value: string;
-  icon: any;
-  color: string;
-  subtitle?: string;
-}) {
-  const colors: Record<string, string> = {
-    teal: "from-teal-500 to-teal-600 shadow-teal-200/50",
-    cyan: "from-cyan-500 to-cyan-600 shadow-cyan-200/50",
-    emerald: "from-emerald-500 to-emerald-600 shadow-emerald-200/50",
-    sky: "from-sky-500 to-sky-600 shadow-sky-200/50",
-  };
-
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${colors[color]} shadow-md`}>
-          <Icon className="h-3.5 w-3.5 text-white" />
-        </div>
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      </div>
-      <p className="text-lg font-bold text-foreground">{value}</p>
-      {subtitle && <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>}
-    </div>
-  );
-}

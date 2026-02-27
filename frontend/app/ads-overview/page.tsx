@@ -4,6 +4,10 @@ import { useState, useMemo } from "react";
 import { useAPI } from "@/lib/use-api";
 import { formatNumber } from "@/lib/utils";
 import { PeriodFilter, PeriodDays } from "@/components/period-filter";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { SectionCard } from "@/components/section-card";
+import { LoadingState } from "@/components/loading-state";
 import {
   Megaphone,
   Zap,
@@ -14,7 +18,6 @@ import {
   Layers,
   TrendingUp,
   PieChart as PieChartIcon,
-  Loader2,
 } from "lucide-react";
 import {
   PieChart,
@@ -47,7 +50,7 @@ const TYPE_LABELS: Record<string, string> = {
   branding: "Branding",
   performance: "Performance",
   dts: "Drive-to-Store",
-  unknown: "Non classifié",
+  unknown: "Non classifie",
 };
 
 function periodToDates(days: PeriodDays): { start: string; end: string } {
@@ -81,7 +84,6 @@ export default function AdsOverviewPage() {
   const timeline = data?.timeline || [];
   const totals = data?.totals || {};
 
-  // Donut data
   const donutData = useMemo(() => {
     return competitors.map((c: any, i: number) => ({
       name: c.name,
@@ -90,7 +92,6 @@ export default function AdsOverviewPage() {
     }));
   }, [competitors, sovMetric]);
 
-  // Platform stacked data
   const platformData = useMemo(() => {
     const allPlatforms = new Set<string>();
     competitors.forEach((c: any) => {
@@ -116,7 +117,6 @@ export default function AdsOverviewPage() {
 
   const compNames = useMemo(() => competitors.map((c: any) => c.name), [competitors]);
 
-  // Ad type data
   const typeData = useMemo(() => {
     const types = new Set<string>();
     competitors.forEach((c: any) => {
@@ -155,74 +155,38 @@ export default function AdsOverviewPage() {
   }
 
   return (
-    <PageGate page="ads_overview"><div className="min-h-screen bg-background">
-      {/* ── Hero ── */}
-      <div className="bg-gradient-to-r from-indigo-950 via-[#1e1b4b] to-violet-950 px-6 py-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              Part de Voix Publicitaire
-            </h1>
-            <p className="text-indigo-200/70 text-sm mt-1">
-              Qui communique le plus, sur quel r&eacute;seau, &agrave; quel moment
-            </p>
-          </div>
+    <PageGate page="ads_overview"><div className="space-y-6">
+      <PageHeader
+        icon={PieChartIcon}
+        title="Part de Voix Publicitaire"
+        subtitle="Qui communique le plus, sur quel reseau, a quel moment"
+        actions={
           <PeriodFilter
             selectedDays={periodDays}
             onDaysChange={setPeriodDays}
-            variant="dark"
           />
-        </div>
-      </div>
+        }
+      />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-32">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
-        </div>
+        <LoadingState message="Chargement des donnees publicitaires..." />
       ) : (
-        <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-          {/* ── KPI Cards ── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KPICard
-              icon={Megaphone}
-              iconBg="bg-violet-100 text-violet-600"
-              label="Total pubs"
-              value={formatNumber(totals.total_ads || 0)}
-              sub={`${totals.competitors_count || 0} concurrents`}
-            />
-            <KPICard
-              icon={Zap}
-              iconBg="bg-emerald-100 text-emerald-600"
-              label="Pubs actives"
-              value={formatNumber(totals.active_ads || 0)}
-              sub="en cours de diffusion"
-            />
-            <KPICard
-              icon={Euro}
-              iconBg="bg-amber-100 text-amber-600"
-              label="Budget estimé total"
-              value={formatBudget(totals.spend_min || 0, totals.spend_max || 0)}
-              sub="estimation CPM 3€"
-            />
-            <KPICard
-              icon={Users}
-              iconBg="bg-blue-100 text-blue-600"
-              label="Couverture EU"
-              value={formatNumber(totals.reach || 0)}
-              sub="personnes atteintes"
-            />
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Megaphone} iconColor="bg-violet-100 text-violet-600" label="Total pubs" value={formatNumber(totals.total_ads || 0)} sub={`${totals.competitors_count || 0} concurrents`} />
+            <StatCard icon={Zap} iconColor="bg-emerald-100 text-emerald-600" label="Pubs actives" value={formatNumber(totals.active_ads || 0)} sub="en cours de diffusion" />
+            <StatCard icon={Euro} iconColor="bg-amber-100 text-amber-600" label="Budget estime total" value={formatBudget(totals.spend_min || 0, totals.spend_max || 0)} sub="estimation CPM 3€" />
+            <StatCard icon={Users} iconColor="bg-blue-100 text-blue-600" label="Couverture EU" value={formatNumber(totals.reach || 0)} sub="personnes atteintes" />
           </div>
 
-          {/* ── Part de voix donut + classement ── */}
+          {/* Part de voix donut + classement */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Donut */}
-            <div className="rounded-2xl border bg-card p-6">
-              <div className="flex items-center justify-between mb-2">
-                <SectionHeader
-                  icon={PieChartIcon}
-                  color="bg-violet-100 text-violet-600"
-                  title="Part de voix"
-                />
+            <SectionCard
+              title="Part de voix"
+              icon={PieChartIcon}
+              iconColor="bg-violet-100 text-violet-600"
+              action={
                 <div className="flex items-center gap-1 p-0.5 rounded-full bg-muted border">
                   <button
                     onClick={() => setSovMetric("ads")}
@@ -241,11 +205,12 @@ export default function AdsOverviewPage() {
                     Budget
                   </button>
                 </div>
-              </div>
+              }
+            >
               <p className="text-xs text-muted-foreground mb-4">
                 {sovMetric === "ads"
                   ? "Proportion du nombre de pubs par concurrent"
-                  : "Proportion du budget estimé par concurrent"}
+                  : "Proportion du budget estime par concurrent"}
               </p>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -283,13 +248,11 @@ export default function AdsOverviewPage() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </SectionCard>
 
-            {/* Ranking */}
-            <div className="rounded-2xl border bg-card p-6">
-              <SectionHeader icon={Trophy} color="bg-amber-100 text-amber-600" title="Classement" />
-              <p className="text-xs text-muted-foreground mt-1 mb-4">
-                Les concurrents qui diffusent le plus de publicit&eacute;s sur la p&eacute;riode
+            <SectionCard title="Classement" icon={Trophy} iconColor="bg-amber-100 text-amber-600">
+              <p className="text-xs text-muted-foreground mb-4">
+                Les concurrents qui diffusent le plus de publicites sur la periode
               </p>
               <div className="space-y-3">
                 {competitors.map((c: any, i: number) => {
@@ -336,14 +299,13 @@ export default function AdsOverviewPage() {
                   );
                 })}
               </div>
-            </div>
+            </SectionCard>
           </div>
 
-          {/* ── R&eacute;partition par plateforme ── */}
-          <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-blue-100 text-blue-600" title="Mix plateforme par concurrent" />
-            <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Sur quels r&eacute;seaux chaque concurrent diffuse ses publicit&eacute;s (% du volume)
+          {/* Repartition par plateforme */}
+          <SectionCard title="Mix plateforme par concurrent" icon={BarChart3} iconColor="bg-blue-100 text-blue-600">
+            <p className="text-xs text-muted-foreground mb-4">
+              Sur quels reseaux chaque concurrent diffuse ses publicites (% du volume)
             </p>
             <div style={{ height: Math.max(250, competitors.length * 40 + 60) }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -365,13 +327,12 @@ export default function AdsOverviewPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* ── Timeline ── */}
-          <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={TrendingUp} color="bg-emerald-100 text-emerald-600" title="Pression publicitaire dans le temps" />
-            <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Nombre de nouvelles publicit&eacute;s lanc&eacute;es par semaine, par concurrent
+          {/* Timeline */}
+          <SectionCard title="Pression publicitaire dans le temps" icon={TrendingUp} iconColor="bg-emerald-100 text-emerald-600">
+            <p className="text-xs text-muted-foreground mb-4">
+              Nombre de nouvelles publicites lancees par semaine, par concurrent
             </p>
             <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -403,13 +364,12 @@ export default function AdsOverviewPage() {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* ── R&eacute;partition par type ── */}
-          <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={Layers} color="bg-pink-100 text-pink-600" title="Objectif publicitaire" />
-            <p className="text-xs text-muted-foreground mt-1 mb-4">
-              Branding (notori&eacute;t&eacute;), Performance (conversion) ou Drive-to-Store pour chaque concurrent
+          {/* Repartition par type */}
+          <SectionCard title="Objectif publicitaire" icon={Layers} iconColor="bg-pink-100 text-pink-600">
+            <p className="text-xs text-muted-foreground mb-4">
+              Branding (notoriete), Performance (conversion) ou Drive-to-Store pour chaque concurrent
             </p>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -431,12 +391,11 @@ export default function AdsOverviewPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* ── Tableau d&eacute;taill&eacute; ── */}
-          <div className="rounded-2xl border bg-card p-6">
-            <SectionHeader icon={BarChart3} color="bg-indigo-100 text-indigo-600" title="Classement d&eacute;taill&eacute;" />
-            <div className="overflow-x-auto mt-4">
+          {/* Tableau detaille */}
+          <SectionCard title="Classement detaille" icon={BarChart3} iconColor="bg-indigo-100 text-indigo-600">
+            <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
@@ -445,7 +404,7 @@ export default function AdsOverviewPage() {
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Pubs</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Actives</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Part de voix</th>
-                    <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Budget estim&eacute;</th>
+                    <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Budget estime</th>
                     <th className="pb-3 pr-4 font-medium text-muted-foreground text-right">Couverture</th>
                     <th className="pb-3 font-medium text-muted-foreground">Plateformes</th>
                   </tr>
@@ -513,59 +472,9 @@ export default function AdsOverviewPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        </div>
+          </SectionCard>
+        </>
       )}
     </div></PageGate>
-  );
-}
-
-/* ── Helper components ── */
-
-function KPICard({
-  icon: Icon,
-  iconBg,
-  label,
-  value,
-  sub,
-}: {
-  icon: any;
-  iconBg: string;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-card p-5">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${iconBg}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-        <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-      </div>
-      <p className="text-xl font-bold tracking-tight">{value}</p>
-      {sub && (
-        <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
-      )}
-    </div>
-  );
-}
-
-function SectionHeader({
-  icon: Icon,
-  color,
-  title,
-}: {
-  icon: any;
-  color: string;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${color}`}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <h2 className="text-[13px] font-semibold">{title}</h2>
-    </div>
   );
 }

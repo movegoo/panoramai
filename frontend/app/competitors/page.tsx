@@ -68,6 +68,9 @@ import {
   Filter,
 } from "lucide-react";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
 
 /* ─────────────── TikTok icon ─────────────── */
 function TikTokIcon({ className = "h-4 w-4" }: { className?: string }) {
@@ -287,14 +290,7 @@ export default function CompetitorsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          <span className="text-sm text-muted-foreground">Chargement des concurrents...</span>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Chargement des concurrents..." />;
   }
 
   async function handleEnrichAll() {
@@ -313,38 +309,34 @@ export default function CompetitorsPage() {
 
   return (
     <PageGate page="competitors"><div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
-            <Users className="h-5 w-5 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Concurrents</h1>
-            <p className="text-[13px] text-muted-foreground flex items-center gap-2">
-              {competitors.length} concurrent{competitors.length !== 1 ? "s" : ""} suivi{competitors.length !== 1 ? "s" : ""}
-              {freshness && <FreshnessBadge timestamp={freshness.instagram || freshness.tiktok || freshness.ads_snapchat || freshness.playstore} />}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2 shadow-sm" onClick={handleEnrichAll} disabled={enriching || competitors.length === 0}>
-            {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {enriching ? "Enrichissement..." : "Enrichir tout"}
-          </Button>
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) resetForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="gap-2 shadow-sm">
-                <UserPlus className="h-4 w-4" />
-                Ajouter
-              </Button>
-            </DialogTrigger>
+      <PageHeader
+        icon={Users}
+        title="Concurrents"
+        subtitle={
+          <span className="flex items-center gap-2">
+            {competitors.length} concurrent{competitors.length !== 1 ? "s" : ""} suivi{competitors.length !== 1 ? "s" : ""}
+            {freshness && <FreshnessBadge timestamp={freshness.instagram || freshness.tiktok || freshness.ads_snapchat || freshness.playstore} />}
+          </span>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2 shadow-sm" onClick={handleEnrichAll} disabled={enriching || competitors.length === 0}>
+              {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {enriching ? "Enrichissement..." : "Enrichir tout"}
+            </Button>
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(open) => {
+                setDialogOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="gap-2 shadow-sm">
+                  <UserPlus className="h-4 w-4" />
+                  Ajouter
+                </Button>
+              </DialogTrigger>
           <DialogContent className="sm:max-w-[560px]">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -560,8 +552,9 @@ export default function CompetitorsPage() {
             </form>
           </DialogContent>
           </Dialog>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* ── Enrichment result banner ── */}
       {enrichResult && (
@@ -615,9 +608,9 @@ export default function CompetitorsPage() {
 
       {/* ── Competitor cards ── */}
       {filteredCompetitors.length === 0 && competitors.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
               <UserPlus className="h-7 w-7 text-violet-400" />
             </div>
           </div>

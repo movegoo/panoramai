@@ -5,6 +5,10 @@ import { useAPI } from "@/lib/use-api";
 import { signalsAPI, SignalItem, SignalSummary } from "@/lib/api";
 import { formatNumber, getRelativeTime } from "@/lib/utils";
 import { SmartFilter } from "@/components/smart-filter";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
 import {
   Bell,
   BellOff,
@@ -18,17 +22,16 @@ import {
   TrendingDown,
   Eye,
   EyeOff,
-  Zap,
   Instagram,
   Youtube,
   Music,
   Smartphone,
   Megaphone,
   Globe,
-  ChevronDown,
   Shield,
 } from "lucide-react";
 import { PageGate } from "@/components/page-gate";
+import { Button } from "@/components/ui/button";
 
 /* ─────────── Helpers ─────────── */
 
@@ -64,7 +67,6 @@ const PLATFORM_CONFIG: Record<string, { label: string; icon: typeof Instagram }>
   appstore: { label: "App Store", icon: Smartphone },
   meta_ads: { label: "Meta Ads", icon: Megaphone },
   facebook: { label: "Facebook", icon: Globe },
-  // snapchat: { label: "Snapchat", icon: Megaphone }, // Snapchat masqué
 };
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -187,37 +189,25 @@ export default function SignalsPage() {
 
   return (
     <PageGate page="signals"><div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Bell className="h-6 w-6 text-violet-600" />
-            Signaux & Alertes
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Anomalies, tendances et mouvements concurrentiels detectes automatiquement
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {unread > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Tout marquer lu
-            </button>
-          )}
-          <button
-            onClick={handleDetect}
-            disabled={detecting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${detecting ? "animate-spin" : ""}`} />
-            {detecting ? "Detection..." : "Lancer la detection"}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Bell}
+        title="Signaux & Alertes"
+        subtitle="Anomalies, tendances et mouvements concurrentiels detectes automatiquement"
+        actions={
+          <>
+            {unread > 0 && (
+              <Button variant="outline" size="sm" onClick={handleMarkAllRead}>
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                Tout marquer lu
+              </Button>
+            )}
+            <Button size="sm" onClick={handleDetect} disabled={detecting}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${detecting ? "animate-spin" : ""}`} />
+              {detecting ? "Detection..." : "Lancer la detection"}
+            </Button>
+          </>
+        }
+      />
 
       <SmartFilter
         page="signals"
@@ -228,34 +218,10 @@ export default function SignalsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Total signaux</span>
-            <Bell className="h-4 w-4 text-gray-400" />
-          </div>
-          <p className="text-2xl font-bold mt-1">{total}</p>
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Non lus</span>
-            <BellOff className="h-4 w-4 text-violet-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-violet-600">{unread}</p>
-        </div>
-        <div className="rounded-xl border border-red-100 bg-red-50/50 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-red-600">Critiques</span>
-            <AlertCircle className="h-4 w-4 text-red-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-red-700">{bySeverity.critical || 0}</p>
-        </div>
-        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-amber-600">Attention</span>
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-bold mt-1 text-amber-700">{bySeverity.warning || 0}</p>
-        </div>
+        <StatCard label="Total signaux" value={total} icon={Bell} iconColor="bg-gray-100 text-gray-500" />
+        <StatCard label="Non lus" value={unread} icon={BellOff} iconColor="bg-violet-100 text-violet-600" />
+        <StatCard label="Critiques" value={bySeverity.critical || 0} icon={AlertCircle} iconColor="bg-red-50 text-red-500" />
+        <StatCard label="Attention" value={bySeverity.warning || 0} icon={AlertTriangle} iconColor="bg-amber-50 text-amber-500" />
       </div>
 
       {/* Filters */}
@@ -326,34 +292,27 @@ export default function SignalsPage() {
       {/* Signals list */}
       <div className="space-y-2">
         {loadingSignals && filteredSignals.length === 0 && (
-          <div className="flex items-center justify-center py-16">
-            <div className="h-6 w-6 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          </div>
+          <LoadingState message="Chargement des signaux..." />
         )}
 
         {!loadingSignals && filteredSignals.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 mb-4">
-              <Bell className="h-7 w-7 text-gray-400" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">Aucun signal detecte</h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-              Lancez la detection pour analyser les dernieres variations de vos concurrents
-            </p>
-          </div>
+          <EmptyState
+            icon={Bell}
+            title="Aucun signal detecte"
+            description="Lancez la detection pour analyser les dernieres variations de vos concurrents"
+          />
         )}
 
         {filteredSignals.map((signal) => {
-          const sevCfg = SEVERITY_CONFIG[signal.severity] || SEVERITY_CONFIG.info;
           return (
             <div
               key={signal.id}
-              className={`rounded-xl border p-4 transition-all ${
+              className={`rounded-xl border p-5 transition-all ${
                 signal.is_brand
                   ? "border-violet-200 bg-violet-50/30 ring-1 ring-violet-100"
                   : signal.is_read
-                    ? "border-gray-100 bg-white/50 opacity-70"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "border-gray-100 bg-card/50 opacity-70"
+                    : "border-border bg-card hover:border-gray-300"
               }`}
             >
               <div className="flex items-start gap-3">

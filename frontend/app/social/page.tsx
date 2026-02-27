@@ -48,6 +48,8 @@ import {
 import { PeriodFilter, PeriodDays, periodLabel } from "@/components/period-filter";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState } from "@/components/loading-state";
 
 type Platform = "instagram" | "tiktok" | "youtube" | "snapchat";
 
@@ -535,37 +537,25 @@ export default function SocialPage() {
   }, [sorted, aiFilters]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
-          <span className="text-sm text-muted-foreground">Chargement des r&eacute;seaux sociaux...</span>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Chargement des réseaux sociaux..." />;
   }
 
   return (
     <PageGate page="social"><div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
-            <Activity className="h-5 w-5 text-violet-600" />
+      <PageHeader
+        icon={Activity}
+        title="Réseaux sociaux"
+        subtitle="Comparaison multi-plateformes"
+        actions={
+          <div className="flex items-center gap-3">
+            <PeriodFilter selectedDays={periodDays} onDaysChange={setPeriodDays} />
+            <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
+              <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+              Rafraîchir
+            </Button>
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">R&eacute;seaux sociaux</h1>
-            <p className="text-[13px] text-muted-foreground">Comparaison multi-plateformes</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <PeriodFilter selectedDays={periodDays} onDaysChange={setPeriodDays} />
-          <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={fetching} className="gap-2">
-            <RefreshCw className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
-            Rafra&icirc;chir
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       <SmartFilter
         page="social"
@@ -576,7 +566,7 @@ export default function SocialPage() {
 
       {/* ── Cross-Platform Overview ── */}
       {crossPlatformData.length > 0 && (
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
+        <div className="rounded-xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 text-white p-5 sm:p-6 space-y-4 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <Crown className="h-4.5 w-4.5 text-amber-400" />
@@ -691,9 +681,9 @@ export default function SocialPage() {
 
       {/* Content */}
       {currentData.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
           <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-50">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
               <Activity className="h-7 w-7 text-violet-400" />
             </div>
           </div>
@@ -849,7 +839,7 @@ export default function SocialPage() {
           </div>
 
           {/* ── Detailed Table ── */}
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
@@ -1097,7 +1087,7 @@ export default function SocialPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Best time slot */}
                 {bestSlot && (
-                  <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-5 shadow-lg shadow-emerald-200/40">
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white p-5 shadow-lg shadow-emerald-200/40">
                     <div className="flex items-center gap-2 mb-2">
                       <Clock className="h-5 w-5 text-emerald-100" />
                       <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-100">Meilleur creneau</span>
@@ -1111,7 +1101,7 @@ export default function SocialPage() {
 
                 {/* Best day */}
                 {bestDay && (
-                  <div className="rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 shadow-lg shadow-blue-200/40">
+                  <div className="rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white p-5 shadow-lg shadow-blue-200/40">
                     <div className="flex items-center gap-2 mb-2">
                       <Calendar className="h-5 w-5 text-blue-100" />
                       <span className="text-[10px] uppercase tracking-widest font-bold text-blue-100">Jour le plus actif</span>
@@ -1125,7 +1115,7 @@ export default function SocialPage() {
 
                 {/* Best tone by engagement */}
                 {bestTone && (
-                  <div className="rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 shadow-lg shadow-violet-200/40">
+                  <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 text-white p-5 shadow-lg shadow-violet-200/40">
                     <div className="flex items-center gap-2 mb-2">
                       <Zap className="h-5 w-5 text-violet-100" />
                       <span className="text-[10px] uppercase tracking-widest font-bold text-violet-100">Ton le + engageant</span>
@@ -1439,7 +1429,7 @@ export default function SocialPage() {
 
         {/* Empty state — only if not loading and no data */}
         {(!contentInsights || contentInsights.total_analyzed === 0) && !contentLoading && (
-          <div className="rounded-2xl border bg-card p-8 text-center space-y-3">
+          <div className="rounded-xl border bg-card p-8 text-center space-y-3">
             <div className="flex justify-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100">
                 <Brain className="h-6 w-6 text-emerald-600" />

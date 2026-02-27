@@ -15,17 +15,28 @@ import {
   ChevronDown,
   Plus,
   Check,
+  Globe,
+  Sparkles,
+  Eye,
+  TrendingUp,
+  Bell,
+  PieChart,
 } from "lucide-react";
 import Link from "next/link";
 
 const PAGE_META: Record<string, { label: string; icon: React.ElementType; parent?: string }> = {
   "/": { label: "Vue d\u2019ensemble", icon: LayoutDashboard, parent: "Dashboard" },
-  "/geo": { label: "Carte & Zones", icon: Map, parent: "Dashboard" },
+  "/tendances": { label: "Tendances", icon: TrendingUp, parent: "Dashboard" },
+  "/signals": { label: "Signaux", icon: Bell, parent: "Dashboard" },
   "/competitors": { label: "Concurrents", icon: Users, parent: "Veille" },
   "/ads": { label: "Publicités", icon: Megaphone, parent: "Veille" },
+  "/ads-overview": { label: "Part de Voix", icon: PieChart, parent: "Veille" },
   "/social": { label: "Réseaux sociaux", icon: Activity, parent: "Veille" },
   "/apps": { label: "Applications", icon: Smartphone, parent: "Veille" },
-  "/vgeo": { label: "Video GEO", icon: Activity, parent: "Veille" },
+  "/seo": { label: "SEO", icon: Globe, parent: "Visibilité" },
+  "/geo-tracking": { label: "GEO (IA)", icon: Sparkles, parent: "Visibilité" },
+  "/vgeo": { label: "VGEO (Vidéo)", icon: Eye, parent: "Visibilité" },
+  "/geo": { label: "Carte & Zones", icon: Map, parent: "Visibilité" },
   "/account": { label: "Mon enseigne", icon: Settings, parent: "Paramètres" },
 };
 

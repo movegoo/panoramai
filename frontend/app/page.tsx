@@ -63,6 +63,9 @@ import { PeriodFilter, PeriodDays } from "@/components/period-filter";
 import { FreshnessBadge } from "@/components/freshness-badge";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { SectionCard } from "@/components/section-card";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
@@ -439,7 +442,7 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
           {/* Hero */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-200/50">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-200/50">
                 <Sparkles className="h-6 w-6 text-white" />
               </div>
             </div>
@@ -455,7 +458,7 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
           </div>
 
           {/* Form */}
-          <div className="rounded-2xl border bg-card p-6 space-y-5">
+          <div className="rounded-xl border bg-card p-6 space-y-5">
             <div className="space-y-2">
               <label className="text-[13px] font-semibold text-foreground flex items-center gap-2">
                 <Building2 className="h-4 w-4 text-violet-600" />
@@ -622,7 +625,7 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
           <StepIndicator />
 
           <div className="flex items-center justify-center mb-6">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200/50">
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-200/50">
               <Check className="h-8 w-8 text-white" />
             </div>
           </div>
@@ -769,7 +772,7 @@ export default function DashboardPage() {
   return (
     <PageGate page="overview"><div className="space-y-8">
       {/* ── Hero header ────────────────────────────────── */}
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 p-5 sm:p-8 text-white relative overflow-hidden">
+      <div className="rounded-xl bg-gradient-to-br from-indigo-950 via-[#1e1b4b] to-violet-950 p-5 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-violet-400/[0.05]" />
         <div className="absolute -bottom-10 -left-10 h-40 w-40 rounded-full bg-indigo-400/[0.04]" />
 
@@ -993,7 +996,7 @@ export default function DashboardPage() {
 
           {/* Active ranking leaderboard */}
           {rankings[activeRanking] && (
-            <div className="rounded-2xl border bg-card overflow-hidden">
+            <div className="rounded-xl border bg-card overflow-hidden">
               <div className="divide-y">
                 {rankings[activeRanking].entries.map((entry) => {
                   const isBrand = entry.is_brand;
@@ -1079,7 +1082,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Ad volume comparison */}
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-4 py-3 border-b bg-muted/20">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Volume par annonceur / payeur
@@ -1136,7 +1139,7 @@ export default function DashboardPage() {
           <div className="space-y-4">
 
           {/* Format breakdown */}
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-4 py-3 border-b bg-muted/20">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Formats publicitaires du marche
@@ -1155,7 +1158,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Platform diffusion breakdown */}
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="px-4 py-3 border-b bg-muted/20">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 Plateformes de diffusion
@@ -1206,7 +1209,7 @@ export default function DashboardPage() {
 
       {/* ── GMB / Google My Business ─────────────────── */}
       {gmbData && gmbData.competitors.length > 0 && (
-        <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-hidden">
           <div className="px-4 py-2.5 border-b bg-muted/20 flex items-center gap-2">
             <MapPin className="h-3.5 w-3.5 text-emerald-500" />
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -1268,7 +1271,7 @@ export default function DashboardPage() {
 
       {/* ── Insights strip ─────────────────────────────── */}
       {insights.length > 0 && (
-        <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-hidden">
           <div className="px-4 py-2.5 border-b bg-muted/20 flex items-center gap-2">
             <Activity className="h-3.5 w-3.5 text-indigo-500" />
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -1325,7 +1328,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={comp.id}
-                className="rounded-2xl border bg-card overflow-hidden transition-shadow hover:shadow-lg"
+                className="rounded-xl border bg-card overflow-hidden transition-shadow hover:shadow-lg"
               >
                 <div className="flex items-center gap-4 px-5 py-4">
                   <div className={`flex items-center justify-center h-9 w-9 rounded-xl text-sm font-bold ${
@@ -1461,7 +1464,7 @@ export default function DashboardPage() {
             Vue comparative
           </h2>
         </div>
-        <div className="rounded-2xl border bg-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -1571,7 +1574,7 @@ export default function DashboardPage() {
               </h2>
               <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.payers.length} entités</span>
             </div>
-            <div className="rounded-2xl border bg-card overflow-hidden">
+            <div className="rounded-xl border bg-card overflow-hidden">
               <div className="divide-y">
                 {adI.payers.map((payer) => {
                   const maxTotal = Math.max(...adI.payers.map(p => p.total), 1);
@@ -1620,7 +1623,7 @@ export default function DashboardPage() {
             </h2>
             <span className="ml-auto text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{adI.advertisers.length} pages</span>
           </div>
-          <div className="rounded-2xl border bg-card overflow-hidden">
+          <div className="rounded-xl border bg-card overflow-hidden">
             <div className="divide-y">
               {(() => {
                 const ADV_LIMIT = 6;

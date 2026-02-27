@@ -3,18 +3,20 @@
 import React, { useState, useMemo } from "react";
 import {
   Eye, RefreshCw, BarChart3, TrendingUp, Youtube, Video,
-  Sparkles, Zap, Bot, Star, Search, ArrowRight, Target,
-  Clock, Trophy, AlertTriangle, CheckCircle2, XCircle,
+  Sparkles, Zap, Bot, Star, Search, Target,
+  Clock, Trophy, CheckCircle2, XCircle,
   Minus, Play, ThumbsUp,
 } from "lucide-react";
 import { vgeoAPI } from "@/lib/api";
 import { useAPI } from "@/lib/use-api";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
+import { LoadingState } from "@/components/loading-state";
+import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 
-// ---------------------------------------------------------------------------
-// Platform config
-// ---------------------------------------------------------------------------
 const LLM_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   mistral: { label: "Mistral", color: "text-orange-600", bg: "bg-orange-100", icon: "https://mistral.ai/favicon.ico" },
   claude: { label: "Claude", color: "text-amber-700", bg: "bg-amber-100", icon: "https://claude.ai/favicon.ico" },
@@ -29,9 +31,6 @@ const CLASSIFICATION_COLORS: Record<string, { bg: string; text: string; border: 
   UNKNOWN: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200", label: "?" },
 };
 
-// ---------------------------------------------------------------------------
-// Score gauge component
-// ---------------------------------------------------------------------------
 function ScoreGauge({ score, size = 120 }: { score: number; size?: number }) {
   const radius = (size - 16) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -54,9 +53,6 @@ function ScoreGauge({ score, size = 120 }: { score: number; size?: number }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sub-score bar
-// ---------------------------------------------------------------------------
 function SubScoreBar({ label, score, weight, icon: Icon }: { label: string; score: number; weight: string; icon: any }) {
   const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
   return (
@@ -76,16 +72,12 @@ function SubScoreBar({ label, score, weight, icon: Icon }: { label: string; scor
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
 export default function VGeoPage() {
   const [aiFilters, setAiFilters] = useState<Record<string, any> | null>(null);
   const [aiInterpretation, setAiInterpretation] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
 
-  // Fetch latest report
   const { data: report, isLoading, mutate: refreshReport } = useAPI<any>("/vgeo/report");
 
   const hasReport = report?.has_report;
@@ -104,7 +96,6 @@ export default function VGeoPage() {
     }
   }
 
-  // Extract data from report
   const score = report?.score;
   const brandChannel = report?.brand_channel;
   const competitors = report?.competitors || [];
@@ -116,14 +107,12 @@ export default function VGeoPage() {
   const strategy = report?.strategy || [];
   const actions = report?.actions || [];
 
-  // Classification counts for brand
   const brandVideos = useMemo(() => videos.filter((v: any) => v.is_brand), [videos]);
   const helpCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HELP").length, [brandVideos]);
   const hubCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HUB").length, [brandVideos]);
   const heroCount = useMemo(() => brandVideos.filter((v: any) => v.classification === "HERO").length, [brandVideos]);
   const totalBrandVideos = brandVideos.length || 1;
 
-  // Filter videos based on AI filters
   const filteredVideos = useMemo(() => {
     if (!videos.length) return videos;
     if (!aiFilters) return videos;
@@ -142,7 +131,6 @@ export default function VGeoPage() {
     return filtered;
   }, [videos, aiFilters]);
 
-  // Build citation matrix: query -> platform -> brands mentioned
   const citationMatrix = useMemo(() => {
     const matrix: Record<string, Record<string, string[]>> = {};
     for (const [platform, mentions] of Object.entries(citations)) {
@@ -159,40 +147,40 @@ export default function VGeoPage() {
     return matrix;
   }, [citations]);
 
-  // Empty state
+  const headerActions = (
+    <Button size="sm" onClick={handleAnalyze} disabled={analyzing}>
+      <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${analyzing ? "animate-spin" : ""}`} />
+      {analyzing ? "Analyse en cours..." : "Nouvelle analyse"}
+    </Button>
+  );
+
   if (!isLoading && !hasReport) {
     return (
       <div className="space-y-6">
-        <VGeoHeader handleAnalyze={handleAnalyze} analyzing={analyzing} />
+        <PageHeader icon={Youtube} title="VGEO — Video GEO" subtitle="Optimisez votre YouTube pour les moteurs IA" actions={headerActions} />
         {analyzeResult && (
           <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-700">
             {analyzeResult}
           </div>
         )}
-        <div className="rounded-2xl border bg-card p-8 text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200/50">
-              <Youtube className="h-7 w-7 text-white" />
-            </div>
-          </div>
-          <h3 className="text-base font-semibold">VGEO — Video Generative Engine Optimization</h3>
-          <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-            Analysez votre strategie YouTube pour maximiser votre visibilite dans les moteurs IA (ChatGPT, Claude, Gemini, Mistral).
-            Le framework HELP/HUB/HERO identifie les contenus que les LLM citent le plus.
-          </p>
-          <button onClick={handleAnalyze} disabled={analyzing}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-violet-200/50 disabled:opacity-50 transition-all">
-            {analyzing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-            {analyzing ? "Analyse en cours..." : "Lancer l'analyse VGEO"}
-          </button>
-        </div>
+        <EmptyState
+          icon={Youtube}
+          title="VGEO — Video Generative Engine Optimization"
+          description="Analysez votre strategie YouTube pour maximiser votre visibilite dans les moteurs IA (ChatGPT, Claude, Gemini, Mistral). Le framework HELP/HUB/HERO identifie les contenus que les LLM citent le plus."
+          action={
+            <Button size="sm" onClick={handleAnalyze} disabled={analyzing}>
+              {analyzing ? <RefreshCw className="h-4 w-4 animate-spin mr-1.5" /> : <Zap className="h-4 w-4 mr-1.5" />}
+              {analyzing ? "Analyse en cours..." : "Lancer l'analyse VGEO"}
+            </Button>
+          }
+        />
       </div>
     );
   }
 
   return (
     <PageGate page="vgeo"><div className="space-y-6">
-      <VGeoHeader handleAnalyze={handleAnalyze} analyzing={analyzing} />
+      <PageHeader icon={Youtube} title="VGEO — Video GEO" subtitle="Optimisez votre YouTube pour les moteurs IA" actions={headerActions} />
 
       {analyzeResult && (
         <div className="rounded-xl bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-700">
@@ -200,7 +188,6 @@ export default function VGeoPage() {
         </div>
       )}
 
-      {/* Smart Filter */}
       <SmartFilter
         page="vgeo"
         placeholder="Filtrer... (ex: videos HELP, concurrent Leclerc, mot-cle tutoriel)"
@@ -209,16 +196,12 @@ export default function VGeoPage() {
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <RefreshCw className="h-6 w-6 animate-spin text-violet-500" />
-          <span className="ml-3 text-muted-foreground">Chargement du rapport VGEO...</span>
-        </div>
+        <LoadingState message="Chargement du rapport VGEO..." />
       ) : score ? (
         <>
-          {/* ── Section 1: Score VGEO global ── */}
-          <div className="rounded-2xl border border-border bg-card p-6">
+          {/* Score VGEO global */}
+          <SectionCard>
             <div className="flex flex-col lg:flex-row items-center gap-8">
-              {/* Gauge */}
               <div className="flex flex-col items-center gap-2">
                 <ScoreGauge score={score.total} size={140} />
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score VGEO</span>
@@ -229,8 +212,6 @@ export default function VGeoPage() {
                   </div>
                 )}
               </div>
-
-              {/* Sub-scores */}
               <div className="flex-1 w-full space-y-4">
                 <SubScoreBar label="Alignement" score={score.alignment} weight="35%" icon={Target} />
                 <SubScoreBar label="Fraicheur" score={score.freshness} weight="30%" icon={Clock} />
@@ -238,8 +219,6 @@ export default function VGeoPage() {
                 <SubScoreBar label="Competitivite" score={score.competitivity} weight="15%" icon={Trophy} />
               </div>
             </div>
-
-            {/* Explanation */}
             <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 text-center">
                 <p className="text-xs text-muted-foreground">Alignement</p>
@@ -258,17 +237,11 @@ export default function VGeoPage() {
                 <p className="text-[10px] text-violet-600 mt-0.5">Position vs concurrents</p>
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          {/* ── Section 2: Classification HELP/HUB/HERO ── */}
+          {/* Classification HELP/HUB/HERO */}
           {brandVideos.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Video className="h-4 w-4 text-violet-500" />
-                Classification HELP / HUB / HERO
-              </h2>
-
-              {/* Distribution bars */}
+            <SectionCard title="Classification HELP / HUB / HERO" icon={Video} iconColor="bg-violet-100 text-violet-600">
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
                   { key: "HELP", count: helpCount, desc: "Tutoriels, FAQ, guides", icon: Search },
@@ -289,15 +262,11 @@ export default function VGeoPage() {
                   );
                 })}
               </div>
-
-              {/* Stacked bar */}
               <div className="h-4 rounded-full overflow-hidden flex mb-4">
                 {helpCount > 0 && <div className="bg-emerald-500 transition-all" style={{ width: `${(helpCount / totalBrandVideos) * 100}%` }} />}
                 {hubCount > 0 && <div className="bg-blue-500 transition-all" style={{ width: `${(hubCount / totalBrandVideos) * 100}%` }} />}
                 {heroCount > 0 && <div className="bg-amber-500 transition-all" style={{ width: `${(heroCount / totalBrandVideos) * 100}%` }} />}
               </div>
-
-              {/* Video list */}
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {filteredVideos.slice(0, 30).map((v: any, i: number) => {
                   const cfg = CLASSIFICATION_COLORS[v.classification] || CLASSIFICATION_COLORS.UNKNOWN;
@@ -331,16 +300,12 @@ export default function VGeoPage() {
                   );
                 })}
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          {/* ── Section 3: Citations LLM ── */}
+          {/* Citations LLM */}
           {Object.keys(citationMatrix).length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Bot className="h-4 w-4 text-indigo-500" />
-                Citations dans les moteurs IA
-              </h2>
+            <SectionCard title="Citations dans les moteurs IA" icon={Bot} iconColor="bg-indigo-100 text-indigo-600">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -381,18 +346,13 @@ export default function VGeoPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           )}
 
-          {/* ── Section 4: Comparaison concurrents ── */}
+          {/* Comparaison concurrents */}
           {competitors.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-violet-500" />
-                Comparaison concurrents
-              </h2>
+            <SectionCard title="Comparaison concurrents" icon={BarChart3} iconColor="bg-violet-100 text-violet-600">
               <div className="space-y-3">
-                {/* Brand first */}
                 {score && (
                   <div className="flex items-center gap-3">
                     <span className="w-32 text-sm font-bold text-violet-700 truncate flex items-center gap-1">
@@ -424,7 +384,6 @@ export default function VGeoPage() {
                   })}
               </div>
 
-              {/* Detail by axis */}
               {competitors.length > 0 && (
                 <div className="mt-6 overflow-x-auto">
                   <table className="w-full text-sm">
@@ -471,19 +430,17 @@ export default function VGeoPage() {
                   </table>
                 </div>
               )}
-            </div>
+            </SectionCard>
           )}
 
-          {/* ── Section 5: Diagnostic IA ── */}
+          {/* Diagnostic IA */}
           {diagnostic && (
-            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6 space-y-5">
-              <h2 className="text-base font-semibold text-violet-800 flex items-center gap-2">
+            <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-5 space-y-5">
+              <h2 className="text-[14px] font-semibold text-violet-800 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
                 Diagnostic IA — Strategie VGEO
               </h2>
               <p className="text-sm text-violet-900 leading-relaxed">{diagnostic}</p>
-
-              {/* Forces & Faiblesses */}
               {(forces.length > 0 || faiblesses.length > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {forces.length > 0 && (
@@ -516,8 +473,6 @@ export default function VGeoPage() {
                   )}
                 </div>
               )}
-
-              {/* Strategy priorities */}
               {strategy.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold text-violet-700 uppercase tracking-wider mb-3">Priorites strategiques</h3>
@@ -542,13 +497,9 @@ export default function VGeoPage() {
             </div>
           )}
 
-          {/* ── Section 6: Actions recommandees ── */}
+          {/* Actions recommandees */}
           {actions.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-500" />
-                Actions recommandees
-              </h2>
+            <SectionCard title="Actions recommandees" icon={Zap} iconColor="bg-amber-100 text-amber-600">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {actions.map((a: any, i: number) => {
                   const priorityConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
@@ -575,39 +526,10 @@ export default function VGeoPage() {
                   );
                 })}
               </div>
-            </div>
+            </SectionCard>
           )}
         </>
       ) : null}
     </div></PageGate>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Header
-// ---------------------------------------------------------------------------
-function VGeoHeader({ handleAnalyze, analyzing }: { handleAnalyze: () => void; analyzing: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-200/50">
-          <Youtube className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">VGEO — Video GEO</h1>
-          <p className="text-sm text-muted-foreground">
-            Optimisez votre YouTube pour les moteurs IA
-          </p>
-        </div>
-      </div>
-      <button
-        onClick={handleAnalyze}
-        disabled={analyzing}
-        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-200/50 hover:shadow-xl hover:shadow-violet-300/50 transition-all disabled:opacity-50"
-      >
-        <RefreshCw className={`h-4 w-4 ${analyzing ? "animate-spin" : ""}`} />
-        {analyzing ? "Analyse en cours..." : "Nouvelle analyse"}
-      </button>
-    </div>
   );
 }

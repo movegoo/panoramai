@@ -7,6 +7,8 @@ import { Map, Store, BarChart3, Sparkles, RefreshCw, TrendingUp, AlertTriangle, 
 import { API_BASE, brandAPI, geoAPI, GmbScoringData, GmbScoringCompetitor } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
 
 interface StoreGroup {
   competitor_id: number;
@@ -184,17 +186,11 @@ export default function GeoPage() {
 
   return (
     <PageGate page="geo"><div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-indigo-100 border border-violet-200/50">
-          <Map className="h-5 w-5 text-violet-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Carte & Zones</h1>
-          <p className="text-[13px] text-muted-foreground">
-            Analysez les zones de chalandise avec donn&eacute;es INSEE et loyers
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Map}
+        title="Carte & Zones"
+        subtitle="Analysez les zones de chalandise avec donnees INSEE et loyers"
+      />
 
       <SmartFilter
         page="geo"
@@ -215,7 +211,7 @@ export default function GeoPage() {
           {/* Store KPIs */}
           {!loading && filteredStoreGroups.length > 0 && (
             <>
-              <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Store className="h-4 w-4 text-violet-500" />
                   <span className="text-sm font-semibold text-foreground">Points de vente</span>
@@ -241,7 +237,7 @@ export default function GeoPage() {
               </div>
 
               {/* Compact store distribution */}
-              <div className="rounded-2xl border border-border bg-card p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
                 <h3 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
                   <BarChart3 className="h-3.5 w-3.5 text-violet-500" />
                   Repartition
@@ -280,7 +276,7 @@ export default function GeoPage() {
 
           {/* GMB summary */}
           {!gmbLoading && gmbScoring && filteredGmbCompetitors.length > 0 && (
-            <div className="rounded-2xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Star className="h-4 w-4 text-amber-500" />
                 <span className="text-sm font-semibold text-foreground">Google My Business</span>
@@ -320,7 +316,7 @@ export default function GeoPage() {
           </h2>
 
           {/* Competitor Ranking Table */}
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-5 py-3 border-b border-border bg-gray-50/50">
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-amber-500" />
@@ -412,7 +408,7 @@ export default function GeoPage() {
           {filteredGmbCompetitors.some(c => c.top_stores.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Top 5 */}
-              <div className="rounded-2xl border border-emerald-200 bg-card p-5">
+              <div className="rounded-xl border border-emerald-200 bg-card p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <Trophy className="h-4 w-4 text-emerald-500" />
                   Top magasins
@@ -456,7 +452,7 @@ export default function GeoPage() {
               </div>
 
               {/* Flop 5 */}
-              <div className="rounded-2xl border border-red-200 bg-card p-5">
+              <div className="rounded-xl border border-red-200 bg-card p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <ThumbsDown className="h-4 w-4 text-red-500" />
                   Magasins a ameliorer
@@ -508,7 +504,7 @@ export default function GeoPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Full Store Distribution */}
-            <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="rounded-xl border border-border bg-card p-5">
               <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                 <Store className="h-4 w-4 text-violet-500" />
                 Repartition des points de vente
@@ -558,7 +554,7 @@ export default function GeoPage() {
 
             {/* Population Coverage */}
             {catchmentData && catchmentData.competitors?.length > 0 && (
-              <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="rounded-xl border border-border bg-card p-5">
                 <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <Target className="h-4 w-4 text-purple-500" />
                   Couverture population
@@ -630,7 +626,7 @@ export default function GeoPage() {
 
           {/* Recommendations */}
           {recommendations.length > 0 && (
-            <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
+            <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-6">
               <h2 className="text-base font-semibold text-violet-800 mb-4 flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
                 Insights geographiques

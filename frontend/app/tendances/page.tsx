@@ -19,6 +19,7 @@ import {
 import { API_BASE, getCurrentAdvertiserId } from "@/lib/api";
 import { SmartFilter } from "@/components/smart-filter";
 import { PageGate } from "@/components/page-gate";
+import { PageHeader } from "@/components/page-header";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -443,38 +444,31 @@ export default function TendancesPage() {
 
   return (
     <PageGate page="tendances"><div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-indigo-500" />
-            Tendances
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Evolution de tous les indicateurs dans le temps
-          </p>
-        </div>
-
-        {/* Date range selector */}
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <div className="flex bg-muted rounded-lg p-0.5">
-            {DATE_PRESETS.map((p) => (
-              <button
-                key={p.days}
-                onClick={() => setDays(p.days)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                  days === p.days
-                    ? "bg-white shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+      <PageHeader
+        icon={TrendingUp}
+        title="Tendances"
+        subtitle="Evolution de tous les indicateurs dans le temps"
+        actions={
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="flex bg-muted rounded-lg p-0.5">
+              {DATE_PRESETS.map((p) => (
+                <button
+                  key={p.days}
+                  onClick={() => setDays(p.days)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                    days === p.days
+                      ? "bg-white shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <SmartFilter
         page="tendances"
@@ -485,7 +479,7 @@ export default function TendancesPage() {
 
       {/* Smart Insights */}
       {insights.length > 0 && (
-        <div className="rounded-2xl border bg-gradient-to-br from-indigo-50/50 to-violet-50/50 p-4">
+        <div className="rounded-xl border bg-gradient-to-br from-indigo-50/50 to-violet-50/50 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="h-4 w-4 text-indigo-500" />
             <span className="text-sm font-semibold">Mouvements notables</span>
@@ -592,14 +586,14 @@ export default function TendancesPage() {
           {newsLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-2xl border bg-card p-4 animate-pulse">
+                <div key={i} className="rounded-xl border bg-card p-4 animate-pulse">
                   <div className="h-4 bg-muted rounded w-3/4 mb-2" />
                   <div className="h-3 bg-muted rounded w-1/2" />
                 </div>
               ))}
             </div>
           ) : filteredNews.length === 0 ? (
-            <div className="rounded-2xl border bg-card p-8 text-center">
+            <div className="rounded-xl border bg-card p-8 text-center">
               <Newspaper className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground mb-2">Aucun article collecte</p>
               <p className="text-xs text-muted-foreground/70 mb-4">
@@ -622,7 +616,7 @@ export default function TendancesPage() {
                   href={article.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block rounded-2xl border bg-card p-4 hover:bg-muted/30 transition-colors group"
+                  className="block rounded-xl border bg-card p-4 hover:bg-muted/30 transition-colors group"
                 >
                   <div className="flex gap-4">
                     {article.thumbnail && (
@@ -664,7 +658,7 @@ export default function TendancesPage() {
       ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border bg-card p-4 animate-pulse">
+            <div key={i} className="rounded-xl border bg-card p-4 animate-pulse">
               <div className="h-4 bg-muted rounded w-1/2 mb-4" />
               <div className="h-32 bg-muted rounded" />
             </div>
@@ -679,7 +673,7 @@ export default function TendancesPage() {
               const isExpanded = expandedChart === metric.key;
 
               return (
-                <div key={metric.key} className="rounded-2xl border bg-card overflow-hidden">
+                <div key={metric.key} className="rounded-xl border bg-card overflow-hidden">
                   {/* Metric header + competitor values */}
                   <button
                     onClick={() => setExpandedChart(isExpanded ? null : metric.key)}
@@ -796,7 +790,7 @@ export default function TendancesPage() {
           </div>
 
           {/* ─── Ranking tables ─── */}
-          <div className="rounded-2xl border bg-card p-5">
+          <div className="rounded-xl border bg-card p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-sm flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-indigo-500" />
@@ -866,7 +860,7 @@ function LatestNewsWidget() {
   if (isLoading || articles.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border bg-card p-5">
+    <div className="rounded-xl border bg-card p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold text-sm flex items-center gap-2">
           <Newspaper className="h-4 w-4 text-indigo-500" />
