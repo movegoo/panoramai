@@ -634,6 +634,60 @@ async def get_scheduler_status():
     return scheduler.get_status()
 
 
+@app.get("/api/debug/data-check")
+async def debug_data_check():
+    """Quick data check per advertiser. Temporary debug endpoint."""
+    from sqlalchemy import text
+    db = SessionLocal()
+    result = {}
+    try:
+        advs = db.execute(text("SELECT id, company_name FROM advertisers WHERE is_active = true ORDER BY id")).fetchall()
+        for adv_id, name in advs:
+            checks = {}
+            # Get competitor IDs via join table (advertiser_competitors)
+            comp_ids = [r[0] for r in db.execute(text(
+                "SELECT c.id FROM competitors c "
+                "JOIN advertiser_competitors ac ON ac.competitor_id = c.id "
+                "WHERE ac.advertiser_id = :a AND c.is_active = true"
+            ), {"a": adv_id}).fetchall()]
+            checks["competitors"] = len(comp_ids)
+            if comp_ids:
+                placeholders = ",".join(str(c) for c in comp_ids)
+                for tbl, q in [
+                    ("ads", f"SELECT COUNT(*) FROM ads WHERE competitor_id IN ({placeholders})"),
+                    ("stores", f"SELECT COUNT(*) FROM stores WHERE competitor_id IN ({placeholders})"),
+                    ("instagram", f"SELECT COUNT(*) FROM instagram_data WHERE competitor_id IN ({placeholders})"),
+                    ("tiktok", f"SELECT COUNT(*) FROM tiktok_data WHERE competitor_id IN ({placeholders})"),
+                    ("youtube", f"SELECT COUNT(*) FROM youtube_data WHERE competitor_id IN ({placeholders})"),
+                    ("app_data", f"SELECT COUNT(*) FROM app_data WHERE competitor_id IN ({placeholders})"),
+                ]:
+                    try:
+                        checks[tbl] = db.execute(text(q)).scalar()
+                    except Exception:
+                        checks[tbl] = "table missing"
+                        db.rollback()
+            # Advertiser-scoped tables
+            for tbl, q in [
+                ("seo_keywords", "SELECT COUNT(DISTINCT keyword) FROM serp_rankings WHERE advertiser_id = :a"),
+                ("seo_results", "SELECT COUNT(*) FROM serp_results WHERE advertiser_id = :a"),
+                ("geo_tracking", "SELECT COUNT(*) FROM geo_tracking_results WHERE advertiser_id = :a"),
+                ("vgeo_results", "SELECT COUNT(*) FROM vgeo_results WHERE advertiser_id = :a"),
+                ("signals", "SELECT COUNT(*) FROM signals WHERE advertiser_id = :a"),
+                ("google_trends", "SELECT COUNT(*) FROM google_trends WHERE advertiser_id = :a"),
+                ("google_news", "SELECT COUNT(*) FROM google_news WHERE advertiser_id = :a"),
+                ("ad_snapshots", "SELECT COUNT(*) FROM ad_snapshots WHERE advertiser_id = :a"),
+            ]:
+                try:
+                    checks[tbl] = db.execute(text(q), {"a": adv_id}).scalar()
+                except Exception:
+                    checks[tbl] = "table missing"
+                    db.rollback()
+            result[f"{adv_id}:{name}"] = checks
+    finally:
+        db.close()
+    return result
+
+
 @app.get("/api/debug/db")
 async def debug_db(user: User = Depends(get_current_user)):
     """Debug database connectivity. Admin only."""
