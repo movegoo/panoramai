@@ -722,9 +722,41 @@ async def trigger_social_analysis():
     return {"message": "Collecte + analyse sociale lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scheduler/run-seo")
+async def trigger_seo_tracking():
+    """Déclenche le tracking SEO SERP pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_seo_tracking())
+    return {"message": "SEO tracking lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scheduler/run-geo")
+async def trigger_geo_tracking():
+    """Déclenche le tracking GEO (visibilité IA) pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_geo_tracking())
+    return {"message": "GEO tracking lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scheduler/run-trends")
+async def trigger_google_trends():
+    """Déclenche la collecte Google Trends pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_google_trends())
+    return {"message": "Google Trends lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
+@app.post("/api/scheduler/run-news")
+async def trigger_google_news():
+    """Déclenche la collecte Google News pour toutes les enseignes."""
+    import asyncio
+    asyncio.create_task(scheduler.daily_google_news())
+    return {"message": "Google News lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
 @app.post("/api/scheduler/run-all")
 async def trigger_all_enrichment():
-    """Déclenche TOUT : collecte données + snapshots/signaux + creative analysis + social analysis."""
+    """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + trends + news."""
     import asyncio
 
     async def _run_all():
@@ -732,6 +764,10 @@ async def trigger_all_enrichment():
         await scheduler.daily_snapshots_and_signals()
         await scheduler.daily_creative_analysis()
         await scheduler.daily_social_analysis()
+        await scheduler.daily_seo_tracking()
+        await scheduler.daily_geo_tracking()
+        await scheduler.daily_google_trends()
+        await scheduler.daily_google_news()
 
     asyncio.create_task(_run_all())
-    return {"message": "Enrichissement complet lancé en background", "timestamp": datetime.utcnow().isoformat()}
+    return {"message": "Enrichissement complet lancé en background (collecte + signaux + creative + social + SEO + GEO + trends + news)", "timestamp": datetime.utcnow().isoformat()}

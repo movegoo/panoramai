@@ -8,7 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, SnapchatData
+from database import SessionLocal, Competitor, AppData, InstagramData, TikTokData, YouTubeData, Ad, SnapchatData, GoogleTrendsData, GoogleNewsArticle
 from core.config import settings
 from core.trends import parse_download_count
 
@@ -57,6 +57,60 @@ class DataCollectionScheduler:
             CronTrigger(hour=settings.SCHEDULER_HOUR + 1, minute=settings.SCHEDULER_MINUTE + 30),
             id="daily_social_analysis",
             name="Daily Social Content Analysis",
+            replace_existing=True
+        )
+
+        # Daily SEO SERP tracking (2h after collection)
+        self.scheduler.add_job(
+            self.daily_seo_tracking,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 2, minute=settings.SCHEDULER_MINUTE),
+            id="daily_seo_tracking",
+            name="Daily SEO SERP Tracking",
+            replace_existing=True
+        )
+
+        # Daily GEO tracking (2h30 after collection)
+        self.scheduler.add_job(
+            self.daily_geo_tracking,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 2, minute=settings.SCHEDULER_MINUTE + 30),
+            id="daily_geo_tracking",
+            name="Daily GEO Tracking",
+            replace_existing=True
+        )
+
+        # Daily VGEO analysis (3h after collection)
+        self.scheduler.add_job(
+            self.daily_vgeo_analysis,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 3, minute=settings.SCHEDULER_MINUTE),
+            id="daily_vgeo_analysis",
+            name="Daily VGEO Analysis",
+            replace_existing=True
+        )
+
+        # Daily ASO analysis (3h30 after collection)
+        self.scheduler.add_job(
+            self.daily_aso_analysis,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 3, minute=settings.SCHEDULER_MINUTE + 30),
+            id="daily_aso_analysis",
+            name="Daily ASO Analysis",
+            replace_existing=True
+        )
+
+        # Daily Google Trends (4h after collection)
+        self.scheduler.add_job(
+            self.daily_google_trends,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 4, minute=settings.SCHEDULER_MINUTE),
+            id="daily_google_trends",
+            name="Daily Google Trends",
+            replace_existing=True
+        )
+
+        # Daily Google News (4h30 after collection)
+        self.scheduler.add_job(
+            self.daily_google_news,
+            CronTrigger(hour=settings.SCHEDULER_HOUR + 4, minute=settings.SCHEDULER_MINUTE + 30),
+            id="daily_google_news",
+            name="Daily Google News",
             replace_existing=True
         )
 
@@ -936,6 +990,298 @@ class DataCollectionScheduler:
 
         except Exception as e:
             logger.error(f"Daily social analysis failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_seo_tracking(self):
+        """Run SEO SERP tracking for ALL active advertisers automatically."""
+        import asyncio
+        logger.info(f"Starting daily SEO tracking at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor, SerpResult
+            from routers.seo import _get_sector_keywords, _build_domain_map, _match_competitor, _extract_domain
+            from services.scrapecreators import scrapecreators
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_results = 0
+
+            for adv in advertisers:
+                competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .all()
+                )
+                if not competitors:
+                    continue
+
+                sector = adv.sector or "supermarche"
+                keywords = _get_sector_keywords(sector)
+                domain_map = _build_domain_map(competitors)
+                valid_ids = {c.id for c in competitors}
+                now = datetime.utcnow()
+                adv_results = 0
+
+                logger.info(f"SEO tracking: {adv.company_name} ({sector}) — {len(keywords)} keywords, {len(competitors)} competitors")
+
+                for i, keyword in enumerate(keywords):
+                    try:
+                        data = await scrapecreators.search_google(keyword, country="FR", limit=10)
+                        if not data.get("success"):
+                            continue
+
+                        for pos_idx, result in enumerate(data.get("results", [])[:10], start=1):
+                            url = result.get("url", "")
+                            domain = _extract_domain(url)
+                            cid = _match_competitor(domain, domain_map)
+                            if cid and cid not in valid_ids:
+                                cid = None
+
+                            serp = SerpResult(
+                                user_id=None,
+                                advertiser_id=adv.id,
+                                keyword=keyword,
+                                position=pos_idx,
+                                competitor_id=cid,
+                                title=result.get("title", "")[:1000],
+                                url=url[:1000],
+                                snippet=result.get("description", ""),
+                                domain=domain,
+                                recorded_at=now,
+                            )
+                            db.add(serp)
+                            adv_results += 1
+
+                    except Exception as e:
+                        logger.error(f"SEO track error for '{keyword}' ({adv.company_name}): {e}")
+
+                    if i < len(keywords) - 1:
+                        await asyncio.sleep(0.3)
+
+                db.commit()
+                total_results += adv_results
+                logger.info(f"SEO tracking done for {adv.company_name}: {adv_results} results")
+
+            logger.info(f"Daily SEO tracking complete: {total_results} total results for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily SEO tracking failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_geo_tracking(self):
+        """Run GEO (AI engine) tracking for ALL active advertisers automatically."""
+        logger.info(f"Starting daily GEO tracking at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor, GeoResult
+            from services.geo_analyzer import geo_analyzer, get_geo_queries
+            from core.sectors import get_sector_label
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_mentions = 0
+
+            for adv in advertisers:
+                competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .all()
+                )
+                if not competitors:
+                    continue
+
+                sector = adv.sector or "supermarche"
+                sector_label = get_sector_label(sector)
+                comp_map = {c.name.lower(): c for c in competitors}
+                brand_names = [c.name for c in competitors]
+
+                logger.info(f"GEO tracking: {adv.company_name} ({sector}) — {len(competitors)} competitors")
+
+                try:
+                    results, errors = await geo_analyzer.run_full_analysis(brand_names, sector=sector, sector_label=sector_label)
+                except Exception as e:
+                    logger.error(f"GEO tracking failed for {adv.company_name}: {e}")
+                    continue
+
+                now = datetime.utcnow()
+                adv_mentions = 0
+
+                for r in results:
+                    name_lower = r["brand_name"].lower()
+                    comp = comp_map.get(name_lower)
+                    if not comp:
+                        for cname, c in comp_map.items():
+                            if name_lower in cname or cname in name_lower:
+                                comp = c
+                                break
+
+                    geo = GeoResult(
+                        user_id=None,
+                        advertiser_id=adv.id,
+                        keyword=r["keyword"],
+                        query=r["query"],
+                        platform=r["platform"],
+                        raw_answer=r["raw_answer"],
+                        analysis=r["analysis"],
+                        competitor_id=comp.id if comp else None,
+                        mentioned=True,
+                        position_in_answer=r["position_in_answer"],
+                        recommended=r["recommended"],
+                        sentiment=r["sentiment"],
+                        context_snippet=r["context_snippet"],
+                        primary_recommendation=r["primary_recommendation"],
+                        recorded_at=now,
+                    )
+                    db.add(geo)
+                    adv_mentions += 1
+
+                db.commit()
+                total_mentions += adv_mentions
+                logger.info(f"GEO tracking done for {adv.company_name}: {adv_mentions} mentions")
+
+            logger.info(f"Daily GEO tracking complete: {total_mentions} total mentions for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily GEO tracking failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_google_trends(self):
+        """Collect Google Trends interest data for ALL active advertisers."""
+        import asyncio
+        logger.info(f"Starting daily Google Trends collection at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor
+            from services.searchapi import searchapi
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_points = 0
+
+            for adv in advertisers:
+                competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .all()
+                )
+                if not competitors:
+                    continue
+
+                keywords = [c.name for c in competitors]
+                kw_to_comp = {c.name: c.id for c in competitors}
+
+                logger.info(f"Google Trends: {adv.company_name} — {len(keywords)} keywords")
+
+                try:
+                    result = await searchapi.fetch_google_trends(keywords, geo="FR")
+
+                    if result.get("success") and result.get("timeline_data"):
+                        adv_points = 0
+                        for point in result["timeline_data"]:
+                            date_str = point.get("date", "")
+                            for kw, val in point.get("values", {}).items():
+                                comp_id = kw_to_comp.get(kw)
+                                if comp_id is not None:
+                                    db.add(GoogleTrendsData(
+                                        competitor_id=comp_id,
+                                        keyword=kw,
+                                        date=date_str,
+                                        value=val,
+                                    ))
+                                    adv_points += 1
+
+                        db.commit()
+                        total_points += adv_points
+                        logger.info(f"Google Trends done for {adv.company_name}: {adv_points} data points")
+                    else:
+                        logger.warning(f"Google Trends: no data for {adv.company_name}: {result.get('error', 'empty')}")
+
+                except Exception as e:
+                    logger.error(f"Google Trends error for {adv.company_name}: {e}")
+                    db.rollback()
+
+                await asyncio.sleep(1)
+
+            logger.info(f"Daily Google Trends complete: {total_points} total data points for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily Google Trends failed: {e}")
+        finally:
+            db.close()
+
+    async def daily_google_news(self):
+        """Collect Google News articles for ALL active advertisers."""
+        import asyncio
+        logger.info(f"Starting daily Google News collection at {datetime.utcnow()}")
+
+        db = SessionLocal()
+        try:
+            from database import Advertiser, AdvertiserCompetitor
+            from services.searchapi import searchapi
+            from sqlalchemy.exc import IntegrityError
+
+            advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()
+            total_added = 0
+
+            for adv in advertisers:
+                competitors = (
+                    db.query(Competitor)
+                    .join(AdvertiserCompetitor, AdvertiserCompetitor.competitor_id == Competitor.id)
+                    .filter(AdvertiserCompetitor.advertiser_id == adv.id, Competitor.is_active == True)
+                    .all()
+                )
+                if not competitors:
+                    continue
+
+                logger.info(f"Google News: {adv.company_name} — {len(competitors)} competitors")
+                adv_added = 0
+
+                for comp in competitors:
+                    try:
+                        result = await searchapi.fetch_google_news(comp.name)
+                        if not result.get("success"):
+                            logger.warning(f"Google News fetch failed for {comp.name}: {result.get('error')}")
+                            continue
+
+                        for article in result.get("articles", []):
+                            if not article.get("link"):
+                                continue
+                            news = GoogleNewsArticle(
+                                competitor_id=comp.id,
+                                title=article.get("title", ""),
+                                link=article["link"],
+                                source=article.get("source", ""),
+                                date=article.get("date", ""),
+                                snippet=article.get("snippet", ""),
+                                thumbnail=article.get("thumbnail", ""),
+                            )
+                            db.add(news)
+                            try:
+                                db.flush()
+                                adv_added += 1
+                            except IntegrityError:
+                                db.rollback()
+
+                    except Exception as e:
+                        logger.error(f"Google News error for {comp.name}: {e}")
+
+                    await asyncio.sleep(0.5)
+
+                try:
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Google News commit error for {adv.company_name}: {e}")
+
+                total_added += adv_added
+                logger.info(f"Google News done for {adv.company_name}: {adv_added} new articles")
+
+            logger.info(f"Daily Google News complete: {total_added} total new articles for {len(advertisers)} advertisers")
+        except Exception as e:
+            logger.error(f"Daily Google News failed: {e}")
         finally:
             db.close()
 
