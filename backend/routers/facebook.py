@@ -28,11 +28,12 @@ router = APIRouter()
 @router.get("/ads/all")
 async def get_all_ads(
     active_only: bool = False,
+    limit: int = Query(3000, ge=1, le=10000),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Retourne TOUTES les publicités des concurrents actifs."""
+    """Retourne les publicités les plus récentes des concurrents actifs."""
     adv_id = parse_advertiser_header(x_advertiser_id)
     competitors = get_user_competitors(db, user, advertiser_id=adv_id)
     active_comps = {c.id: c.name for c in competitors}
@@ -43,7 +44,7 @@ async def get_all_ads(
     )
     if active_only:
         query = query.filter(Ad.is_active == True)
-    ads = query.order_by(desc(Ad.start_date)).all()
+    ads = query.order_by(desc(Ad.start_date)).limit(limit).all()
 
     result = []
     for ad in ads:

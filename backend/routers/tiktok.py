@@ -2,7 +2,7 @@
 TikTok API router.
 Endpoints for fetching and analyzing TikTok profile data + TikTok Ads.
 """
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List
@@ -290,16 +290,18 @@ async def get_recent_videos(
 
 @router.get("/ads/all")
 async def get_all_tiktok_ads(
+    limit: int = Query(3000, ge=1, le=10000),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     x_advertiser_id: str | None = Header(None),
 ):
-    """Get all TikTok ads stored in the database."""
+    """Get TikTok ads stored in the database (most recent first)."""
     competitors = {c.id: c.name for c in get_user_competitors(db, user, advertiser_id=int(x_advertiser_id) if x_advertiser_id else None)}
     ads = (
         db.query(Ad)
         .filter(Ad.platform == "tiktok", Ad.competitor_id.in_(competitors.keys()))
         .order_by(desc(Ad.start_date))
+        .limit(limit)
         .all()
     )
     return [

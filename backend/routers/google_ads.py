@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from database import get_db, Competitor, Ad, User
 from services.scrapecreators import scrapecreators
@@ -66,7 +67,7 @@ async def get_all_google_ads(
     if active_only:
         query = query.filter(Ad.is_active == True)
 
-    rows = query.all()
+    rows = query.order_by(desc(Ad.start_date)).limit(3000).all()
 
     results = []
     for ad, comp_name in rows:
