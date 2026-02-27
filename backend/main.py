@@ -655,7 +655,7 @@ async def debug_data_check():
                 placeholders = ",".join(str(c) for c in comp_ids)
                 for tbl, q in [
                     ("ads", f"SELECT COUNT(*) FROM ads WHERE competitor_id IN ({placeholders})"),
-                    ("stores", f"SELECT COUNT(*) FROM stores WHERE competitor_id IN ({placeholders})"),
+                    ("store_locations", f"SELECT COUNT(*) FROM store_locations WHERE competitor_id IN ({placeholders})"),
                     ("instagram", f"SELECT COUNT(*) FROM instagram_data WHERE competitor_id IN ({placeholders})"),
                     ("tiktok", f"SELECT COUNT(*) FROM tiktok_data WHERE competitor_id IN ({placeholders})"),
                     ("youtube", f"SELECT COUNT(*) FROM youtube_data WHERE competitor_id IN ({placeholders})"),
