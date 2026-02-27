@@ -1698,6 +1698,22 @@ export default function AdsPage() {
   const { data: creativeInsights, mutate: mutateInsights } = useAPI<CreativeInsights>(creativeInsightsUrl);
   const { data: freshness } = useAPI<FreshnessData>("/freshness");
 
+  // Auto-launch creative analysis when page loads and there are unanalyzed ads
+  const autoAnalyzeLaunched = useRef(false);
+
+  // Reset local state when advertiser changes
+  // IMPORTANT: This effect must be declared BEFORE the SWR merge effects below,
+  // so that on initial mount (and advertiser change), the reset runs first,
+  // then the SWR data effects overwrite it with actual data.
+  useEffect(() => {
+    setAllAds([]);
+    setCompetitors([]);
+    setBrandName("");
+    setLoading(true);
+    setAnalyzeResult(null);
+    autoAnalyzeLaunched.current = false;
+  }, [currentAdvertiserId]);
+
   // Merge SWR data into state when available
   useEffect(() => {
     const fb = swrFbAds || [];
@@ -1723,19 +1739,6 @@ export default function AdsPage() {
       setLoading(false);
     }
   }, [swrFbAds, swrTtAds, swrGAds]);
-
-  // Auto-launch creative analysis when page loads and there are unanalyzed ads
-  const autoAnalyzeLaunched = useRef(false);
-
-  // Reset local state when advertiser changes
-  useEffect(() => {
-    setAllAds([]);
-    setCompetitors([]);
-    setBrandName("");
-    setLoading(true);
-    setAnalyzeResult(null);
-    autoAnalyzeLaunched.current = false;
-  }, [currentAdvertiserId]);
 
   useEffect(() => {
     if (
