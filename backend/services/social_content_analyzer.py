@@ -172,7 +172,6 @@ class SocialContentAnalyzer:
             }],
             "generationConfig": {
                 "temperature": 0.3,
-                "maxOutputTokens": 2048,
                 "responseMimeType": "application/json",
             },
         }
@@ -187,7 +186,6 @@ class SocialContentAnalyzer:
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "maxOutputTokens": 2048,
                 "temperature": 0.3,
                 "responseMimeType": "application/json",
             },
@@ -206,7 +204,7 @@ class SocialContentAnalyzer:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 2048,
+            "max_tokens": 4096,
             "temperature": 0.3,
             "response_format": {"type": "json_object"},
         }
