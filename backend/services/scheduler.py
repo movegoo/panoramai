@@ -211,80 +211,203 @@ class DataCollectionScheduler:
             await self._fetch_google_ads(db, competitor, name)
 
     async def _fetch_ads(self, db: Session, competitor: Competitor, name: str):
-        """Fetch Facebook/Instagram ads from Ad Library."""
+        """Fetch Facebook/Instagram ads from Ad Library.
+        Primary: Meta Ad Library API (free, official).
+        Fallback: ScrapeCreators (paid).
+        """
         try:
-            from services.scrapecreators import scrapecreators
             from routers.facebook import _name_matches, _parse_date
+            from database import Ad
             import json
 
-            # Prefer page_id-based fetch with pagination
             page_id = competitor.facebook_page_id
-            ads_list = []
-            use_page_id = False
-            if page_id:
-                cursor = None
-                for _ in range(30):
-                    result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id, cursor=cursor)
-                    if not result.get("success"):
-                        break
-                    batch = result.get("ads", [])
-                    ads_list.extend(batch)
-                    cursor = result.get("cursor")
-                    if not cursor or not batch:
-                        break
-                if ads_list:
-                    use_page_id = True
-
-            if not ads_list:
-                result = await scrapecreators.search_facebook_ads(
-                    company_name=name, country="FR", limit=50
-                )
-                if not result.get("success"):
-                    return
-                ads_list = result.get("ads", [])
-
-            from database import Ad
             new_count = 0
-            for ad in ads_list:
-                ad_id = str(ad.get("ad_archive_id", ""))
-                if not ad_id:
-                    continue
-                snapshot = ad.get("snapshot", {})
-                page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
-                if not use_page_id and not _name_matches(name, page_name_val):
-                    continue
-                if db.query(Ad).filter(Ad.ad_id == ad_id).first():
-                    continue
 
-                cards = snapshot.get("cards", [])
-                first_card = cards[0] if cards else {}
-                start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
-                end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
-                pub_platforms = ad.get("publisher_platform", [])
-                if not isinstance(pub_platforms, list):
-                    pub_platforms = [pub_platforms] if pub_platforms else []
+            # ── Primary: Meta Ad Library API ──
+            if page_id:
+                try:
+                    from services.meta_ad_library import meta_ad_library
+                    if meta_ad_library.is_configured:
+                        meta_ads = await meta_ad_library.get_active_ads(page_id, country="FR")
+                        if meta_ads:
+                            new_count = self._store_meta_api_ads(db, competitor, meta_ads, _parse_date)
+                            if new_count >= 0:
+                                logger.info(f"Ads: {new_count} new ads via Meta API for {name}")
+                                return
+                except Exception as e:
+                    logger.warning(f"Meta API failed for {name}, falling back to ScrapeCreators: {e}")
 
-                new_ad = Ad(
-                    competitor_id=competitor.id,
-                    ad_id=ad_id,
-                    platform="instagram" if any("INSTAGRAM" in str(p).upper() for p in pub_platforms) else "facebook",
-                    creative_url=first_card.get("original_image_url") or first_card.get("resized_image_url") or "",
-                    ad_text=first_card.get("body") or snapshot.get("body", {}).get("text", "") or "",
-                    cta=first_card.get("cta_text") or snapshot.get("cta_text", ""),
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=ad.get("is_active", not bool(end_date)),
-                    page_name=page_name_val or None,
-                    ad_library_url=ad.get("url", "") or None,
-                )
-                db.add(new_ad)
-                new_count += 1
+            # ── Fallback: ScrapeCreators ──
+            try:
+                from services.scrapecreators import scrapecreators
 
-            if new_count:
-                db.commit()
-                logger.info(f"Ads: {new_count} new ads stored for {name}")
+                ads_list = []
+                use_page_id = False
+                if page_id:
+                    cursor = None
+                    for _ in range(30):
+                        result = await scrapecreators.fetch_facebook_company_ads(page_id=page_id, cursor=cursor)
+                        if not result.get("success"):
+                            break
+                        batch = result.get("ads", [])
+                        ads_list.extend(batch)
+                        cursor = result.get("cursor")
+                        if not cursor or not batch:
+                            break
+                    if ads_list:
+                        use_page_id = True
+
+                if not ads_list:
+                    result = await scrapecreators.search_facebook_ads(
+                        company_name=name, country="FR", limit=50
+                    )
+                    if not result.get("success"):
+                        return
+                    ads_list = result.get("ads", [])
+
+                for ad in ads_list:
+                    ad_id = str(ad.get("ad_archive_id", ""))
+                    if not ad_id:
+                        continue
+                    snapshot = ad.get("snapshot", {})
+                    page_name_val = snapshot.get("page_name", "") or ad.get("page_name", "")
+                    if not use_page_id and not _name_matches(name, page_name_val):
+                        continue
+                    if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                        continue
+
+                    cards = snapshot.get("cards", [])
+                    first_card = cards[0] if cards else {}
+                    start_date = _parse_date(ad.get("start_date_string") or ad.get("start_date"))
+                    end_date = _parse_date(ad.get("end_date_string") or ad.get("end_date"))
+                    pub_platforms = ad.get("publisher_platform", [])
+                    if not isinstance(pub_platforms, list):
+                        pub_platforms = [pub_platforms] if pub_platforms else []
+
+                    new_ad = Ad(
+                        competitor_id=competitor.id,
+                        ad_id=ad_id,
+                        platform="instagram" if any("INSTAGRAM" in str(p).upper() for p in pub_platforms) else "facebook",
+                        creative_url=first_card.get("original_image_url") or first_card.get("resized_image_url") or "",
+                        ad_text=first_card.get("body") or snapshot.get("body", {}).get("text", "") or "",
+                        cta=first_card.get("cta_text") or snapshot.get("cta_text", ""),
+                        start_date=start_date,
+                        end_date=end_date,
+                        is_active=ad.get("is_active", not bool(end_date)),
+                        page_name=page_name_val or None,
+                        ad_library_url=ad.get("url", "") or None,
+                    )
+                    db.add(new_ad)
+                    new_count += 1
+
+                if new_count:
+                    db.commit()
+                    logger.info(f"Ads: {new_count} new ads via ScrapeCreators for {name}")
+            except Exception as e:
+                logger.error(f"ScrapeCreators fallback failed for {name}: {e}")
         except Exception as e:
             logger.error(f"Ads fetch failed for {name}: {e}")
+
+    @staticmethod
+    def _store_meta_api_ads(db: Session, competitor, meta_ads: list[dict], _parse_date) -> int:
+        """Map Meta Ad Library API response to Ad model and store in DB.
+        Returns count of new ads stored.
+        """
+        from database import Ad
+        import json
+
+        new_count = 0
+        for ad in meta_ads:
+            ad_id = str(ad.get("id", ""))
+            if not ad_id:
+                continue
+            if db.query(Ad).filter(Ad.ad_id == ad_id).first():
+                continue
+
+            # Determine platform from publisher_platforms
+            pub_platforms = ad.get("publisher_platforms", [])
+            platform = "facebook"
+            if pub_platforms:
+                if any("instagram" in str(p).lower() for p in pub_platforms):
+                    platform = "instagram"
+
+            # Parse dates
+            start_date = _parse_date(ad.get("ad_delivery_start_time"))
+            end_date = _parse_date(ad.get("ad_delivery_stop_time"))
+
+            # Extract creative text
+            bodies = ad.get("ad_creative_bodies", [])
+            ad_text = bodies[0] if bodies else ""
+
+            # Extract title
+            titles = ad.get("ad_creative_link_titles", [])
+            title = titles[0][:1000] if titles else None
+
+            # Extract link description
+            descriptions = ad.get("ad_creative_link_descriptions", [])
+            link_description = descriptions[0] if descriptions else None
+
+            # Extract impressions range
+            impressions = ad.get("impressions", {})
+            impressions_min = None
+            impressions_max = None
+            if isinstance(impressions, dict):
+                try:
+                    impressions_min = int(impressions.get("lower_bound", 0)) if impressions.get("lower_bound") else None
+                    impressions_max = int(impressions.get("upper_bound", 0)) if impressions.get("upper_bound") else None
+                except (ValueError, TypeError):
+                    pass
+
+            # Extract spend range
+            spend = ad.get("spend", {})
+            spend_min = None
+            spend_max = None
+            if isinstance(spend, dict):
+                try:
+                    spend_min = float(spend.get("lower_bound", 0)) if spend.get("lower_bound") else None
+                    spend_max = float(spend.get("upper_bound", 0)) if spend.get("upper_bound") else None
+                except (ValueError, TypeError):
+                    pass
+
+            # Extract payer/beneficiary
+            bp_list = ad.get("beneficiary_payers", [])
+            payer = None
+            beneficiary = None
+            if bp_list:
+                payer = bp_list[0].get("payer")
+                beneficiary = bp_list[0].get("beneficiary")
+
+            new_ad = Ad(
+                competitor_id=competitor.id,
+                ad_id=ad_id,
+                platform=platform,
+                creative_url="",  # Not available via Meta API
+                ad_text=ad_text,
+                title=title,
+                link_description=link_description,
+                cta="",  # Not available via Meta API
+                start_date=start_date,
+                end_date=end_date,
+                is_active=not bool(end_date),
+                page_id=ad.get("page_id"),
+                page_name=ad.get("page_name"),
+                ad_library_url=ad.get("ad_snapshot_url") or None,
+                publisher_platforms=json.dumps(pub_platforms) if pub_platforms else None,
+                eu_total_reach=ad.get("eu_total_reach") or None,
+                impressions_min=impressions_min,
+                impressions_max=impressions_max,
+                estimated_spend_min=spend_min,
+                estimated_spend_max=spend_max,
+                payer=payer,
+                beneficiary=beneficiary,
+                byline=ad.get("bylines", ""),
+            )
+            db.add(new_ad)
+            new_count += 1
+
+        if new_count:
+            db.commit()
+        return new_count
 
     async def _fetch_snapchat(self, db: Session, competitor: Competitor, name: str):
         """Fetch Snapchat ads via Apify."""
@@ -347,11 +470,13 @@ class DataCollectionScheduler:
             logger.error(f"Google Ads fetch failed for {name}: {e}")
 
     async def _enrich_transparency(self, db: Session):
-        """Enrich Meta ads with EU transparency data (age/gender/reach) via ScrapeCreators."""
+        """Enrich Meta ads with EU transparency data (age/gender/reach).
+        Primary: SearchAPI ad_details (via meta_ad_library.enrich_ad_details).
+        Fallback: ScrapeCreators get_facebook_ad_detail.
+        """
         try:
             import asyncio
             import json
-            from services.scrapecreators import scrapecreators
             from database import Ad
 
             meta_platforms = ["facebook", "instagram", "messenger", "audience_network", "meta",
@@ -366,27 +491,52 @@ class DataCollectionScheduler:
             if not ads_to_enrich:
                 return
 
+            # Try to use SearchAPI via meta_ad_library (primary)
+            from services.meta_ad_library import meta_ad_library
+            use_searchapi = bool(meta_ad_library.searchapi_key)
+
             async def _enrich_one(ad):
                 try:
-                    detail = await scrapecreators.get_facebook_ad_detail(ad.ad_id)
-                    if not detail.get("success"):
+                    # Primary: SearchAPI ad_details
+                    if use_searchapi:
+                        detail = await meta_ad_library.enrich_ad_details(ad.ad_id)
+                        if detail:
+                            ad.eu_total_reach = detail.get("eu_total_reach") or 0
+                            payer = detail.get("payer")
+                            beneficiary_val = detail.get("beneficiary")
+                            if payer:
+                                ad.payer = payer
+                            if beneficiary_val:
+                                ad.beneficiary = beneficiary_val
+                            age_gender = detail.get("age_gender_data", [])
+                            if age_gender:
+                                ad.age_country_gender_reach = json.dumps(age_gender)
+                            loc = detail.get("location_data", [])
+                            if loc:
+                                ad.location_audience = json.dumps(loc)
+                            return True
+
+                    # Fallback: ScrapeCreators
+                    from services.scrapecreators import scrapecreators
+                    sc_detail = await scrapecreators.get_facebook_ad_detail(ad.ad_id)
+                    if not sc_detail.get("success"):
                         ad.eu_total_reach = 0
                         return False
-                    ad.age_min = detail.get("age_min")
-                    ad.age_max = detail.get("age_max")
-                    ad.gender_audience = detail.get("gender_audience")
-                    ad.eu_total_reach = detail.get("eu_total_reach") or 0
-                    loc = detail.get("location_audience", [])
+                    ad.age_min = sc_detail.get("age_min")
+                    ad.age_max = sc_detail.get("age_max")
+                    ad.gender_audience = sc_detail.get("gender_audience")
+                    ad.eu_total_reach = sc_detail.get("eu_total_reach") or 0
+                    loc = sc_detail.get("location_audience", [])
                     if loc:
                         ad.location_audience = json.dumps(loc)
-                    breakdown = detail.get("age_country_gender_reach_breakdown", [])
+                    breakdown = sc_detail.get("age_country_gender_reach_breakdown", [])
                     if breakdown:
                         ad.age_country_gender_reach = json.dumps(breakdown)
-                    byline = detail.get("byline")
+                    byline = sc_detail.get("byline")
                     if byline:
                         ad.byline = byline
-                    payer = detail.get("payer")
-                    beneficiary_val = detail.get("beneficiary")
+                    payer = sc_detail.get("payer")
+                    beneficiary_val = sc_detail.get("beneficiary")
                     if payer:
                         ad.payer = payer
                     if beneficiary_val:
@@ -400,6 +550,7 @@ class DataCollectionScheduler:
             # Process in batches of 10
             enriched = 0
             errors = 0
+            source = "SearchAPI" if use_searchapi else "ScrapeCreators"
             for i in range(0, len(ads_to_enrich), 10):
                 batch = ads_to_enrich[i:i + 10]
                 results = await asyncio.gather(*[_enrich_one(ad) for ad in batch])
@@ -407,7 +558,7 @@ class DataCollectionScheduler:
                 errors += sum(1 for r in results if not r)
                 db.commit()
 
-            logger.info(f"Transparency: enriched {enriched}/{len(ads_to_enrich)} ads ({errors} errors)")
+            logger.info(f"Transparency ({source}): enriched {enriched}/{len(ads_to_enrich)} ads ({errors} errors)")
         except Exception as e:
             logger.error(f"Transparency enrichment failed: {e}")
 

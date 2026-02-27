@@ -38,6 +38,11 @@ AD_FIELDS = ",".join([
     "impressions",
     "spend",
     "currency",
+    "ad_creative_bodies",
+    "ad_creative_link_titles",
+    "ad_creative_link_captions",
+    "ad_creative_link_descriptions",
+    "beneficiary_payers",
 ])
 
 
@@ -144,6 +149,109 @@ class MetaAdLibraryService:
                 return await self._searchapi_ads(page_id, country)
 
         return all_ads
+
+    async def get_all_ads(
+        self,
+        page_id: str,
+        country: str = "FR",
+        active_only: bool = True,
+        limit: int = 0,
+    ) -> list[dict]:
+        """
+        Get ads for a page via Meta API.
+        active_only=True returns only active ads, False returns all (active + inactive).
+        """
+        if active_only:
+            return await self.get_active_ads(page_id, country, limit)
+
+        if not self.is_configured:
+            return await self._searchapi_ads(page_id, country)
+
+        all_ads = []
+        url = f"{GRAPH_API_BASE}/ads_archive"
+        params = {
+            "access_token": self.meta_token,
+            "search_terms": "*",
+            "ad_reached_countries": country,
+            "ad_active_status": "ALL",
+            "search_page_ids": page_id,
+            "fields": AD_FIELDS,
+            "limit": 100,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                all_ads.extend(data.get("data", []))
+
+                while True:
+                    next_url = data.get("paging", {}).get("next")
+                    if not next_url:
+                        break
+                    if limit and len(all_ads) >= limit:
+                        all_ads = all_ads[:limit]
+                        break
+                    resp = await client.get(next_url)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    ads = data.get("data", [])
+                    if not ads:
+                        break
+                    all_ads.extend(ads)
+
+        except Exception as e:
+            logger.error(f"Meta API all ads error for page {page_id}: {e}")
+            if not all_ads:
+                return await self._searchapi_ads(page_id, country)
+
+        return all_ads
+
+    async def enrich_ad_details(
+        self,
+        ad_id: str,
+    ) -> dict | None:
+        """
+        Enrich a single ad with EU transparency data via SearchAPI ad_details.
+        Returns dict with payer, beneficiary, eu_total_reach, age/gender data, or None on failure.
+        """
+        if not self.searchapi_key:
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    "https://www.searchapi.io/api/v1/search",
+                    params={
+                        "engine": "meta_ad_library_ad_details",
+                        "ad_archive_id": ad_id,
+                        "api_key": self.searchapi_key,
+                    },
+                )
+                resp.raise_for_status()
+                detail = resp.json()
+
+            aaa = detail.get("aaa_info", {})
+            pb_list = aaa.get("payer_beneficiary_data", [])
+            eu_reach = aaa.get("eu_total_reach", 0) or 0
+
+            payer = None
+            beneficiary = None
+            if pb_list:
+                payer = pb_list[0].get("payer")
+                beneficiary = pb_list[0].get("beneficiary")
+
+            return {
+                "eu_total_reach": eu_reach,
+                "payer": payer,
+                "beneficiary": beneficiary,
+                "age_gender_data": aaa.get("age_country_gender_reach_breakdown", []),
+                "location_data": aaa.get("location_audience", []),
+            }
+        except Exception as e:
+            logger.warning(f"SearchAPI ad_details error for {ad_id}: {e}")
+            return None
 
     async def enrich_payers(
         self,
