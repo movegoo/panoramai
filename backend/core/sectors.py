@@ -74,6 +74,7 @@ SECTORS = {
             {
                 "name": "Casino",
                 "website": "https://www.casino.fr",
+                "facebook_page_id": "CasinoFranceOfficiel",
                 "playstore_app_id": "fr.casino.fidelite",
                 "appstore_app_id": "1273195340",
                 "instagram_username": "casinosupermarches",
