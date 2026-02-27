@@ -2418,6 +2418,394 @@ export default function AdsPage() {
         </div>
       )}
 
+      {/* ── Creative Intelligence ─────────────────── */}
+      <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between border-b">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
+              <Brain className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <h3 className="text-[12px] font-semibold text-foreground">Intelligence Cr&eacute;ative</h3>
+              <p className="text-[10px] text-muted-foreground">
+                Analyse IA des visuels publicitaires
+                {creativeInsights && creativeInsights.total_analyzed > 0 && (
+                  <> &middot; <span className="text-green-600 font-medium">{creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</span></>
+                )}
+                {(analyzeResult?.remaining ?? creativeInsights?.remaining ?? 0) > 0 && (
+                  <> &middot; {((analyzeResult?.remaining ?? creativeInsights?.remaining) || 0).toLocaleString("fr-FR")} en attente (analyse auto.)</>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <CompetitorPicker
+              competitors={competitors}
+              value={creativeCompetitorId}
+              onChange={setCreativeCompetitorId}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAnalyzeCreatives}
+              disabled={analyzingCreatives}
+              className="gap-2 text-xs"
+            >
+              {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {analyzingCreatives
+                ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
+                : "Relancer l'analyse"}
+            </Button>
+          </div>
+        </div>
+
+        {analyzeResult && (
+          <div className="px-5 py-2.5 bg-muted/30 border-b text-[11px]">
+            <span className="text-emerald-600 font-semibold">{analyzeResult.analyzed} analys&eacute;e{analyzeResult.analyzed > 1 ? "s" : ""}</span>
+            {analyzeResult.errors > 0 && <span className="text-red-500 ml-2">{analyzeResult.errors} erreur{analyzeResult.errors > 1 ? "s" : ""}</span>}
+            {analyzeResult.remaining > 0 && <span className="text-muted-foreground ml-2">&middot; {analyzeResult.remaining} restante{analyzeResult.remaining > 1 ? "s" : ""}</span>}
+          </div>
+        )}
+
+        {creativeInsights && creativeInsights.total_analyzed > 0 ? (
+          <div className="p-5 space-y-5">
+            {/* Score moyen + KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 text-center">
+                <div className="text-2xl font-bold text-violet-700">{creativeInsights.avg_score}</div>
+                <div className="text-[10px] text-violet-500 uppercase tracking-widest mt-0.5">Score moyen</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.total_analyzed}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Analys&eacute;es</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.concepts.length}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Concepts</div>
+              </div>
+              <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="text-2xl font-bold">{creativeInsights.by_competitor.length}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">B&eacute;n&eacute;ficiaires</div>
+              </div>
+            </div>
+
+            {/* Score Expliqué */}
+            <details className="rounded-xl bg-muted/30 border px-4 py-3 group">
+              <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden">
+                <HelpCircle className="h-3.5 w-3.5 text-violet-500" />
+                <span>Comment est calculé le score créatif ?</span>
+                <ChevronDown className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground border-t pt-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Impact visuel (30%)</span> — contraste, composition, accroche visuelle</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-pink-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Clarté du message (25%)</span> — compréhension immédiate de l&apos;offre</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Exécution professionnelle (25%)</span> — qualité graphique, cohérence de marque</div>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                  <div><span className="font-medium text-foreground/80">Persuasion (20%)</span> — incitation à l&apos;action, urgence, désirabilité</div>
+                </div>
+              </div>
+            </details>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Top concepts */}
+              {creativeInsights.concepts.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Concepts dominants</div>
+                  <div className="space-y-2">
+                    {creativeInsights.concepts.slice(0, 6).map(c => (
+                      <div key={c.concept} className="flex items-center gap-3">
+                        <span className="text-xs font-medium w-24 truncate">{c.concept}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top tones */}
+              {creativeInsights.tones.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Tons utilis&eacute;s</div>
+                  <div className="space-y-2">
+                    {creativeInsights.tones.slice(0, 6).map(t => (
+                      <div key={t.tone} className="flex items-center gap-3">
+                        <span className="text-xs font-medium w-24 truncate">{t.tone}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-pink-500 transition-all duration-500" style={{ width: `${t.pct}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{t.pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Product categories + Objectives */}
+            {((creativeInsights.categories && creativeInsights.categories.length > 0) || (creativeInsights.objectives && creativeInsights.objectives.length > 0)) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Product categories */}
+                {creativeInsights.categories && creativeInsights.categories.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Cat&eacute;gories produit</div>
+                    <div className="space-y-2">
+                      {creativeInsights.categories.slice(0, 8).map(c => (
+                        <div key={c.category} className="flex items-center gap-3">
+                          <span className="text-xs font-medium w-32 truncate">{c.category}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ad objectives */}
+                {creativeInsights.objectives && creativeInsights.objectives.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Objectifs publicitaires</div>
+                    <div className="space-y-2">
+                      {creativeInsights.objectives.slice(0, 8).map(o => (
+                        <div key={o.objective} className="flex items-center gap-3">
+                          <span className="text-xs font-medium w-32 truncate">{o.objective}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${o.pct}%` }} />
+                          </div>
+                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{o.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Color palette + by competitor */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Color trends */}
+              {creativeInsights.colors.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Palette couleurs tendance</div>
+                  <div className="flex flex-wrap gap-2">
+                    {creativeInsights.colors.slice(0, 12).map(c => (
+                      <div key={c.color} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 border">
+                        <div className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color }} />
+                        <span className="text-[10px] font-mono text-muted-foreground">{c.color}</span>
+                        <span className="text-[9px] font-bold text-muted-foreground/60">{c.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Score par concurrent */}
+              {creativeInsights.by_competitor.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Score par concurrent</div>
+                  <div className="space-y-2">
+                    {creativeInsights.by_competitor.map((c, i) => {
+                      const isBrand = !!(brandName && c.competitor.toLowerCase() === brandName.toLowerCase());
+                      return (
+                      <div key={c.competitor} className={`flex items-center gap-3 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200 rounded-lg px-2 py-1" : ""}`}>
+                        <span className="text-[10px] font-bold text-muted-foreground/50 w-4">{i + 1}</span>
+                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}{isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
+                        <span className="text-[10px] text-muted-foreground">{c.count} pubs</span>
+                        <span className={`text-xs font-bold tabular-nums ${c.avg_score >= 70 ? "text-emerald-600" : c.avg_score >= 50 ? "text-blue-600" : "text-amber-600"}`}>
+                          {c.avg_score}
+                        </span>
+                      </div>
+                      ); })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top performers */}
+            {creativeInsights.top_performers.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
+                  <Trophy className="h-3 w-3 inline mr-1" />Top cr&eacute;atifs
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  {creativeInsights.top_performers.slice(0, 5).map((p) => (
+                    <div key={p.ad_id} className="rounded-xl border overflow-hidden bg-muted/20 hover:shadow-md transition-shadow">
+                      {p.creative_url && (
+                        <div className="aspect-square bg-slate-900 overflow-hidden flex items-center justify-center relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={p.creative_url} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
+                          <div className="absolute top-2 right-2">
+                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
+                              p.score >= 80 ? "bg-emerald-500 text-white" :
+                              p.score >= 60 ? "bg-blue-500 text-white" :
+                              "bg-amber-500 text-white"
+                            }`}>
+                              <Sparkles className="h-2 w-2" />{p.score}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="p-2">
+                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}{!!(brandName && p.competitor_name?.toLowerCase() === brandName.toLowerCase()) && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {p.concept && <span className="text-[9px] px-1.5 py-0 rounded bg-violet-100 text-violet-700">{p.concept}</span>}
+                          {p.tone && <span className="text-[9px] px-1.5 py-0 rounded bg-pink-100 text-pink-700">{p.tone}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Signaux JARVIS Intelligence */}
+            {creativeInsights.signals && creativeInsights.signals.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100">
+                    <Zap className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-semibold">Signaux Intelligence</h4>
+                    <p className="text-[10px] text-muted-foreground">{creativeInsights.signals.length} signal{creativeInsights.signals.length > 1 ? "x" : ""} détecté{creativeInsights.signals.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {creativeInsights.signals.map((s, i) => (
+                    <div key={i} className={`flex gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm ${
+                      s.severity === "high" ? "bg-red-50/50 border-red-200" :
+                      s.severity === "medium" ? "bg-amber-50/50 border-amber-200" :
+                      "bg-blue-50/50 border-blue-200"
+                    }`}>
+                      <div className={`shrink-0 mt-0.5 ${
+                        s.severity === "high" ? "text-red-500" :
+                        s.severity === "medium" ? "text-amber-500" :
+                        "text-blue-500"
+                      }`}>
+                        {s.severity === "high" ? <AlertTriangle className="h-4 w-4" /> :
+                         s.severity === "medium" ? <TrendingUp className="h-4 w-4" /> :
+                         <Info className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-semibold leading-snug">{s.title}</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{s.description}</p>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">{s.competitor}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{s.metric}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Répartition Géographique */}
+            {creativeInsights.geo_analysis && creativeInsights.geo_analysis.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100">
+                    <MapPin className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-[13px] font-semibold">Couverture Géographique</h4>
+                    <p className="text-[10px] text-muted-foreground">{creativeInsights.geo_analysis.length} zone{creativeInsights.geo_analysis.length > 1 ? "s" : ""} de diffusion</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {creativeInsights.geo_analysis.slice(0, 10).map((g) => {
+                    const maxAds = creativeInsights.geo_analysis[0]?.ad_count || 1;
+                    return (
+                      <div key={g.location} className="p-3 rounded-xl border bg-card hover:bg-accent/30 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-medium truncate">{g.location}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5">{g.ad_count} pub{g.ad_count > 1 ? "s" : ""}</div>
+                          </div>
+                          {g.top_category && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">{g.top_category}</span>
+                          )}
+                        </div>
+                        <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.round((g.ad_count / maxAds) * 100)}%` }} />
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {g.competitors.map((c) => (
+                            <span key={c} className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {creativeInsights.recommendations.length > 0 && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
+                  <Lightbulb className="h-3 w-3 inline mr-1" />Recommandations
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {creativeInsights.recommendations.map((r, i) => (
+                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-muted/30 border">
+                      <Sparkles className="h-4 w-4 text-violet-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-muted-foreground leading-relaxed">{r}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center">
+            {analyzingCreatives ? (
+              <>
+                <Loader2 className="h-8 w-8 text-violet-500 mx-auto mb-3 animate-spin" />
+                <p className="text-sm font-medium text-foreground">Analyse en cours...</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {analyzeResult
+                    ? `${analyzeResult.analyzed} visuels analysés — ${analyzeResult.remaining.toLocaleString("fr-FR")} restants`
+                    : "Préparation de l'analyse IA des visuels publicitaires"}
+                </p>
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-8 w-8 text-violet-400 mx-auto mb-3" />
+                <p className="text-sm font-medium text-foreground">Analyse créative prête</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Lancez l&apos;analyse IA pour découvrir les concepts, tons et scores de vos publicités
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAnalyzeCreatives}
+                  className="gap-2 text-xs"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Lancer l&apos;analyse
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── Channel pills ─────────────────────── */}
       {availableSources.entries.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -3033,394 +3421,6 @@ export default function AdsPage() {
 
       {/* ── Comparatif Concurrentiel ── */}
       <CompetitorComparison filteredAds={filteredAds} stats={stats} competitors={competitors} brandName={brandName} />
-
-      {/* ── Creative Intelligence ─────────────────── */}
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-5 py-4 flex items-center justify-between border-b">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900">
-              <Brain className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <h3 className="text-[12px] font-semibold text-foreground">Intelligence Cr&eacute;ative</h3>
-              <p className="text-[10px] text-muted-foreground">
-                Analyse IA des visuels publicitaires
-                {creativeInsights && creativeInsights.total_analyzed > 0 && (
-                  <> &middot; <span className="text-green-600 font-medium">{creativeInsights.total_analyzed} analys&eacute;e{creativeInsights.total_analyzed > 1 ? "s" : ""}</span></>
-                )}
-                {(analyzeResult?.remaining ?? creativeInsights?.remaining ?? 0) > 0 && (
-                  <> &middot; {((analyzeResult?.remaining ?? creativeInsights?.remaining) || 0).toLocaleString("fr-FR")} en attente (analyse auto.)</>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <CompetitorPicker
-              competitors={competitors}
-              value={creativeCompetitorId}
-              onChange={setCreativeCompetitorId}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAnalyzeCreatives}
-              disabled={analyzingCreatives}
-              className="gap-2 text-xs"
-            >
-              {analyzingCreatives ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {analyzingCreatives
-                ? analyzeResult ? `${analyzeResult.analyzed} analysées...` : "Analyse en cours..."
-                : "Relancer l'analyse"}
-            </Button>
-          </div>
-        </div>
-
-        {analyzeResult && (
-          <div className="px-5 py-2.5 bg-muted/30 border-b text-[11px]">
-            <span className="text-emerald-600 font-semibold">{analyzeResult.analyzed} analys&eacute;e{analyzeResult.analyzed > 1 ? "s" : ""}</span>
-            {analyzeResult.errors > 0 && <span className="text-red-500 ml-2">{analyzeResult.errors} erreur{analyzeResult.errors > 1 ? "s" : ""}</span>}
-            {analyzeResult.remaining > 0 && <span className="text-muted-foreground ml-2">&middot; {analyzeResult.remaining} restante{analyzeResult.remaining > 1 ? "s" : ""}</span>}
-          </div>
-        )}
-
-        {creativeInsights && creativeInsights.total_analyzed > 0 ? (
-          <div className="p-5 space-y-5">
-            {/* Score moyen + KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-violet-100 text-center">
-                <div className="text-2xl font-bold text-violet-700">{creativeInsights.avg_score}</div>
-                <div className="text-[10px] text-violet-500 uppercase tracking-widest mt-0.5">Score moyen</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.total_analyzed}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Analys&eacute;es</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.concepts.length}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">Concepts</div>
-              </div>
-              <div className="p-3 rounded-xl bg-muted/50 text-center">
-                <div className="text-2xl font-bold">{creativeInsights.by_competitor.length}</div>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">B&eacute;n&eacute;ficiaires</div>
-              </div>
-            </div>
-
-            {/* Score Expliqué */}
-            <details className="rounded-xl bg-muted/30 border px-4 py-3 group">
-              <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors list-none [&::-webkit-details-marker]:hidden">
-                <HelpCircle className="h-3.5 w-3.5 text-violet-500" />
-                <span>Comment est calculé le score créatif ?</span>
-                <ChevronDown className="h-3.5 w-3.5 ml-auto transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="mt-3 space-y-2 text-sm text-muted-foreground border-t pt-3">
-                <div className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-1.5 shrink-0" />
-                  <div><span className="font-medium text-foreground/80">Impact visuel (30%)</span> — contraste, composition, accroche visuelle</div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-pink-500 mt-1.5 shrink-0" />
-                  <div><span className="font-medium text-foreground/80">Clarté du message (25%)</span> — compréhension immédiate de l&apos;offre</div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                  <div><span className="font-medium text-foreground/80">Exécution professionnelle (25%)</span> — qualité graphique, cohérence de marque</div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
-                  <div><span className="font-medium text-foreground/80">Persuasion (20%)</span> — incitation à l&apos;action, urgence, désirabilité</div>
-                </div>
-              </div>
-            </details>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Top concepts */}
-              {creativeInsights.concepts.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Concepts dominants</div>
-                  <div className="space-y-2">
-                    {creativeInsights.concepts.slice(0, 6).map(c => (
-                      <div key={c.concept} className="flex items-center gap-3">
-                        <span className="text-xs font-medium w-24 truncate">{c.concept}</span>
-                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-violet-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
-                        </div>
-                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Top tones */}
-              {creativeInsights.tones.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Tons utilis&eacute;s</div>
-                  <div className="space-y-2">
-                    {creativeInsights.tones.slice(0, 6).map(t => (
-                      <div key={t.tone} className="flex items-center gap-3">
-                        <span className="text-xs font-medium w-24 truncate">{t.tone}</span>
-                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-pink-500 transition-all duration-500" style={{ width: `${t.pct}%` }} />
-                        </div>
-                        <span className="text-[10px] font-bold tabular-nums w-10 text-right">{t.pct}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Product categories + Objectives */}
-            {((creativeInsights.categories && creativeInsights.categories.length > 0) || (creativeInsights.objectives && creativeInsights.objectives.length > 0)) && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* Product categories */}
-                {creativeInsights.categories && creativeInsights.categories.length > 0 && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Cat&eacute;gories produit</div>
-                    <div className="space-y-2">
-                      {creativeInsights.categories.slice(0, 8).map(c => (
-                        <div key={c.category} className="flex items-center gap-3">
-                          <span className="text-xs font-medium w-32 truncate">{c.category}</span>
-                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${c.pct}%` }} />
-                          </div>
-                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{c.pct}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Ad objectives */}
-                {creativeInsights.objectives && creativeInsights.objectives.length > 0 && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Objectifs publicitaires</div>
-                    <div className="space-y-2">
-                      {creativeInsights.objectives.slice(0, 8).map(o => (
-                        <div key={o.objective} className="flex items-center gap-3">
-                          <span className="text-xs font-medium w-32 truncate">{o.objective}</span>
-                          <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                            <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${o.pct}%` }} />
-                          </div>
-                          <span className="text-[10px] font-bold tabular-nums w-10 text-right">{o.pct}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Color palette + by competitor */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Color trends */}
-              {creativeInsights.colors.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Palette couleurs tendance</div>
-                  <div className="flex flex-wrap gap-2">
-                    {creativeInsights.colors.slice(0, 12).map(c => (
-                      <div key={c.color} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-muted/50 border">
-                        <div className="h-4 w-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color }} />
-                        <span className="text-[10px] font-mono text-muted-foreground">{c.color}</span>
-                        <span className="text-[9px] font-bold text-muted-foreground/60">{c.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Score par concurrent */}
-              {creativeInsights.by_competitor.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">Score par concurrent</div>
-                  <div className="space-y-2">
-                    {creativeInsights.by_competitor.map((c, i) => {
-                      const isBrand = !!(brandName && c.competitor.toLowerCase() === brandName.toLowerCase());
-                      return (
-                      <div key={c.competitor} className={`flex items-center gap-3 ${isBrand ? "bg-violet-50/50 ring-1 ring-violet-200 rounded-lg px-2 py-1" : ""}`}>
-                        <span className="text-[10px] font-bold text-muted-foreground/50 w-4">{i + 1}</span>
-                        <span className="text-xs font-medium flex-1 truncate">{c.competitor}{isBrand && <span className="ml-1.5 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</span>
-                        <span className="text-[10px] text-muted-foreground">{c.count} pubs</span>
-                        <span className={`text-xs font-bold tabular-nums ${c.avg_score >= 70 ? "text-emerald-600" : c.avg_score >= 50 ? "text-blue-600" : "text-amber-600"}`}>
-                          {c.avg_score}
-                        </span>
-                      </div>
-                      ); })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Top performers */}
-            {creativeInsights.top_performers.length > 0 && (
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
-                  <Trophy className="h-3 w-3 inline mr-1" />Top cr&eacute;atifs
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {creativeInsights.top_performers.slice(0, 5).map((p) => (
-                    <div key={p.ad_id} className="rounded-xl border overflow-hidden bg-muted/20 hover:shadow-md transition-shadow">
-                      {p.creative_url && (
-                        <div className="aspect-square bg-slate-900 overflow-hidden flex items-center justify-center relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={p.creative_url} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
-                          <div className="absolute top-2 right-2">
-                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
-                              p.score >= 80 ? "bg-emerald-500 text-white" :
-                              p.score >= 60 ? "bg-blue-500 text-white" :
-                              "bg-amber-500 text-white"
-                            }`}>
-                              <Sparkles className="h-2 w-2" />{p.score}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="p-2">
-                        <div className="text-[10px] font-semibold truncate">{p.competitor_name}{!!(brandName && p.competitor_name?.toLowerCase() === brandName.toLowerCase()) && <span className="ml-1 text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Vous</span>}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {p.concept && <span className="text-[9px] px-1.5 py-0 rounded bg-violet-100 text-violet-700">{p.concept}</span>}
-                          {p.tone && <span className="text-[9px] px-1.5 py-0 rounded bg-pink-100 text-pink-700">{p.tone}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Signaux JARVIS Intelligence */}
-            {creativeInsights.signals && creativeInsights.signals.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100">
-                    <Zap className="h-4 w-4 text-violet-600" />
-                  </div>
-                  <div>
-                    <h4 className="text-[13px] font-semibold">Signaux Intelligence</h4>
-                    <p className="text-[10px] text-muted-foreground">{creativeInsights.signals.length} signal{creativeInsights.signals.length > 1 ? "x" : ""} détecté{creativeInsights.signals.length > 1 ? "s" : ""}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {creativeInsights.signals.map((s, i) => (
-                    <div key={i} className={`flex gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm ${
-                      s.severity === "high" ? "bg-red-50/50 border-red-200" :
-                      s.severity === "medium" ? "bg-amber-50/50 border-amber-200" :
-                      "bg-blue-50/50 border-blue-200"
-                    }`}>
-                      <div className={`shrink-0 mt-0.5 ${
-                        s.severity === "high" ? "text-red-500" :
-                        s.severity === "medium" ? "text-amber-500" :
-                        "text-blue-500"
-                      }`}>
-                        {s.severity === "high" ? <AlertTriangle className="h-4 w-4" /> :
-                         s.severity === "medium" ? <TrendingUp className="h-4 w-4" /> :
-                         <Info className="h-4 w-4" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-semibold leading-snug">{s.title}</div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">{s.description}</p>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">{s.competitor}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{s.metric}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Répartition Géographique */}
-            {creativeInsights.geo_analysis && creativeInsights.geo_analysis.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100">
-                    <MapPin className="h-4 w-4 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h4 className="text-[13px] font-semibold">Couverture Géographique</h4>
-                    <p className="text-[10px] text-muted-foreground">{creativeInsights.geo_analysis.length} zone{creativeInsights.geo_analysis.length > 1 ? "s" : ""} de diffusion</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {creativeInsights.geo_analysis.slice(0, 10).map((g) => {
-                    const maxAds = creativeInsights.geo_analysis[0]?.ad_count || 1;
-                    return (
-                      <div key={g.location} className="p-3 rounded-xl border bg-card hover:bg-accent/30 transition-colors">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-medium truncate">{g.location}</div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">{g.ad_count} pub{g.ad_count > 1 ? "s" : ""}</div>
-                          </div>
-                          {g.top_category && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">{g.top_category}</span>
-                          )}
-                        </div>
-                        <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${Math.round((g.ad_count / maxAds) * 100)}%` }} />
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {g.competitors.map((c) => (
-                            <span key={c} className="text-[9px] px-1 py-0 rounded bg-muted text-muted-foreground">{c}</span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Recommendations */}
-            {creativeInsights.recommendations.length > 0 && (
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2.5">
-                  <Lightbulb className="h-3 w-3 inline mr-1" />Recommandations
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {creativeInsights.recommendations.map((r, i) => (
-                    <div key={i} className="flex gap-2.5 p-3 rounded-xl bg-muted/30 border">
-                      <Sparkles className="h-4 w-4 text-violet-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-muted-foreground leading-relaxed">{r}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="px-5 py-8 text-center">
-            {analyzingCreatives ? (
-              <>
-                <Loader2 className="h-8 w-8 text-violet-500 mx-auto mb-3 animate-spin" />
-                <p className="text-sm font-medium text-foreground">Analyse en cours...</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {analyzeResult
-                    ? `${analyzeResult.analyzed} visuels analysés — ${analyzeResult.remaining.toLocaleString("fr-FR")} restants`
-                    : "Préparation de l'analyse IA des visuels publicitaires"}
-                </p>
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-8 w-8 text-violet-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-foreground">Analyse créative prête</p>
-                <p className="text-xs text-muted-foreground mt-1 mb-3">
-                  Lancez l&apos;analyse IA pour découvrir les concepts, tons et scores de vos publicités
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAnalyzeCreatives}
-                  className="gap-2 text-xs"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Lancer l&apos;analyse
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* ── Payeurs & Diffusion ────── */}
       {stats.byAdvertiser.size > 0 && (() => {
