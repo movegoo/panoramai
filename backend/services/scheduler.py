@@ -1727,8 +1727,7 @@ class DataCollectionScheduler:
         db = SessionLocal()
         try:
             from database import Advertiser, AdvertiserCompetitor, StoreLocation
-            from services.gmb_service import gmb_service
-            from routers.geo import compute_gmb_score
+            from services.gmb_service import gmb_service, compute_gmb_score
 
             if not gmb_service.is_configured:
                 logger.warning("GMB service not configured, skipping weekly enrichment")
@@ -1760,6 +1759,10 @@ class DataCollectionScheduler:
             ).all()
             comp_map = {c.id: c.name for c in competitors}
 
+            if not comp_map:
+                logger.info("No active competitors found, skipping GMB enrichment")
+                return
+
             # Get BANCO stores not enriched in the last 30 days
             from datetime import timedelta
             cutoff = datetime.utcnow() - timedelta(days=30)
@@ -1779,7 +1782,11 @@ class DataCollectionScheduler:
             skipped = 0
 
             for store in stores:
-                comp_name = comp_map.get(store.competitor_id, "inconnu")
+                comp_name = comp_map.get(store.competitor_id)
+                if not comp_name:
+                    skipped += 1
+                    logger.debug(f"Skipping store {store.id}: competitor_id={store.competitor_id} not in active comp_map")
+                    continue
 
                 try:
                     result = await gmb_service.enrich_store(
@@ -1801,16 +1808,20 @@ class DataCollectionScheduler:
                         store.google_open_state = result.get("open_state")
                         store.google_hours = result.get("hours")
                         store.google_price = result.get("price")
-                        store.gmb_score = compute_gmb_score(
-                            rating=result.get("rating"),
-                            reviews_count=result.get("reviews_count"),
-                            phone=result.get("phone"),
-                            website=result.get("website"),
-                            hours=result.get("hours"),
-                            thumbnail=result.get("thumbnail"),
-                            gtype=result.get("type"),
-                            open_state=result.get("open_state"),
-                        )
+                        try:
+                            store.gmb_score = compute_gmb_score(
+                                rating=result.get("rating"),
+                                reviews_count=result.get("reviews_count"),
+                                phone=result.get("phone"),
+                                website=result.get("website"),
+                                hours=result.get("hours"),
+                                thumbnail=result.get("thumbnail"),
+                                gtype=result.get("type"),
+                                open_state=result.get("open_state"),
+                            )
+                        except Exception as e:
+                            logger.warning(f"compute_gmb_score failed for store {store.id}: {e}")
+                            store.gmb_score = None
                         store.rating_fetched_at = datetime.utcnow()
                         enriched += 1
                     else:
@@ -1824,7 +1835,10 @@ class DataCollectionScheduler:
                 await asyncio.sleep(1.1)
 
             db.commit()
-            logger.info(f"Weekly GMB enrichment completed: {enriched} enriched, {errors} errors, {len(stores)} processed")
+            logger.info(
+                f"Weekly GMB enrichment completed: {enriched} enriched, "
+                f"{skipped} skipped, {errors} errors, {len(stores)} processed"
+            )
 
         except Exception as e:
             logger.error(f"Weekly GMB enrichment failed: {e}")
