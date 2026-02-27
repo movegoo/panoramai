@@ -218,25 +218,53 @@ async def setup_brand(
             detail=f"Secteur invalide. Secteurs disponibles: {list(SECTORS.keys())}"
         )
 
-    brand = Advertiser(
-        company_name=data.company_name,
-        sector=data.sector,
-        website=data.website,
-        logo_url=get_logo_url(data.website),
-        playstore_app_id=data.playstore_app_id,
-        appstore_app_id=data.appstore_app_id,
-        instagram_username=data.instagram_username,
-        tiktok_username=data.tiktok_username,
-        youtube_channel_id=data.youtube_channel_id,
-        snapchat_entity_name=data.snapchat_entity_name,
+    # Check if user already has this advertiser linked
+    from sqlalchemy import func as sa_func
+    existing_link = (
+        db.query(UserAdvertiser)
+        .join(Advertiser, Advertiser.id == UserAdvertiser.advertiser_id)
+        .filter(
+            UserAdvertiser.user_id == user.id,
+            sa_func.lower(Advertiser.company_name) == data.company_name.strip().lower(),
+            Advertiser.is_active == True,
+        )
+        .first()
     )
-    db.add(brand)
-    db.flush()
+    if existing_link:
+        raise HTTPException(status_code=400, detail="Enseigne déjà configurée pour cet utilisateur.")
 
-    # Create user-advertiser link
-    db.add(UserAdvertiser(user_id=user.id, advertiser_id=brand.id, role="owner"))
-    db.commit()
-    db.refresh(brand)
+    # Check if advertiser already exists globally (another user created it)
+    global_existing = db.query(Advertiser).filter(
+        sa_func.lower(Advertiser.company_name) == data.company_name.strip().lower(),
+        Advertiser.is_active == True,
+    ).first()
+
+    if global_existing:
+        # Reuse existing advertiser, just link the new user
+        brand = global_existing
+        db.add(UserAdvertiser(user_id=user.id, advertiser_id=brand.id, role="member"))
+        db.commit()
+        db.refresh(brand)
+    else:
+        brand = Advertiser(
+            company_name=data.company_name,
+            sector=data.sector,
+            website=data.website,
+            logo_url=get_logo_url(data.website),
+            playstore_app_id=data.playstore_app_id,
+            appstore_app_id=data.appstore_app_id,
+            instagram_username=data.instagram_username,
+            tiktok_username=data.tiktok_username,
+            youtube_channel_id=data.youtube_channel_id,
+            snapchat_entity_name=data.snapchat_entity_name,
+        )
+        db.add(brand)
+        db.flush()
+
+        # Create user-advertiser link
+        db.add(UserAdvertiser(user_id=user.id, advertiser_id=brand.id, role="owner"))
+        db.commit()
+        db.refresh(brand)
 
     # Create a mirror Competitor for the brand so its data gets enriched + auto-enrich
     _sync_brand_competitor(db, brand, user)

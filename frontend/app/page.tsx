@@ -367,12 +367,15 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
       setSelectedCompetitors(new Set(result.suggested_competitors.map((c) => c.name)));
       setStep(2);
     } catch (e: any) {
-      // Brand already exists → skip to dashboard
+      // Brand already exists for this user → skip to dashboard
       if (e.status === 400 && e.message?.includes("déjà configurée")) {
         onComplete();
         return;
       }
-      alert(e.message || "Erreur lors de la configuration");
+      const msg = e.message && !e.message.includes("Failed to fetch")
+        ? e.message
+        : "Erreur de connexion au serveur. Veuillez réessayer.";
+      alert(msg);
     } finally {
       setSubmitting(false);
     }
@@ -435,8 +438,8 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
 
   if (step === 1) {
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="w-full max-w-lg">
+      <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center overflow-auto">
+        <div className="w-full max-w-lg px-4 py-8">
           <StepIndicator />
 
           {/* Hero */}
@@ -532,8 +535,8 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
   if (step === 2 && setupResult) {
     const suggestions = setupResult.suggested_competitors;
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="w-full max-w-2xl">
+      <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center overflow-auto">
+        <div className="w-full max-w-2xl px-4 py-8">
           <StepIndicator />
 
           <div className="text-center mb-6">
@@ -620,8 +623,8 @@ function OnboardingScreen({ onComplete }: { onComplete: () => void }) {
 
   if (step === 3) {
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="w-full max-w-md text-center">
+      <div className="fixed inset-0 z-[100] bg-background flex items-center justify-center overflow-auto">
+        <div className="w-full max-w-md text-center px-4 py-8">
           <StepIndicator />
 
           <div className="flex items-center justify-center mb-6">
