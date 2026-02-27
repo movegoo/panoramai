@@ -103,7 +103,8 @@ def _patch_missing_social_handles():
                 continue
             changed = False
             for field in ["tiktok_username", "instagram_username", "youtube_channel_id",
-                          "playstore_app_id", "appstore_app_id", "snapchat_entity_name"]:
+                          "playstore_app_id", "appstore_app_id", "snapchat_entity_name",
+                          "facebook_page_id"]:
                 current = getattr(comp, field, None)
                 new_val = ref.get(field)
                 if new_val and (not current or current != new_val):
@@ -118,7 +119,8 @@ def _patch_missing_social_handles():
             if not ref:
                 continue
             for field in ["playstore_app_id", "appstore_app_id", "instagram_username",
-                          "tiktok_username", "youtube_channel_id", "snapchat_entity_name"]:
+                          "tiktok_username", "youtube_channel_id", "snapchat_entity_name",
+                          "facebook_page_id"]:
                 current = getattr(adv, field, None)
                 new_val = ref.get(field)
                 if new_val and (not current or current != new_val):
