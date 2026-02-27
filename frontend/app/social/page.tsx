@@ -679,316 +679,6 @@ export default function SocialPage() {
         })}
       </div>
 
-      {/* Content */}
-      {currentData.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
-              <Activity className="h-7 w-7 text-violet-400" />
-            </div>
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-1">Aucune donn&eacute;e {config.label}</h3>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">Configurez des concurrents avec un compte {config.label}.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-
-          {/* ── Ranking View Selector ── */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mr-1">Classer par</span>
-            {(platform === "snapchat" ? RANKING_VIEWS_BASE.filter(rv => rv.key === "audience" || rv.key === "engagement") : RANKING_VIEWS_BASE).map(rv => (
-              <button
-                key={rv.key}
-                onClick={() => setRankingView(rv.key)}
-                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
-                  rankingView === rv.key
-                    ? `bg-gradient-to-r ${config.gradient} text-white border-transparent shadow-sm`
-                    : "bg-card text-muted-foreground hover:text-foreground border-border hover:border-foreground/20"
-                }`}
-              >
-                {rv.icon}{rv.label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Ranked Cards Grid ── */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {displayData.map((c, i) => {
-              const primaryVal = getRankingValue(c);
-              const pct = maxRankingVal > 0 ? (primaryVal / maxRankingVal) * 100 : 0;
-              const followers = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
-              const name = platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name;
-              const growth = c.follower_growth_7d ?? c.subscriber_growth_7d;
-              const brand = isBrand(c.competitor_name);
-
-              return (
-                <div
-                  key={c.competitor_id}
-                  className={`rounded-xl border p-4 transition-all hover:shadow-md ${
-                    brand ? "ring-2 ring-violet-500/40 bg-violet-50/30 dark:bg-violet-950/20" :
-                    i === 0 ? `${config.lightBg} ${config.border}` : "bg-card"
-                  }`}
-                >
-                  {/* Header: rank + name */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold shrink-0 ${
-                        i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"
-                      }`}>
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-semibold truncate">{name}</span>
-                          {brand && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">Vous</span>}
-                        </div>
-                        {(c.username || c.channel_id) && (
-                          <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer"
-                            className={`text-[11px] ${config.accent} hover:underline flex items-center gap-0.5`}>
-                            {config.linkLabel(c.username || c.channel_id)}
-                            <ExternalLink className="h-2.5 w-2.5" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <GrowthBadge value={growth} />
-                  </div>
-
-                  {/* Primary metric */}
-                  <div className="mb-2">
-                    <div className="text-2xl font-bold tabular-nums">{formatRankingValue(primaryVal)}</div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{getRankingLabel()}</div>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
-                    <div className={`h-full rounded-full transition-all duration-700 ${i === 0 ? `bg-gradient-to-r ${config.gradient}` : "bg-slate-300 dark:bg-slate-600"}`}
-                      style={{ width: `${pct}%` }} />
-                  </div>
-
-                  {/* Secondary metrics */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {platform !== "snapchat" && rankingView !== "audience" && (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                        <Users className="h-3 w-3" />{formatNumber(followers)}
-                      </span>
-                    )}
-                    {platform === "instagram" && (
-                      <>
-                        {rankingView !== "engagement" && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
-                          </span>
-                        )}
-                        {rankingView !== "efficiency" && c.avg_likes != null && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            <Heart className="h-3 w-3" />{formatNumber(Math.round(c.avg_likes))} moy
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                          {formatNumber(c.posts_count || 0)} posts
-                        </span>
-                      </>
-                    )}
-                    {platform === "tiktok" && (
-                      <>
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                          <Heart className="h-3 w-3" />{formatNumber(c.likes || 0)}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                          {formatNumber(c.videos_count || 0)} videos
-                        </span>
-                        {c.videos_count > 0 && rankingView !== "efficiency" && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            <Zap className="h-3 w-3" />{formatNumber(Math.round(c.likes / c.videos_count))}/vid
-                          </span>
-                        )}
-                      </>
-                    )}
-                    {platform === "youtube" && (
-                      <>
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                          {formatNumber(c.total_views || 0)} vues
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                          {formatNumber(c.videos_count || 0)} videos
-                        </span>
-                        {rankingView !== "engagement" && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
-                          </span>
-                        )}
-                      </>
-                    )}
-                    {platform === "snapchat" && (
-                      <>
-                        {rankingView !== "engagement" && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            {formatNumber(c.impressions_total || 0)} impressions
-                          </span>
-                        )}
-                        {c.entity_name && (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                            {c.entity_name}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* ── Detailed Table ── */}
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
-                  <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
-                </div>
-                <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
-              </div>
-              <ExportMenu
-                filename={`social_${platform}_details`}
-                data={displayData.map(c => ({ name: c.competitor_name, followers: platform === "youtube" ? c.subscribers : c.followers, engagement: c.engagement_rate, posts: c.posts_count || c.videos_count, likes: c.avg_likes || c.likes }))}
-                columns={[
-                  { key: "name", label: "Concurrent" },
-                  { key: "followers", label: platform === "youtube" ? "Abonnes" : "Followers" },
-                  { key: "engagement", label: "Engagement (%)", format: (v: number) => v?.toFixed(2) || "" },
-                  { key: "posts", label: platform === "youtube" ? "Videos" : "Posts" },
-                  { key: "likes", label: "Likes" },
-                ]}
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[650px]">
-                <thead>
-                  <tr className="bg-muted/30">
-                    <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
-                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : platform === "snapchat" ? (scComparison.some(c => c.subscribers) ? "Subscribers" : "Pubs actives") : "Followers"}</th>
-                    {platform === "instagram" && (
-                      <>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes moy</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Posts</th>
-                      </>
-                    )}
-                    {platform === "tiktok" && (
-                      <>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Videos</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes/vid</th>
-                      </>
-                    )}
-                    {platform === "youtube" && (
-                      <>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues totales</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues moy</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
-                      </>
-                    )}
-                    {platform === "snapchat" && (
-                      <>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Engagement" : "Impressions"}</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Spotlights" : "Entity"}</th>
-                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Stories" : "Pubs"}</th>
-                      </>
-                    )}
-                    {platform !== "snapchat" && (
-                      <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">7j</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayData.map((c, i) => {
-                    const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.subscribers || c.ads_count || 0) : (c.followers || 0);
-                    const brand = isBrand(c.competitor_name);
-                    return (
-                      <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-medium">{platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name}</span>
-                                {brand && <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-violet-100 text-violet-700">Vous</span>}
-                              </div>
-                              {(c.username || c.channel_id) && (
-                                <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer" className={`text-[11px] ${config.accent} hover:underline`}>
-                                  {config.linkLabel(c.username || c.channel_id)}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm font-bold tabular-nums">{formatNumber(val)}</td>
-                        {platform === "instagram" && (
-                          <>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_likes != null ? formatNumber(Math.round(c.avg_likes)) : "\u2014"}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.posts_count || 0)}</td>
-                          </>
-                        )}
-                        {platform === "tiktok" && (
-                          <>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.likes || 0)}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.videos_count || 0)}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.videos_count > 0 ? formatNumber(Math.round(c.likes / c.videos_count)) : "\u2014"}</td>
-                          </>
-                        )}
-                        {platform === "youtube" && (
-                          <>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.total_views || 0)}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_views ? formatNumber(c.avg_views) : "\u2014"}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
-                          </>
-                        )}
-                        {platform === "snapchat" && (
-                          <>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums">{scComparison.some(sc => sc.subscribers) ? `${(c.engagement_rate || 0).toFixed(2)}%` : formatNumber(c.impressions_total || 0)}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.spotlight_count ?? "\u2014") : (c.entity_name || "\u2014")}</td>
-                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.story_count ?? "\u2014") : (c.ads_count || 0)}</td>
-                          </>
-                        )}
-                        {platform !== "snapchat" && (
-                          <td className="px-4 py-3 text-right">
-                            <GrowthBadge value={c.follower_growth_7d ?? c.subscriber_growth_7d} />
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── Brand Position Insight ── */}
-          {brandName && displayData.length > 1 && (() => {
-            const brandIdx = displayData.findIndex(c => isBrand(c.competitor_name));
-            if (brandIdx < 0) return null;
-            const leaderVal = getRankingValue(displayData[0]);
-            const brandVal = getRankingValue(displayData[brandIdx]);
-            const gap = leaderVal > 0 ? Math.round(((leaderVal - brandVal) / leaderVal) * 100) : 0;
-            if (brandIdx === 0) return (
-              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
-                <Trophy className="h-5 w-5 text-emerald-600 shrink-0" />
-                <p className="text-sm text-emerald-800 dark:text-emerald-200">
-                  <span className="font-semibold">{brandName}</span> est leader {config.label} en {getRankingLabel()}.
-                </p>
-              </div>
-            );
-            return (
-              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-3">
-                <Trophy className="h-5 w-5 text-amber-600 shrink-0" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
-                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {displayData.length} en {getRankingLabel()}, {gap}% derriere le leader.
-                </p>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* Intelligence Contenu (AI-powered social content analysis)            */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
@@ -1447,6 +1137,317 @@ export default function SocialPage() {
           </div>
         )}
       </div>
+
+      {/* Content */}
+      {currentData.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-border bg-card/50 p-12 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50">
+              <Activity className="h-7 w-7 text-violet-400" />
+            </div>
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-1">Aucune donn&eacute;e {config.label}</h3>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">Configurez des concurrents avec un compte {config.label}.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+
+          {/* ── Ranking View Selector ── */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mr-1">Classer par</span>
+            {(platform === "snapchat" ? RANKING_VIEWS_BASE.filter(rv => rv.key === "audience" || rv.key === "engagement") : RANKING_VIEWS_BASE).map(rv => (
+              <button
+                key={rv.key}
+                onClick={() => setRankingView(rv.key)}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+                  rankingView === rv.key
+                    ? `bg-gradient-to-r ${config.gradient} text-white border-transparent shadow-sm`
+                    : "bg-card text-muted-foreground hover:text-foreground border-border hover:border-foreground/20"
+                }`}
+              >
+                {rv.icon}{rv.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Ranked Cards Grid ── */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {displayData.map((c, i) => {
+              const primaryVal = getRankingValue(c);
+              const pct = maxRankingVal > 0 ? (primaryVal / maxRankingVal) * 100 : 0;
+              const followers = platform === "youtube" ? (c.subscribers || 0) : (c.followers || 0);
+              const name = platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name;
+              const growth = c.follower_growth_7d ?? c.subscriber_growth_7d;
+              const brand = isBrand(c.competitor_name);
+
+              return (
+                <div
+                  key={c.competitor_id}
+                  className={`rounded-xl border p-4 transition-all hover:shadow-md ${
+                    brand ? "ring-2 ring-violet-500/40 bg-violet-50/30 dark:bg-violet-950/20" :
+                    i === 0 ? `${config.lightBg} ${config.border}` : "bg-card"
+                  }`}
+                >
+                  {/* Header: rank + name */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold shrink-0 ${
+                        i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold truncate">{name}</span>
+                          {brand && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">Vous</span>}
+                        </div>
+                        {(c.username || c.channel_id) && (
+                          <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer"
+                            className={`text-[11px] ${config.accent} hover:underline flex items-center gap-0.5`}>
+                            {config.linkLabel(c.username || c.channel_id)}
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <GrowthBadge value={growth} />
+                  </div>
+
+                  {/* Primary metric */}
+                  <div className="mb-2">
+                    <div className="text-2xl font-bold tabular-nums">{formatRankingValue(primaryVal)}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{getRankingLabel()}</div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden mb-3">
+                    <div className={`h-full rounded-full transition-all duration-700 ${i === 0 ? `bg-gradient-to-r ${config.gradient}` : "bg-slate-300 dark:bg-slate-600"}`}
+                      style={{ width: `${pct}%` }} />
+                  </div>
+
+                  {/* Secondary metrics */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {platform !== "snapchat" && rankingView !== "audience" && (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                        <Users className="h-3 w-3" />{formatNumber(followers)}
+                      </span>
+                    )}
+                    {platform === "instagram" && (
+                      <>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          </span>
+                        )}
+                        {rankingView !== "efficiency" && c.avg_likes != null && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Heart className="h-3 w-3" />{formatNumber(Math.round(c.avg_likes))} moy
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.posts_count || 0)} posts
+                        </span>
+                      </>
+                    )}
+                    {platform === "tiktok" && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          <Heart className="h-3 w-3" />{formatNumber(c.likes || 0)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.videos_count || 0)} videos
+                        </span>
+                        {c.videos_count > 0 && rankingView !== "efficiency" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Zap className="h-3 w-3" />{formatNumber(Math.round(c.likes / c.videos_count))}/vid
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {platform === "youtube" && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.total_views || 0)} vues
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                          {formatNumber(c.videos_count || 0)} videos
+                        </span>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            <Target className="h-3 w-3" />{c.engagement_rate?.toFixed(2) || "0"}%
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {platform === "snapchat" && (
+                      <>
+                        {rankingView !== "engagement" && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            {formatNumber(c.impressions_total || 0)} impressions
+                          </span>
+                        )}
+                        {c.entity_name && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                            {c.entity_name}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Detailed Table ── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <div className="px-5 py-3 border-b bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100">
+                  <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
+                </div>
+                <span className="text-[12px] font-semibold text-foreground">D&eacute;tails complets</span>
+              </div>
+              <ExportMenu
+                filename={`social_${platform}_details`}
+                data={displayData.map(c => ({ name: c.competitor_name, followers: platform === "youtube" ? c.subscribers : c.followers, engagement: c.engagement_rate, posts: c.posts_count || c.videos_count, likes: c.avg_likes || c.likes }))}
+                columns={[
+                  { key: "name", label: "Concurrent" },
+                  { key: "followers", label: platform === "youtube" ? "Abonnes" : "Followers" },
+                  { key: "engagement", label: "Engagement (%)", format: (v: number) => v?.toFixed(2) || "" },
+                  { key: "posts", label: platform === "youtube" ? "Videos" : "Posts" },
+                  { key: "likes", label: "Likes" },
+                ]}
+              />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[650px]">
+                <thead>
+                  <tr className="bg-muted/30">
+                    <th className="text-left text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Concurrent</th>
+                    <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{platform === "youtube" ? "Abonnes" : platform === "snapchat" ? (scComparison.some(c => c.subscribers) ? "Subscribers" : "Pubs actives") : "Followers"}</th>
+                    {platform === "instagram" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes moy</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Posts</th>
+                      </>
+                    )}
+                    {platform === "tiktok" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Videos</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Likes/vid</th>
+                      </>
+                    )}
+                    {platform === "youtube" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues totales</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Vues moy</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">Engagement</th>
+                      </>
+                    )}
+                    {platform === "snapchat" && (
+                      <>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Engagement" : "Impressions"}</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Spotlights" : "Entity"}</th>
+                        <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">{scComparison.some(c => c.subscribers) ? "Stories" : "Pubs"}</th>
+                      </>
+                    )}
+                    {platform !== "snapchat" && (
+                      <th className="text-right text-[10px] uppercase tracking-widest text-muted-foreground font-semibold px-4 py-2.5">7j</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayData.map((c, i) => {
+                    const val = platform === "youtube" ? (c.subscribers || 0) : platform === "snapchat" ? (c.subscribers || c.ads_count || 0) : (c.followers || 0);
+                    const brand = isBrand(c.competitor_name);
+                    return (
+                      <tr key={c.competitor_id} className={`border-t transition-colors hover:bg-muted/30 ${brand ? "bg-violet-50/50 dark:bg-violet-950/20" : i === 0 ? config.lightBg : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold ${i < 3 ? MEDAL[i] : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-medium">{platform === "youtube" ? (c.channel_name || c.competitor_name) : c.competitor_name}</span>
+                                {brand && <span className="text-[8px] font-bold uppercase px-1 py-0.5 rounded bg-violet-100 text-violet-700">Vous</span>}
+                              </div>
+                              {(c.username || c.channel_id) && (
+                                <a href={config.link(c.username || c.channel_id)} target="_blank" rel="noopener noreferrer" className={`text-[11px] ${config.accent} hover:underline`}>
+                                  {config.linkLabel(c.username || c.channel_id)}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right text-sm font-bold tabular-nums">{formatNumber(val)}</td>
+                        {platform === "instagram" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_likes != null ? formatNumber(Math.round(c.avg_likes)) : "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.posts_count || 0)}</td>
+                          </>
+                        )}
+                        {platform === "tiktok" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.likes || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.videos_count || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.videos_count > 0 ? formatNumber(Math.round(c.likes / c.videos_count)) : "\u2014"}</td>
+                          </>
+                        )}
+                        {platform === "youtube" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{formatNumber(c.total_views || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.avg_views ? formatNumber(c.avg_views) : "\u2014"}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{c.engagement_rate?.toFixed(2) || "0"}%</td>
+                          </>
+                        )}
+                        {platform === "snapchat" && (
+                          <>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums">{scComparison.some(sc => sc.subscribers) ? `${(c.engagement_rate || 0).toFixed(2)}%` : formatNumber(c.impressions_total || 0)}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.spotlight_count ?? "\u2014") : (c.entity_name || "\u2014")}</td>
+                            <td className="px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">{scComparison.some(sc => sc.subscribers) ? (c.story_count ?? "\u2014") : (c.ads_count || 0)}</td>
+                          </>
+                        )}
+                        {platform !== "snapchat" && (
+                          <td className="px-4 py-3 text-right">
+                            <GrowthBadge value={c.follower_growth_7d ?? c.subscriber_growth_7d} />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Brand Position Insight ── */}
+          {brandName && displayData.length > 1 && (() => {
+            const brandIdx = displayData.findIndex(c => isBrand(c.competitor_name));
+            if (brandIdx < 0) return null;
+            const leaderVal = getRankingValue(displayData[0]);
+            const brandVal = getRankingValue(displayData[brandIdx]);
+            const gap = leaderVal > 0 ? Math.round(((leaderVal - brandVal) / leaderVal) * 100) : 0;
+            if (brandIdx === 0) return (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
+                <Trophy className="h-5 w-5 text-emerald-600 shrink-0" />
+                <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                  <span className="font-semibold">{brandName}</span> est leader {config.label} en {getRankingLabel()}.
+                </p>
+              </div>
+            );
+            return (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-3">
+                <Trophy className="h-5 w-5 text-amber-600 shrink-0" />
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <span className="font-semibold">{brandName}</span> est {brandIdx + 1}&egrave;me sur {displayData.length} en {getRankingLabel()}, {gap}% derriere le leader.
+                </p>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
     </div></PageGate>
   );
 }
