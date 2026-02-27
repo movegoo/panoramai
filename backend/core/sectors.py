@@ -1195,6 +1195,82 @@ SECTORS = {
             },
         ],
     },
+    "fonciere_commerciale": {
+        "name": "Foncières Commerciales",
+        "competitors": [
+            {
+                "name": "Carmila",
+                "website": "https://www.carmila.com",
+                "facebook_page_id": "carmila",
+                "youtube_channel_id": "UCLUUZDqGTxyvt-E-XB-ug5Q",
+                "playstore_app_id": "com.mallcommapp.carmila",
+                "appstore_app_id": "6746479363",
+            },
+            {
+                "name": "Unibail-Rodamco-Westfield",
+                "website": "https://www.urw.com",
+                "instagram_username": "urw_group",
+                "youtube_channel_id": "UCR5zFGwRd-CTenGXXoRC5fA",
+            },
+            {
+                "name": "Klépierre",
+                "website": "https://www.klepierre.com",
+                "instagram_username": "klepierre",
+                "tiktok_username": "klepierre",
+                "youtube_channel_id": "UC7Soagoms2jhH37ZHkiN4Jw",
+                "playstore_app_id": "com.maxdoro.incontrol.klepierre",
+                "appstore_app_id": "1461138637",
+            },
+            {
+                "name": "Altarea",
+                "website": "https://www.altarea.com",
+                "facebook_page_id": "altarea",
+                "youtube_channel_id": "UCxVfc0coJQmSrItTft1rl_g",
+            },
+            {
+                "name": "Mercialys",
+                "website": "https://www.mercialys.fr",
+                "youtube_channel_id": "UC2hd66QNP0mWEKUHiYTsr5Q",
+                "playstore_app_id": "fr.mercialys.lagalerie",
+                "appstore_app_id": "987469094",
+            },
+            {
+                "name": "Nhood",
+                "website": "https://www.nhood.com",
+                "instagram_username": "nhood_corporate",
+                "youtube_channel_id": "UCVRAonORkeM5-qOkedJnSCw",
+            },
+            {
+                "name": "Apsys",
+                "website": "https://www.apsysgroup.com",
+                "instagram_username": "apsys_group",
+                "facebook_page_id": "apsys",
+            },
+            {
+                "name": "Hammerson",
+                "website": "https://www.hammerson.com",
+                "instagram_username": "hammerson_plc",
+                "facebook_page_id": "hammersonplc",
+                "youtube_channel_id": "UCwU-loR9RJfx_KITuIWPuxg",
+            },
+            {
+                "name": "Wereldhave",
+                "website": "https://www.wereldhave.com",
+                "youtube_channel_id": "UCCGxZDlcHrorzfi6D9-PYVA",
+            },
+            {
+                "name": "Frey",
+                "website": "https://frey.fr",
+                "youtube_channel_id": "UCaxeU_i97vgL-pLeBbyiPDg",
+            },
+            {
+                "name": "Patrimoine & Commerce",
+                "website": "https://patrimoine-commerce.com",
+                "instagram_username": "groupe_duval",
+                "facebook_page_id": "groupeduval",
+            },
+        ],
+    },
 }
 
 
