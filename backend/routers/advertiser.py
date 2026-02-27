@@ -61,25 +61,37 @@ async def onboard_advertiser(
         if existing:
             raise HTTPException(status_code=400, detail="Advertiser already exists")
 
-    # Create advertiser
-    advertiser = Advertiser(
-        company_name=data.company_name,
-        sector=data.sector,
-        website=data.website,
-        playstore_app_id=data.playstore_app_id,
-        appstore_app_id=data.appstore_app_id,
-        instagram_username=data.instagram_username,
-        tiktok_username=data.tiktok_username,
-        youtube_channel_id=data.youtube_channel_id,
-        contact_email=data.contact_email,
-    )
-    db.add(advertiser)
-    db.flush()
+    # Check if advertiser already exists globally (another user created it)
+    global_existing = db.query(Advertiser).filter(
+        Advertiser.company_name == data.company_name,
+    ).first()
 
-    # Create user-advertiser link
-    db.add(UserAdvertiser(user_id=user.id, advertiser_id=advertiser.id, role="owner"))
-    db.commit()
-    db.refresh(advertiser)
+    if global_existing:
+        # Reuse existing advertiser, just link the new user
+        advertiser = global_existing
+        db.add(UserAdvertiser(user_id=user.id, advertiser_id=advertiser.id, role="member"))
+        db.commit()
+        db.refresh(advertiser)
+    else:
+        # Create new advertiser
+        advertiser = Advertiser(
+            company_name=data.company_name,
+            sector=data.sector,
+            website=data.website,
+            playstore_app_id=data.playstore_app_id,
+            appstore_app_id=data.appstore_app_id,
+            instagram_username=data.instagram_username,
+            tiktok_username=data.tiktok_username,
+            youtube_channel_id=data.youtube_channel_id,
+            contact_email=data.contact_email,
+        )
+        db.add(advertiser)
+        db.flush()
+
+        # Create user-advertiser link
+        db.add(UserAdvertiser(user_id=user.id, advertiser_id=advertiser.id, role="owner"))
+        db.commit()
+        db.refresh(advertiser)
 
     # Auto-add selected competitors
     if data.selected_competitors:

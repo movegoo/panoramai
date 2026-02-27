@@ -4,6 +4,7 @@ Uses the official Graph API for ad listing (free, fast, paginated)
 with SearchAPI fallback for EU transparency payer data.
 """
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -95,58 +96,70 @@ class MetaAdLibraryService:
 
     async def get_active_ads(
         self,
-        page_id: str,
+        page_id: str | list[str],
         country: str = "FR",
         limit: int = 0,
     ) -> list[dict]:
         """
-        Get all active ads for a page via Meta API.
+        Get all active ads for one or more pages via Meta API.
+        page_id can be a single ID string or a list of IDs (max 10 per API call).
         limit=0 means fetch all (paginated).
         Returns list of ad dicts with reach, targeting, platforms.
         """
         if not self.is_configured:
-            return await self._searchapi_ads(page_id, country)
+            pid = page_id if isinstance(page_id, str) else page_id[0]
+            return await self._searchapi_ads(pid, country)
+
+        # Normalize to list and batch in groups of 10 (API limit)
+        page_ids = [page_id] if isinstance(page_id, str) else list(page_id)
 
         all_ads = []
-        url = f"{GRAPH_API_BASE}/ads_archive"
-        params = {
-            "access_token": self.meta_token,
-            "search_terms": "*",
-            "ad_reached_countries": country,
-            "ad_active_status": "ACTIVE",
-            "search_page_ids": page_id,
-            "fields": AD_FIELDS,
-            "limit": 100,
-        }
+        for batch_start in range(0, len(page_ids), 10):
+            batch_ids = page_ids[batch_start:batch_start + 10]
+            search_page_ids_param = json.dumps(batch_ids) if len(batch_ids) > 1 else batch_ids[0]
 
-        try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                # First page
-                resp = await client.get(url, params=params)
-                resp.raise_for_status()
-                data = resp.json()
-                all_ads.extend(data.get("data", []))
+            url = f"{GRAPH_API_BASE}/ads_archive"
+            params = {
+                "access_token": self.meta_token,
+                "search_terms": "*",
+                "ad_reached_countries": country,
+                "ad_active_status": "ACTIVE",
+                "search_page_ids": search_page_ids_param,
+                "fields": AD_FIELDS,
+                "limit": 100,
+            }
 
-                # Paginate
-                while True:
-                    next_url = data.get("paging", {}).get("next")
-                    if not next_url:
-                        break
-                    if limit and len(all_ads) >= limit:
-                        all_ads = all_ads[:limit]
-                        break
-                    resp = await client.get(next_url)
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.get(url, params=params)
                     resp.raise_for_status()
                     data = resp.json()
-                    ads = data.get("data", [])
-                    if not ads:
-                        break
-                    all_ads.extend(ads)
+                    all_ads.extend(data.get("data", []))
 
-        except Exception as e:
-            logger.error(f"Meta API ads error for page {page_id}: {e}")
-            if not all_ads:
-                return await self._searchapi_ads(page_id, country)
+                    while True:
+                        next_url = data.get("paging", {}).get("next")
+                        if not next_url:
+                            break
+                        if limit and len(all_ads) >= limit:
+                            all_ads = all_ads[:limit]
+                            break
+                        resp = await client.get(next_url)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        ads = data.get("data", [])
+                        if not ads:
+                            break
+                        all_ads.extend(ads)
+
+            except Exception as e:
+                logger.error(f"Meta API ads error for pages {batch_ids}: {e}")
+
+            if limit and len(all_ads) >= limit:
+                all_ads = all_ads[:limit]
+                break
+
+        if not all_ads and len(page_ids) == 1:
+            return await self._searchapi_ads(page_ids[0], country)
 
         return all_ads
 
