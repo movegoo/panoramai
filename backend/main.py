@@ -660,6 +660,8 @@ async def debug_data_check():
                     ("tiktok", f"SELECT COUNT(*) FROM tiktok_data WHERE competitor_id IN ({placeholders})"),
                     ("youtube", f"SELECT COUNT(*) FROM youtube_data WHERE competitor_id IN ({placeholders})"),
                     ("app_data", f"SELECT COUNT(*) FROM app_data WHERE competitor_id IN ({placeholders})"),
+                    ("social_posts", f"SELECT COUNT(*) FROM social_posts WHERE competitor_id IN ({placeholders})"),
+                    ("social_posts_analyzed", f"SELECT COUNT(*) FROM social_posts WHERE competitor_id IN ({placeholders}) AND content_analyzed_at IS NOT NULL AND content_engagement_score > 0"),
                 ]:
                     try:
                         checks[tbl] = db.execute(text(q)).scalar()

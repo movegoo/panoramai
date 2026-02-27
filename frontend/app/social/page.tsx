@@ -694,16 +694,7 @@ export default function SocialPage() {
               <p className="text-[13px] text-muted-foreground">Analyse IA des posts sociaux (themes, tons, hooks)</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAnalyzeContent}
-            disabled={contentLoading}
-            className="gap-2 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${contentLoading ? "animate-spin" : ""}`} />
-            {contentLoading ? "Collecte..." : "Rafraichir"}
-          </Button>
+          <span className="text-[11px] text-muted-foreground/60">Mise a jour automatique chaque nuit</span>
         </div>
 
         {/* Content Platform Switcher */}
@@ -1125,15 +1116,10 @@ export default function SocialPage() {
                 <Brain className="h-6 w-6 text-emerald-600" />
               </div>
             </div>
-            <h3 className="text-sm font-semibold">Aucune analyse de contenu disponible</h3>
+            <h3 className="text-sm font-semibold">Analyse en cours de preparation</h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              La collecte automatique n&apos;a trouve aucun post a analyser. Verifiez les comptes sociaux de vos concurrents ou relancez manuellement.
+              L&apos;analyse IA des contenus sociaux est mise a jour automatiquement chaque nuit. Les resultats apparaitront ici des que la prochaine collecte sera terminee.
             </p>
-            <button onClick={handleAnalyzeContent} disabled={contentLoading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
-              <RefreshCw className="h-4 w-4" />
-              Relancer la collecte
-            </button>
           </div>
         )}
       </div>
