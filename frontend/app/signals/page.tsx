@@ -100,7 +100,7 @@ function ChangeIndicator({ change, previous, current }: { change: number | null;
         <TrendingDown className="h-3.5 w-3.5 text-red-500" />
       )}
       <span className={`font-semibold tabular-nums ${isUp ? "text-emerald-600" : "text-red-600"}`}>
-        {change > 0 ? "+" : ""}{change.toFixed(1)}%
+        {change > 0 ? "+" : ""}{Math.abs(change) >= 1 ? change.toFixed(1) : Math.abs(change) >= 0.01 ? change.toFixed(2) : change.toFixed(3)}%
       </span>
       {previous !== null && current !== null && (
         <span className="text-muted-foreground">

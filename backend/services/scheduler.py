@@ -883,6 +883,21 @@ class DataCollectionScheduler:
                     comp = db.query(Competitor).get(post.competitor_id)
                     comp_names[post.competitor_id] = comp.name if comp else ""
 
+            # Reset previous failures (analyzed but score=0 = failed)
+            for post in unanalyzed:
+                if post.content_analyzed_at and post.content_engagement_score == 0:
+                    post.content_analyzed_at = None
+                    post.content_engagement_score = None
+                    post.content_analysis = None
+            db.commit()
+            # Re-query after reset
+            unanalyzed = db.query(SocialPost).filter(SocialPost.content_analyzed_at.is_(None)).all()
+            comp_names = {}
+            for post in unanalyzed:
+                if post.competitor_id not in comp_names:
+                    comp = db.query(Competitor).get(post.competitor_id)
+                    comp_names[post.competitor_id] = comp.name if comp else ""
+
             for post in unanalyzed:
                 try:
                     result = await asyncio.wait_for(
@@ -895,7 +910,7 @@ class DataCollectionScheduler:
                             likes=post.likes or 0,
                             comments=post.comments or 0,
                             shares=post.shares or 0,
-                            brand_name=comp_names.get(post.competitor_id, ""),
+                            competitor_name=comp_names.get(post.competitor_id, ""),
                         ),
                         timeout=30,
                     )

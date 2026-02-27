@@ -15,6 +15,19 @@ from database import (
 
 logger = logging.getLogger(__name__)
 
+
+def _fmt_pct(pct: float) -> str:
+    """Format a percentage smartly: avoid '-0.0%' by using enough decimals."""
+    if pct == 0:
+        return "0%"
+    abs_pct = abs(pct)
+    if abs_pct >= 1:
+        return f"{pct:+.1f}%"
+    if abs_pct >= 0.01:
+        return f"{pct:+.2f}%"
+    return f"{pct:+.3f}%"
+
+
 # Thresholds for signal detection
 THRESHOLDS = {
     # Social followers: % change triggers
@@ -159,8 +172,8 @@ def _detect_instagram_signals(db: Session, comp: Competitor) -> list:
                 signal_type=f"follower_{'spike' if pct > 0 else 'drop'}",
                 severity=sev,
                 platform="instagram",
-                title=f"Instagram: {direction} de {abs(pct):.1f}% des followers pour {comp.name}",
-                description=f"Passage de {prev.followers:,} à {latest.followers:,} followers ({pct:+.1f}%)",
+                title=f"Instagram: {direction} de {_fmt_pct(abs(pct)).lstrip('+')} des followers pour {comp.name}",
+                description=f"Passage de {prev.followers:,} à {latest.followers:,} followers ({_fmt_pct(pct)})",
                 metric_name="followers",
                 previous_value=prev.followers,
                 current_value=latest.followers,
@@ -203,8 +216,8 @@ def _detect_tiktok_signals(db: Session, comp: Competitor) -> list:
                 signal_type=f"follower_{'spike' if pct > 0 else 'drop'}",
                 severity=sev,
                 platform="tiktok",
-                title=f"TikTok: {direction} de {abs(pct):.1f}% des followers pour {comp.name}",
-                description=f"Passage de {prev.followers:,} à {latest.followers:,} followers ({pct:+.1f}%)",
+                title=f"TikTok: {direction} de {_fmt_pct(abs(pct)).lstrip('+')} des followers pour {comp.name}",
+                description=f"Passage de {prev.followers:,} à {latest.followers:,} followers ({_fmt_pct(pct)})",
                 metric_name="followers",
                 previous_value=prev.followers,
                 current_value=latest.followers,
@@ -229,8 +242,8 @@ def _detect_youtube_signals(db: Session, comp: Competitor) -> list:
                 signal_type=f"subscriber_{'spike' if pct > 0 else 'drop'}",
                 severity=sev,
                 platform="youtube",
-                title=f"YouTube: {direction} de {abs(pct):.1f}% des abonnés pour {comp.name}",
-                description=f"Passage de {prev.subscribers:,} à {latest.subscribers:,} abonnés ({pct:+.1f}%)",
+                title=f"YouTube: {direction} de {_fmt_pct(abs(pct)).lstrip('+')} des abonnés pour {comp.name}",
+                description=f"Passage de {prev.subscribers:,} à {latest.subscribers:,} abonnés ({_fmt_pct(pct)})",
                 metric_name="subscribers",
                 previous_value=prev.subscribers,
                 current_value=latest.subscribers,
@@ -417,7 +430,7 @@ def _detect_growth_trends(db: Session, comp: Competitor) -> list:
                 platform=platform,
                 title=f"{platform.title()}: acceleration de croissance des {label} pour {comp.name}",
                 description=(
-                    f"Croissance en acceleration sur 7 jours: +{total_gain:,.0f} ({pct_gain:+.1f}%). "
+                    f"Croissance en acceleration sur 7 jours: +{total_gain:,.0f} ({_fmt_pct(pct_gain)}). "
                     f"Rythme x{slope_second / slope_first:.1f} vs semaine precedente."
                 ),
                 metric_name=field,
@@ -437,7 +450,7 @@ def _detect_growth_trends(db: Session, comp: Competitor) -> list:
                 title=f"{platform.title()}: retournement de tendance des {label} pour {comp.name}",
                 description=(
                     f"Apres une croissance, les {label} sont en baisse. "
-                    f"Variation totale: {total_change:+,.0f} ({pct:+.1f}%) sur 7 jours."
+                    f"Variation totale: {total_change:+,.0f} ({_fmt_pct(pct)}) sur 7 jours."
                 ),
                 metric_name=field,
                 previous_value=values[0],
@@ -463,7 +476,7 @@ def _detect_growth_trends(db: Session, comp: Competitor) -> list:
                     title=f"{platform.title()}: baisse continue des {label} ({consecutive_drops}j) pour {comp.name}",
                     description=(
                         f"Les {label} baissent depuis {consecutive_drops} jours consecutifs. "
-                        f"Perte totale: {total_loss:+,.0f} ({pct:+.1f}%)."
+                        f"Perte totale: {total_loss:+,.0f} ({_fmt_pct(pct)})."
                     ),
                     metric_name=field,
                     previous_value=values[-consecutive_drops - 1],
