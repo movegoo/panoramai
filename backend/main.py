@@ -668,14 +668,14 @@ async def debug_data_check():
                         db.rollback()
             # Advertiser-scoped tables
             for tbl, q in [
-                ("seo_keywords", "SELECT COUNT(DISTINCT keyword) FROM serp_rankings WHERE advertiser_id = :a"),
+                ("seo_keywords", "SELECT COUNT(DISTINCT keyword) FROM serp_results WHERE advertiser_id = :a"),
                 ("seo_results", "SELECT COUNT(*) FROM serp_results WHERE advertiser_id = :a"),
-                ("geo_tracking", "SELECT COUNT(*) FROM geo_tracking_results WHERE advertiser_id = :a"),
-                ("vgeo_results", "SELECT COUNT(*) FROM vgeo_results WHERE advertiser_id = :a"),
+                ("geo_results", "SELECT COUNT(*) FROM geo_results WHERE advertiser_id = :a"),
+                ("vgeo_reports", "SELECT COUNT(*) FROM vgeo_reports WHERE advertiser_id = :a"),
                 ("signals", "SELECT COUNT(*) FROM signals WHERE advertiser_id = :a"),
-                ("google_trends", "SELECT COUNT(*) FROM google_trends WHERE advertiser_id = :a"),
-                ("google_news", "SELECT COUNT(*) FROM google_news WHERE advertiser_id = :a"),
-                ("ad_snapshots", "SELECT COUNT(*) FROM ad_snapshots WHERE advertiser_id = :a"),
+                ("google_trends", "SELECT COUNT(*) FROM google_trends_data WHERE competitor_id IN (SELECT c.id FROM competitors c JOIN advertiser_competitors ac ON ac.competitor_id = c.id WHERE ac.advertiser_id = :a)"),
+                ("google_news", "SELECT COUNT(*) FROM google_news_articles WHERE competitor_id IN (SELECT c.id FROM competitors c JOIN advertiser_competitors ac ON ac.competitor_id = c.id WHERE ac.advertiser_id = :a)"),
+                ("ad_snapshots", "SELECT COUNT(*) FROM ad_snapshots WHERE competitor_id IN (SELECT c.id FROM competitors c JOIN advertiser_competitors ac ON ac.competitor_id = c.id WHERE ac.advertiser_id = :a)"),
             ]:
                 try:
                     checks[tbl] = db.execute(text(q), {"a": adv_id}).scalar()
