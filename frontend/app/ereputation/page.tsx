@@ -34,6 +34,7 @@ import {
   Instagram,
   Music,
   ExternalLink,
+  MessageSquareWarning,
 } from "lucide-react";
 
 const PLATFORM_ICONS: Record<string, typeof Youtube> = {
@@ -167,7 +168,7 @@ export default function EReputationPage() {
     setAuditing(false);
   }
 
-  if (isLoading) return <LoadingState title="Chargement e-reputation..." />;
+  if (isLoading) return <LoadingState message="Chargement e-reputation..." />;
 
   const competitors = dashboard?.competitors || [];
   const summary = dashboard?.summary;
@@ -183,7 +184,7 @@ export default function EReputationPage() {
           <button onClick={() => { setView("dashboard"); setSelectedCompetitor(null); }} className="text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <PageHeader title={`E-Reputation : ${comp?.competitor_name || ""}`} />
+          <PageHeader icon={MessageSquareWarning} title={`E-Reputation : ${comp?.competitor_name || ""}`} />
         </div>
 
         {!audit ? (
@@ -331,7 +332,7 @@ export default function EReputationPage() {
           <button onClick={() => { setView(selectedCompetitor ? "detail" : "dashboard"); setCommentFilters({ page: 1 }); }} className="text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <PageHeader title="Explorateur de commentaires" />
+          <PageHeader icon={MessageSquareWarning} title="Explorateur de commentaires" />
         </div>
 
         {/* Filters */}
@@ -410,8 +411,9 @@ export default function EReputationPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <PageHeader
+          icon={MessageSquareWarning}
           title="E-Reputation"
-          description="Analyse de la reputation en ligne de vos concurrents"
+          subtitle="Analyse de la reputation en ligne de vos concurrents"
         />
         <Button
           onClick={handleRunAudit}
