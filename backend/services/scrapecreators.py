@@ -392,6 +392,7 @@ class ScrapeCreatorsAPI:
         try:
             return {
                 "success": True,
+                "page_id": str(data.get("pageId") or data.get("page_id") or data.get("id") or ""),
                 "name": data.get("name", ""),
                 "follower_count": data.get("followerCount"),
                 "like_count": data.get("likeCount"),

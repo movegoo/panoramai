@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import json
 import asyncio
 import logging
+import re
 
 from database import get_db, SessionLocal, Competitor, Ad, User, StoreLocation
 from core.auth import get_current_user
@@ -292,6 +293,73 @@ async def _discover_child_pages_background(competitor_ids: list[int], advertiser
                 if _is_valid_child(comp.name, ad_page_name or ""):
                     existing_children.add(ad_page_id)
                     found_children.append({"page_id": ad_page_id, "page_name": ad_page_name, "source": "ads_db"})
+
+            # Strategy 1b: Google Search — "Brand site:facebook.com"
+            # Finds ALL Facebook pages indexed by Google, even without active ads
+            google_queries = [
+                f'"{comp.name}" site:facebook.com',
+            ]
+            # Add brand prefix variants
+            bn_lower = comp.name.lower().strip()
+            matched_prefixes_g = None
+            for key, prefixes in BRAND_PREFIXES.items():
+                if key in bn_lower or bn_lower in key:
+                    matched_prefixes_g = prefixes
+                    break
+            if matched_prefixes_g:
+                for prefix in matched_prefixes_g:
+                    if prefix != bn_lower:
+                        google_queries.append(f'"{prefix}" site:facebook.com')
+
+            logger.info(f"[{comp.name}] Google Search strategy: {len(google_queries)} queries")
+
+            for gq in google_queries:
+                try:
+                    google_result = await scrapecreators.search_google(gq, country="FR", limit=30)
+                    if google_result.get("success"):
+                        for result in google_result.get("results", []):
+                            url = result.get("url", "") or result.get("link", "")
+                            title = result.get("title", "")
+                            # Extract Facebook page handle/ID from URL
+                            fb_match = re.match(
+                                r'https?://(?:www\.|m\.|fr-fr\.)?facebook\.com/(?:p/)?([^/?#]+)',
+                                url
+                            )
+                            if not fb_match:
+                                continue
+                            fb_handle = fb_match.group(1)
+                            # Skip non-page URLs
+                            if fb_handle in ("watch", "events", "groups", "marketplace",
+                                             "pages", "profile.php", "story.php", "share",
+                                             "login", "help", "photo", "photos", "videos",
+                                             "reel", "reels", "permalink.php"):
+                                continue
+                            # Check if the page name is a valid child
+                            page_name_from_title = title.split(" - ")[0].split(" | ")[0].strip()
+                            if not _is_valid_child(comp.name, page_name_from_title):
+                                continue
+                            # Try to get page_id via profile fetch
+                            try:
+                                profile = await scrapecreators.fetch_facebook_profile(url)
+                                if profile.get("success"):
+                                    page_id = profile.get("page_id", "")
+                                    page_name = profile.get("name", "") or page_name_from_title
+                                    if page_id and page_id != parent_page_id and page_id not in existing_children:
+                                        if _is_valid_child(comp.name, page_name):
+                                            existing_children.add(page_id)
+                                            found_children.append({
+                                                "page_id": page_id,
+                                                "page_name": page_name,
+                                                "source": f"google:{gq[:40]}",
+                                            })
+                                await asyncio.sleep(0.3)
+                            except Exception as e:
+                                logger.debug(f"Profile fetch failed for {url}: {e}")
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.warning(f"Google search failed for '{gq}': {e}")
+
+            logger.info(f"[{comp.name}] Google Search found {len(found_children)} pages so far")
 
             # Strategy 2: Wildcard search — "Brand -", "Brand City", "Brand Market", etc.
             # Much more efficient than per-city: a few queries can find most child pages
