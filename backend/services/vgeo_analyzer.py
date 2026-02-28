@@ -340,7 +340,7 @@ class VgeoAnalyzer:
         prompt = CLASSIFICATION_PROMPT.format(videos_json=json.dumps(videos_for_prompt, ensure_ascii=False))
 
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(url, json={
                     "contents": [{"parts": [{"text": prompt}]}],
@@ -523,7 +523,7 @@ class VgeoAnalyzer:
         )
 
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={settings.GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={settings.GEMINI_API_KEY}"
             async with httpx.AsyncClient(timeout=45) as client:
                 resp = await client.post(url, json={
                     "contents": [{"parts": [{"text": prompt}]}],

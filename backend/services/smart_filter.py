@@ -198,7 +198,7 @@ class SmartFilterService:
 
     async def _call_gemini(self, query: str, system_prompt: str) -> str:
         """Call Gemini Flash for fast structured output."""
-        url = GEMINI_API_URL.format(model="gemini-2.0-flash") + f"?key={self.gemini_key}"
+        url = GEMINI_API_URL.format(model="gemini-3-flash-preview") + f"?key={self.gemini_key}"
         payload = {
             "contents": [
                 {

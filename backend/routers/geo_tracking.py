@@ -626,8 +626,9 @@ async def _generate_ai_analysis(
     import httpx
     import os
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "") or os.getenv("CLAUDE_KEY", "")
-    if not api_key:
+    from core.config import settings
+    gemini_key = settings.GEMINI_API_KEY
+    if not gemini_key:
         return None
 
     from database import SessionLocal, PromptTemplate
@@ -637,7 +638,6 @@ async def _generate_ai_analysis(
         if not row:
             return None
         prompt_text = row.prompt_text
-        model_id = row.model_id or "claude-haiku-4-5-20251001"
         max_tokens = row.max_tokens or 1024
     finally:
         db.close()
@@ -657,18 +657,17 @@ async def _generate_ai_analysis(
     )
 
     try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={gemini_key}"
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
+                url,
                 json={
-                    "model": model_id,
-                    "max_tokens": max_tokens,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "maxOutputTokens": max_tokens,
+                        "temperature": 0.1,
+                        "responseMimeType": "application/json",
+                    },
                 },
             )
         if response.status_code != 200:
@@ -676,18 +675,21 @@ async def _generate_ai_analysis(
             return None
 
         result = response.json()
+        candidates = result.get("candidates", [])
+        if not candidates:
+            return None
+        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
 
         from core.langfuse_client import trace_generation
-        usage = result.get("usage", {})
+        usage = result.get("usageMetadata", {})
         trace_generation(
             name="geo_tracking.ai_analysis",
-            model=model_id,
+            model="gemini-3-flash-preview",
             input=prompt,
-            output=result.get("content", [{}])[0].get("text", ""),
-            usage={"input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens")},
+            output=text,
+            usage={"input_tokens": usage.get("promptTokenCount"), "output_tokens": usage.get("candidatesTokenCount")},
         )
 
-        text = result.get("content", [{}])[0].get("text", "")
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1]

@@ -5,11 +5,21 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from routers.advertiser import router
+from core.auth import get_current_user
+
+
+def _make_admin_user():
+    user = MagicMock()
+    user.id = 1
+    user.is_admin = True
+    user.is_active = True
+    return user
 
 
 def make_app():
     app = FastAPI()
     app.include_router(router, prefix="/api/advertiser")
+    app.dependency_overrides[get_current_user] = lambda: _make_admin_user()
     return app
 
 

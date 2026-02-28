@@ -18,7 +18,7 @@ from database import EReputationAudit, EReputationComment, Competitor
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
 
 SENTIMENT_PROMPT = """Tu es un expert en analyse de sentiment pour des commentaires sur les réseaux sociaux.
 Analyse chaque commentaire ci-dessous pour la marque "{competitor_name}".
