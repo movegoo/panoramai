@@ -23,6 +23,7 @@ class Settings:
 
     # ScrapeCreators API
     SCRAPECREATORS_API_KEY: str = os.getenv("SCRAPECREATORS_API_KEY", "")
+    SCRAPECREATORS_CACHE_TTL_MINUTES: int = int(os.getenv("SCRAPECREATORS_CACHE_TTL_MINUTES", "60"))
 
     # Anthropic Claude API (for AI creative analysis)
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")

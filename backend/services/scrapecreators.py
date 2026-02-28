@@ -3,6 +3,9 @@ ScrapeCreators API service.
 Unified social media data extraction via https://api.scrapecreators.com
 """
 import logging
+import os
+import re
+import time
 import httpx
 from typing import Dict, Optional
 from core.config import settings
@@ -15,17 +18,75 @@ BASE_URL = "https://api.scrapecreators.com"
 class ScrapeCreatorsAPI:
     """Client for the ScrapeCreators social media scraping API."""
 
+    # TTL rules: (compiled_regex, ttl_seconds) — order matters (first match wins)
+    _TTL_RULES = [
+        (re.compile(r"/v\d+/.+/(videos|channel-videos)"), 2 * 3600),  # Videos: 2h
+        (re.compile(r"/v\d+/.+/comments"), 3600),           # Comments: 1h
+        (re.compile(r"/v\d+/.+/adLibrary/"), 3600),         # Ads: 1h
+        (re.compile(r"/v\d+/.+/search/"), 1800),            # Search: 30min
+        (re.compile(r"/v\d+/google/"), 3600),               # Google ads: 1h
+        (re.compile(r"/v\d+/.+/profile"), 6 * 3600),       # Profiles: 6h
+        (re.compile(r"/v\d+/.+/channel$"), 6 * 3600),      # Channels: 6h
+    ]
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.SCRAPECREATORS_API_KEY
         if not self.api_key:
             logger.warning("ScrapeCreators API key not configured. Set SCRAPECREATORS_API_KEY in .env")
+        self._cache: dict[str, tuple[dict, float]] = {}
+        self._cache_ttl_default = int(os.getenv("SCRAPECREATORS_CACHE_TTL_MINUTES", "60")) * 60
+        self._cache_hits = 0
+        self._cache_misses = 0
 
     @property
     def _headers(self) -> dict:
         return {"x-api-key": self.api_key}
 
+    def _get_ttl(self, path: str) -> int:
+        """Return cache TTL in seconds based on endpoint pattern."""
+        for pattern, ttl in self._TTL_RULES:
+            if pattern.search(path):
+                return ttl
+        return self._cache_ttl_default
+
+    def _make_cache_key(self, path: str, params: dict | None) -> str:
+        """Build a deterministic cache key from path and params."""
+        frozen = tuple(sorted((params or {}).items()))
+        return f"{path}|{frozen}"
+
+    def clear_cache(self) -> None:
+        """Clear all cached responses."""
+        self._cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
+
+    @property
+    def cache_stats(self) -> dict:
+        """Return cache statistics for monitoring."""
+        return {
+            "size": len(self._cache),
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+        }
+
     async def _get(self, path: str, params: dict = None) -> Dict:
-        """Make a GET request to the ScrapeCreators API."""
+        """Make a GET request to the ScrapeCreators API (with in-memory cache)."""
+        cache_key = self._make_cache_key(path, params)
+        ttl = self._get_ttl(path)
+
+        # Check cache
+        if cache_key in self._cache:
+            cached_data, cached_ts = self._cache[cache_key]
+            if time.time() - cached_ts < ttl:
+                self._cache_hits += 1
+                logger.debug(f"Cache HIT for {path} (TTL {ttl}s)")
+                return cached_data
+            else:
+                # Expired — remove stale entry
+                del self._cache[cache_key]
+
+        self._cache_misses += 1
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -51,6 +112,8 @@ class ScrapeCreatorsAPI:
                 if "success" not in data:
                     data["success"] = True
 
+                # Cache successful responses only
+                self._cache[cache_key] = (data, time.time())
                 return data
 
         except httpx.HTTPStatusError as e:

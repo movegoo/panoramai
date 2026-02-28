@@ -1,5 +1,6 @@
 """Tests for services/scrapecreators.py — ScrapeCreators API client."""
 import os
+import time
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 
@@ -432,6 +433,190 @@ class TestSearchTiktokAds:
         assert result["success"] is True
         assert result["ads_count"] == 1
         assert result["total_results"] == 2
+
+
+# ─── Cache ────────────────────────────────────────────────────────
+
+def _make_mock_client(mock_response):
+    """Helper: create a patched httpx.AsyncClient that returns mock_response."""
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    return mock_client
+
+
+def _make_mock_response(data: dict):
+    """Helper: create a mock httpx response."""
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.json.return_value = data
+    resp.raise_for_status = MagicMock()
+    return resp
+
+
+class TestCache:
+    @pytest.mark.asyncio
+    async def test_cache_hit(self):
+        """Two identical calls → only 1 HTTP request."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        mock_response = _make_mock_response({"data": "value"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = _make_mock_client(mock_response)
+            mock_cls.return_value = mock_client
+
+            result1 = await api._get("/v1/test/profile", {"handle": "foo"})
+            result2 = await api._get("/v1/test/profile", {"handle": "foo"})
+
+        assert result1["success"] is True
+        assert result2["success"] is True
+        assert result1["data"] == "value"
+        # HTTP client.get should have been called exactly once
+        assert mock_client.get.call_count == 1
+        assert api.cache_stats["hits"] == 1
+        assert api.cache_stats["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_cache_miss_after_ttl(self):
+        """After TTL expires, a new HTTP call is made."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        mock_response = _make_mock_response({"data": "value"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = _make_mock_client(mock_response)
+            mock_cls.return_value = mock_client
+
+            await api._get("/v1/test/profile", {"handle": "foo"})
+
+            # Expire the cache entry by backdating the timestamp
+            for key in api._cache:
+                data, ts = api._cache[key]
+                api._cache[key] = (data, ts - 100_000)  # shift 100k seconds back
+
+            await api._get("/v1/test/profile", {"handle": "foo"})
+
+        assert mock_client.get.call_count == 2
+        assert api.cache_stats["misses"] == 2
+
+    @pytest.mark.asyncio
+    async def test_error_not_cached(self):
+        """Error responses (success: False) should NOT be cached."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        error_response = _make_mock_response({"success": False, "message": "Bad request"})
+        ok_response = _make_mock_response({"data": "ok"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            # First call returns error, second returns success
+            mock_client.get = AsyncMock(side_effect=[error_response, ok_response])
+            mock_cls.return_value = mock_client
+
+            result1 = await api._get("/v1/test", {"q": "bad"})
+            result2 = await api._get("/v1/test", {"q": "bad"})
+
+        assert result1["success"] is False
+        assert result2["success"] is True
+        assert mock_client.get.call_count == 2
+        assert api.cache_stats["size"] == 1  # only the success is cached
+
+    @pytest.mark.asyncio
+    async def test_clear_cache(self):
+        """After clear_cache(), same call triggers new HTTP request."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        mock_response = _make_mock_response({"data": "value"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = _make_mock_client(mock_response)
+            mock_cls.return_value = mock_client
+
+            await api._get("/v1/test/profile", {"handle": "foo"})
+            assert api.cache_stats["size"] == 1
+
+            api.clear_cache()
+            assert api.cache_stats["size"] == 0
+            assert api.cache_stats["hits"] == 0
+
+            await api._get("/v1/test/profile", {"handle": "foo"})
+
+        assert mock_client.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_cache_stats(self):
+        """Verify hits/misses are tracked correctly."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        mock_response = _make_mock_response({"data": "v"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = _make_mock_client(mock_response)
+            mock_cls.return_value = mock_client
+
+            await api._get("/v1/x", {"a": "1"})  # miss
+            await api._get("/v1/x", {"a": "1"})  # hit
+            await api._get("/v1/x", {"a": "1"})  # hit
+            await api._get("/v1/y", {"b": "2"})  # miss
+
+        stats = api.cache_stats
+        assert stats["misses"] == 2
+        assert stats["hits"] == 2
+        assert stats["size"] == 2
+
+    @pytest.mark.asyncio
+    async def test_different_params_different_cache(self):
+        """Different params for same path → separate cache entries."""
+        api = ScrapeCreatorsAPI(api_key="test")
+        resp_a = _make_mock_response({"data": "a"})
+        resp_b = _make_mock_response({"data": "b"})
+
+        with patch("services.scrapecreators.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.get = AsyncMock(side_effect=[resp_a, resp_b])
+            mock_cls.return_value = mock_client
+
+            result_a = await api._get("/v1/test/profile", {"handle": "alice"})
+            result_b = await api._get("/v1/test/profile", {"handle": "bob"})
+
+        assert result_a["data"] == "a"
+        assert result_b["data"] == "b"
+        assert mock_client.get.call_count == 2
+        assert api.cache_stats["size"] == 2
+        assert api.cache_stats["misses"] == 2
+        assert api.cache_stats["hits"] == 0
+
+
+class TestGetTTL:
+    def setup_method(self):
+        self.api = ScrapeCreatorsAPI(api_key="test")
+
+    def test_profile_ttl(self):
+        assert self.api._get_ttl("/v1/instagram/profile") == 6 * 3600
+        assert self.api._get_ttl("/v1/tiktok/profile") == 6 * 3600
+
+    def test_channel_ttl(self):
+        assert self.api._get_ttl("/v1/youtube/channel") == 6 * 3600
+
+    def test_videos_ttl(self):
+        assert self.api._get_ttl("/v1/tiktok/profile/videos") == 2 * 3600
+        assert self.api._get_ttl("/v1/youtube/channel-videos") == 2 * 3600
+
+    def test_comments_ttl(self):
+        assert self.api._get_ttl("/v1/youtube/video/comments") == 3600
+
+    def test_adlibrary_ttl(self):
+        assert self.api._get_ttl("/v1/facebook/adLibrary/search/ads") == 3600
+
+    def test_google_ttl(self):
+        assert self.api._get_ttl("/v1/google/company/ads") == 3600
+
+    def test_search_ttl(self):
+        assert self.api._get_ttl("/v1/tiktok/search/keyword") == 1800
+
+    def test_default_ttl(self):
+        assert self.api._get_ttl("/v1/unknown/endpoint") == 3600
 
 
 # ─── Singleton ───────────────────────────────────────────────────
