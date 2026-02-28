@@ -348,8 +348,8 @@ async def test_auth_middleware_valid_key():
 
 
 @pytest.mark.asyncio
-async def test_auth_middleware_messages_reuses_last_context():
-    """Test that /messages/ endpoint reuses last authenticated context."""
+async def test_auth_middleware_messages_reuses_session_context():
+    """Test that /messages/ endpoint reuses session-scoped context."""
     import core.mcp_auth as mcp_auth_mod
     from core.mcp_auth import MCPAuthMiddleware
 
@@ -363,10 +363,9 @@ async def test_auth_middleware_messages_reuses_last_context():
 
     middleware = MCPAuthMiddleware(inner_app)
 
-    # Set last context
+    # Set session context (keyed by session_id, not global)
     test_ctx = MCPUserContext(user_id=42, advertiser_id=10, competitor_ids=[1, 2])
-    old_ctx = mcp_auth_mod._last_context
-    mcp_auth_mod._last_context = test_ctx
+    mcp_auth_mod._session_contexts["test-session-123"] = test_ctx
 
     scope = {
         "type": "http",
@@ -382,23 +381,26 @@ async def test_auth_middleware_messages_reuses_last_context():
     assert captured_ctx[0].user_id == 42
     assert captured_ctx[0].advertiser_id == 10
 
-    # Restore
-    mcp_auth_mod._last_context = old_ctx
+    # Clean up
+    mcp_auth_mod._session_contexts.clear()
 
 
 @pytest.mark.asyncio
-async def test_auth_middleware_messages_passes_through_without_cache():
-    """Test that /messages/ with session_id passes through even without cache."""
+async def test_auth_middleware_messages_rejects_unknown_session():
+    """Test that /messages/ with unknown session_id returns 401 (no cross-user leak)."""
+    import core.mcp_auth as mcp_auth_mod
     from core.mcp_auth import MCPAuthMiddleware
 
-    called = []
+    responses = []
 
     async def inner_app(scope, receive, send):
-        called.append(True)
-        await send({"type": "http.response.start", "status": 200, "headers": []})
-        await send({"type": "http.response.body", "body": b"ok"})
+        responses.append("inner_called")
+
+    async def mock_send(message):
+        responses.append(message)
 
     middleware = MCPAuthMiddleware(inner_app)
+    mcp_auth_mod._session_contexts.clear()
 
     scope = {
         "type": "http",
@@ -408,7 +410,10 @@ async def test_auth_middleware_messages_passes_through_without_cache():
         "headers": [],
     }
 
-    await middleware(scope, AsyncMock(), AsyncMock())
+    await middleware(scope, AsyncMock(), mock_send)
 
-    # Should pass through to inner app (not 401)
-    assert len(called) == 1
+    # Should return 401, not pass through
+    assert "inner_called" not in responses
+    status_msg = [r for r in responses if isinstance(r, dict) and r.get("type") == "http.response.start"]
+    assert len(status_msg) == 1
+    assert status_msg[0]["status"] == 401

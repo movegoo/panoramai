@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from services.creative_analyzer import creative_analyzer
 from services.smart_filter import smart_filter_service
-from core.auth import get_current_user
+from core.auth import get_current_user, get_admin_user
 from core.permissions import parse_advertiser_header, get_user_competitor_ids
 
 logger = logging.getLogger(__name__)
@@ -246,6 +246,7 @@ async def analyze_all_creatives(
 async def set_api_key(
     key: str = Query(..., min_length=10),
     db: Session = Depends(get_db),
+    user: User = Depends(get_admin_user),
 ):
     """Store the Anthropic API key in the database (Railway env var workaround)."""
     row = db.query(SystemSetting).filter(SystemSetting.key == "ANTHROPIC_API_KEY").first()
@@ -261,7 +262,7 @@ async def set_api_key(
 @router.post("/reset-failed")
 async def reset_failed_analyses(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Reset ads that were marked as analyzed but have score=0 (failed analyses)."""

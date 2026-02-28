@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from core.auth import get_current_user
-from database import get_db, Ad, Competitor
+from database import get_db, Ad, Competitor, User
 
 from services.meta_ad_library import meta_ad_library
 
@@ -91,6 +91,7 @@ class BulkImportRequest(BaseModel):
 async def import_bulk_ads(
     req: BulkImportRequest,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """
     Import pre-fetched Meta ads directly into DB (no API call).

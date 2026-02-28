@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from database import get_db, Competitor, User, SocialPost, Advertiser, AdvertiserCompetitor, UserAdvertiser
 from services.scrapecreators import scrapecreators
 from services.social_content_analyzer import social_content_analyzer
-from core.auth import get_current_user
+from core.auth import get_current_user, get_admin_user
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ router = APIRouter()
 @router.post("/collect-all")
 async def collect_all_social_posts(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Collect recent posts/videos from TikTok, YouTube, Instagram for all active competitors."""
@@ -211,7 +211,7 @@ async def collect_all_social_posts(
 async def analyze_all_content(
     limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """Batch-analyze social posts that haven't been analyzed yet."""

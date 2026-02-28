@@ -12,7 +12,7 @@ from database import (
     get_db, User, Competitor, InstagramData, TikTokData,
     YouTubeData, AppData, Ad,
 )
-from core.auth import get_current_user
+from core.auth import get_current_user, get_admin_user
 from core.permissions import get_user_competitors, parse_advertiser_header
 from services.scrapecreators import scrapecreators
 
@@ -314,7 +314,7 @@ async def _fetch_facebook_ads(competitor: Competitor, db: Session) -> dict:
 @router.post("/all")
 async def enrich_all(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     x_advertiser_id: str | None = Header(None),
 ):
     """

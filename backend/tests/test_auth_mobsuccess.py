@@ -4,8 +4,10 @@ import json
 import time
 from unittest.mock import patch, MagicMock
 
-import jwt
+import jwt as pyjwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -15,27 +17,53 @@ from core.auth import (
     get_current_user,
     _decode_cognito_jwt,
     _validate_cognito_token,
+    _cognito_jwks_cache,
     create_access_token,
 )
 from database import Base, User
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# RSA key pair for testing Cognito JWT signature verification
 # ---------------------------------------------------------------------------
 
-def _make_cognito_jwt(payload: dict, header: dict | None = None) -> str:
-    """Build a fake Cognito JWT (3-part base64url, no real signature)."""
-    header = header or {"alg": "RS256", "typ": "JWT", "kid": "DhUAkad"}
-    def b64url(data: dict) -> str:
-        return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
-    return f"{b64url(header)}.{b64url(payload)}.fake-signature"
+_test_rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_test_rsa_public = _test_rsa_key.public_key()
+
+# Build JWKS response from the test key
+_test_kid = "test-kid-001"
+
+
+def _build_jwks():
+    """Build a JWKS dict from our test RSA public key."""
+    from jwt.algorithms import RSAAlgorithm
+    jwk = json.loads(RSAAlgorithm.to_jwk(_test_rsa_public))
+    jwk["kid"] = _test_kid
+    jwk["use"] = "sig"
+    jwk["alg"] = "RS256"
+    return {"keys": [jwk]}
+
+
+def _make_cognito_jwt(payload: dict) -> str:
+    """Build a properly signed RS256 JWT (like Cognito would issue)."""
+    return pyjwt.encode(
+        payload,
+        _test_rsa_key,
+        algorithm="RS256",
+        headers={"kid": _test_kid},
+    )
 
 
 def _make_credentials(token: str):
     creds = MagicMock()
     creds.credentials = token
     return creds
+
+
+def _mock_jwks():
+    """Inject test JWKS into the cache so _decode_cognito_jwt doesn't fetch."""
+    issuer = "https://cognito-idp.eu-central-1.amazonaws.com/eu-central-1_xxx"
+    _cognito_jwks_cache[f"{issuer}/.well-known/jwks.json"] = _build_jwks()
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +92,15 @@ def cognito_payload():
     }
 
 
+@pytest.fixture(autouse=True)
+def inject_jwks():
+    """Auto-inject test JWKS before each test."""
+    _mock_jwks()
+    yield
+    # Clean up cache
+    _cognito_jwks_cache.clear()
+
+
 # ---------------------------------------------------------------------------
 # Tests: _decode_cognito_jwt
 # ---------------------------------------------------------------------------
@@ -75,13 +112,31 @@ class TestDecodeCognitoJwt:
         assert decoded["sub"] == "abc-123-def-456"
         assert decoded["email"] == "chloe@mobsuccess.com"
 
+    def test_decode_invalid_signature(self, cognito_payload):
+        """Token signed with a different key should fail."""
+        other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        token = pyjwt.encode(
+            cognito_payload, other_key, algorithm="RS256",
+            headers={"kid": _test_kid},
+        )
+        with pytest.raises(ValueError, match="Invalid Cognito token"):
+            _decode_cognito_jwt(token)
+
     def test_decode_invalid_token(self):
-        with pytest.raises(ValueError, match="Not a valid JWT"):
+        with pytest.raises(ValueError):
             _decode_cognito_jwt("not-a-jwt")
 
-    def test_decode_two_parts(self):
-        with pytest.raises(ValueError, match="Not a valid JWT"):
-            _decode_cognito_jwt("part1.part2")
+    def test_decode_expired_token(self, cognito_payload):
+        cognito_payload["exp"] = int(time.time()) - 100
+        token = _make_cognito_jwt(cognito_payload)
+        with pytest.raises(ValueError, match="expired"):
+            _decode_cognito_jwt(token)
+
+    def test_decode_non_cognito_issuer(self, cognito_payload):
+        cognito_payload["iss"] = "https://evil.example.com"
+        token = _make_cognito_jwt(cognito_payload)
+        with pytest.raises(ValueError, match="Not a Cognito token"):
+            _decode_cognito_jwt(token)
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +177,6 @@ class TestValidateCognitoToken:
         with pytest.raises(HTTPException) as exc_info:
             _validate_cognito_token(token, db_session)
         assert exc_info.value.status_code == 401
-        assert "expiré" in exc_info.value.detail
 
     def test_missing_sub_raises_401(self, db_session, cognito_payload):
         del cognito_payload["sub"]
@@ -136,6 +190,17 @@ class TestValidateCognitoToken:
         with pytest.raises(HTTPException) as exc_info:
             _validate_cognito_token("not-a-jwt", db_session)
         assert exc_info.value.status_code == 401
+
+    def test_deterministic_ms_user_id(self, db_session, cognito_payload):
+        """ms_user_id should be deterministic (SHA-256 based, not hash())."""
+        token = _make_cognito_jwt(cognito_payload)
+        user1 = _validate_cognito_token(token, db_session)
+        ms_id_1 = user1.ms_user_id
+
+        # Same sub should produce same ms_user_id
+        import hashlib
+        expected = int(hashlib.sha256("abc-123-def-456".encode()).hexdigest()[:8], 16)
+        assert ms_id_1 == expected
 
 
 # ---------------------------------------------------------------------------

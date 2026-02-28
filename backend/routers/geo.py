@@ -17,7 +17,7 @@ import random
 
 logger = logging.getLogger(__name__)
 from database import get_db, Advertiser, Store, CommuneData, ZoneAnalysis, StoreLocation, Competitor, User, UserAdvertiser, AdvertiserCompetitor
-from core.auth import get_current_user, get_optional_user
+from core.auth import get_current_user, get_optional_user, get_admin_user
 from core.permissions import parse_advertiser_header
 from services.gmb_service import gmb_service, compute_gmb_score
 from services.geodata import (
@@ -282,7 +282,7 @@ async def upload_stores(
 
 
 @router.delete("/stores/{store_id}")
-async def delete_store(store_id: int, db: Session = Depends(get_db)):
+async def delete_store(store_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Supprime un magasin."""
     store = db.query(Store).filter(Store.id == store_id).first()
     if not store:
@@ -849,7 +849,7 @@ async def get_catchment_zones(
 # =============================================================================
 
 @router.post("/banco/download")
-async def download_banco():
+async def download_banco(user: User = Depends(get_admin_user)):
     """Télécharge/rafraîchit la base nationale des commerces."""
     from services.banco import banco_service
     count = await banco_service.download(force=True)
@@ -885,7 +885,7 @@ async def enrich_one_competitor(competitor_id: int, db: Session = Depends(get_db
 
 
 @router.post("/banco/enrich-all")
-async def enrich_all_competitors(db: Session = Depends(get_db)):
+async def enrich_all_competitors(db: Session = Depends(get_db), user: User = Depends(get_admin_user)):
     """Enrichit tous les concurrents existants avec la base commerces.
     Retourne immédiatement la liste des concurrents à enrichir, puis les enrichit un par un."""
     import traceback as tb
@@ -957,6 +957,7 @@ async def enrich_gmb(
     force: bool = False,
     max_per_run: int = 50,
     db: Session = Depends(get_db),
+    user: User = Depends(get_admin_user),
 ):
     """
     Enrichit les store_locations avec des données Google My Business réelles.

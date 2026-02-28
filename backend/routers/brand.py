@@ -560,12 +560,37 @@ _IG_NON_PROFILES = {
 }
 
 
+def _is_safe_url(url: str) -> bool:
+    """Block SSRF: reject internal/private IPs and metadata endpoints."""
+    from urllib.parse import urlparse
+    import ipaddress
+    import socket
+
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+
+    # Block obvious internal hostnames
+    if hostname in ("localhost", "metadata.google.internal"):
+        return False
+    if hostname.startswith("169.254.") or hostname.endswith(".internal"):
+        return False
+
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return ip.is_global
+    except (socket.gaierror, ValueError):
+        return True
+
+
 async def _detect_socials_from_website(website: str) -> dict:
     """Scrape a website's HTML and extract social media links."""
     import httpx
 
     suggestions = {}
     url = website if website.startswith("http") else f"https://{website}"
+
+    if not _is_safe_url(url):
+        return suggestions
 
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
@@ -638,7 +663,7 @@ class SocialSuggestRequest(BaseModel):
 
 
 @router.post("/suggest-socials")
-async def suggest_socials(data: SocialSuggestRequest):
+async def suggest_socials(data: SocialSuggestRequest, user: User = Depends(get_current_user)):
     """
     Auto-detect social media handles from the brand's website.
     1. Scrapes the website HTML for links to social profiles.

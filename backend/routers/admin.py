@@ -19,7 +19,7 @@ from database import (
     PromptTemplate, Store, AdvertiserCompetitor, UserAdvertiser,
     deduplicate_competitors,
 )
-from core.auth import get_current_user
+from core.auth import get_current_user, get_admin_user
 from core.features import resolve_features, get_registry_grouped
 from core.sectors import SECTORS, list_sectors
 from services.scheduler import scheduler
@@ -89,7 +89,7 @@ METHODOLOGIES = [
 
 @router.get("/methodologies")
 async def get_methodologies(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
 ):
     """Return analysis methodology for each module."""
     return METHODOLOGIES
@@ -105,7 +105,7 @@ class PromptUpdateRequest(BaseModel):
 
 @router.get("/prompts")
 async def list_prompts(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """List all editable AI prompt templates."""
@@ -127,7 +127,7 @@ async def list_prompts(
 async def update_prompt(
     key: str,
     body: PromptUpdateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Update an AI prompt template."""
@@ -167,7 +167,7 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 @router.get("/gps-conflicts")
 async def get_gps_conflicts(
     threshold: int = 200,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Compare store GPS positions with BANCO data. Returns conflicts above threshold (meters)."""
@@ -231,7 +231,7 @@ class GpsResolveRequest(BaseModel):
 async def resolve_gps_conflict(
     store_id: int,
     body: GpsResolveRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Resolve a GPS conflict by choosing store or BANCO coordinates."""
@@ -261,7 +261,7 @@ async def resolve_gps_conflict(
 
 @router.get("/stats")
 async def get_stats(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Platform statistics scoped to the current user."""
@@ -306,7 +306,7 @@ async def get_stats(
 
 @router.get("/data-audit")
 async def audit_data(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Show ownership of all brands and competitors. Admin only."""
@@ -341,7 +341,7 @@ async def audit_data(
 # ── Pages Audit (Vertical → Brands → Platforms → Detected pages) ─────────
 
 @router.get("/sectors")
-async def get_sectors(user: User = Depends(get_current_user)):
+async def get_sectors(user: User = Depends(get_admin_user)):
     """List available sectors/verticals."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin uniquement")
@@ -351,7 +351,7 @@ async def get_sectors(user: User = Depends(get_current_user)):
 @router.get("/pages-audit")
 async def pages_audit(
     sector: Optional[str] = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Audit detected pages per competitor per platform. Admin only.
@@ -572,7 +572,7 @@ class PageDeleteRequest(BaseModel):
 @router.post("/pages-audit/delete")
 async def delete_detected_page(
     body: PageDeleteRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Delete a detected page/handle from a competitor. Admin only.
@@ -656,7 +656,7 @@ async def delete_detected_page(
 
 @router.post("/deduplicate")
 async def deduplicate(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
 ):
     """Merge duplicate competitors by facebook_page_id and name. Admin only."""
     if not user.is_admin:
@@ -700,7 +700,7 @@ def _serialize_user(u: User, db: Session) -> dict:
 
 @router.get("/users")
 async def list_users(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """List all users with their brand/competitor info. Admin only."""
@@ -722,7 +722,7 @@ class UserUpdateRequest(BaseModel):
 async def update_user(
     user_id: int,
     body: UserUpdateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Update a user's profile/status. Admin only."""
@@ -781,7 +781,7 @@ async def update_user(
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Delete a user. Admin only. Cannot delete yourself."""
@@ -820,7 +820,7 @@ class CompetitorEditRequest(BaseModel):
 async def admin_update_competitor(
     competitor_id: int,
     body: CompetitorEditRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Update any competitor's handles/info. Admin only, no ownership check."""
@@ -863,7 +863,7 @@ async def admin_update_competitor(
 @router.post("/re-enrich/{competitor_id}")
 async def admin_re_enrich(
     competitor_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Force re-enrichment of a single competitor. Admin only."""
@@ -885,7 +885,7 @@ async def admin_re_enrich(
 
 @router.post("/re-enrich-all")
 async def admin_re_enrich_all(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Re-enrich ALL active competitors. Admin only."""
@@ -917,7 +917,7 @@ async def admin_re_enrich_all(
 
 @router.get("/data-health")
 async def admin_data_health(
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Data health report: stale data, missing data, coverage. Admin only."""
@@ -1029,7 +1029,7 @@ async def admin_data_health(
 # ── Feature Access Control ────────────────────────────────────────────────────
 
 @router.get("/features/registry")
-async def get_feature_registry(user: User = Depends(get_current_user)):
+async def get_feature_registry(user: User = Depends(get_admin_user)):
     """Return the feature registry grouped by page (for admin UI)."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin uniquement")
@@ -1039,7 +1039,7 @@ async def get_feature_registry(user: User = Depends(get_current_user)):
 @router.get("/features/{user_id}")
 async def get_user_features(
     user_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Get resolved features for a user."""
@@ -1065,7 +1065,7 @@ class FeaturesUpdateRequest(BaseModel):
 async def update_user_features(
     user_id: int,
     body: FeaturesUpdateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """Update features for a user."""

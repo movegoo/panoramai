@@ -60,7 +60,17 @@ class Settings:
     DATAGOUV_CACHE_DAYS: int = int(os.getenv("DATAGOUV_CACHE_DAYS", "7"))
 
     # Auth
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
+
+    def __init__(self):
+        if not self.JWT_SECRET:
+            import sys
+            # Allow empty secret only in test mode
+            if "pytest" not in sys.modules:
+                raise RuntimeError(
+                    "CRITICAL: JWT_SECRET environment variable is not set. "
+                    "Refusing to start with an empty/default secret."
+                )
     JWT_EXPIRATION_DAYS: int = int(os.getenv("JWT_EXPIRATION_DAYS", "7"))
 
     # Mobsuccess Lambda Authorizer

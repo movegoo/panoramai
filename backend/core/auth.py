@@ -52,24 +52,85 @@ def decode_token(token: str) -> dict:
 
 
 def _decode_cognito_jwt(token: str) -> dict:
-    """Decode a Cognito JWT payload without signature verification (like vibely-stack).
+    """Decode and VERIFY a Cognito JWT using JWKS public keys.
 
-    The token is trusted because it comes from the Mobsuccess getauthid-auth endpoint
-    which already authenticated the user. We just extract the claims.
+    Fetches the Cognito JWKS endpoint to validate the token signature,
+    then verifies issuer and expiration.
     """
     try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            raise ValueError("Not a valid JWT")
-        # Base64url decode the payload (part 1)
-        payload_b64 = parts[1]
-        # Add padding if needed
-        payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        payload_bytes = base64.urlsafe_b64decode(payload_b64)
-        payload = json.loads(payload_bytes)
+        # First, decode header without verification to get the kid
+        header = jwt.get_unverified_header(token)
+        kid = header.get("kid")
+        if not kid:
+            raise ValueError("JWT has no kid in header")
+
+        # Get the JWKS URL from the token's issuer
+        # Decode payload without verification just to get iss
+        unverified = jwt.decode(token, options={"verify_signature": False})
+        issuer = unverified.get("iss", "")
+
+        if "cognito" not in issuer:
+            raise ValueError(f"Not a Cognito token (iss={issuer})")
+
+        jwks_url = f"{issuer}/.well-known/jwks.json"
+
+        # Fetch JWKS (cached in-process)
+        jwks_data = _get_cognito_jwks(jwks_url)
+        public_key = None
+        for key_data in jwks_data.get("keys", []):
+            if key_data.get("kid") == kid:
+                from jwt.algorithms import RSAAlgorithm
+                public_key = RSAAlgorithm.from_jwk(key_data)
+                break
+
+        if not public_key:
+            # Clear cache and retry once (key rotation)
+            _cognito_jwks_cache.pop(jwks_url, None)
+            jwks_data = _get_cognito_jwks(jwks_url)
+            for key_data in jwks_data.get("keys", []):
+                if key_data.get("kid") == kid:
+                    from jwt.algorithms import RSAAlgorithm
+                    public_key = RSAAlgorithm.from_jwk(key_data)
+                    break
+
+        if not public_key:
+            raise ValueError(f"No matching key found for kid={kid}")
+
+        # Verify signature, expiration, and issuer
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            issuer=issuer,
+            options={"verify_aud": False},  # Cognito ID tokens may not have aud
+        )
         return payload
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Cognito token expired")
+    except jwt.InvalidTokenError as e:
+        raise ValueError(f"Invalid Cognito token: {e}")
     except Exception as e:
-        raise ValueError(f"Failed to decode Cognito JWT: {e}")
+        raise ValueError(f"Failed to verify Cognito JWT: {e}")
+
+
+# JWKS cache (avoid fetching on every request)
+_cognito_jwks_cache: dict[str, dict] = {}
+
+
+def _get_cognito_jwks(jwks_url: str) -> dict:
+    """Fetch and cache Cognito JWKS public keys."""
+    if jwks_url in _cognito_jwks_cache:
+        return _cognito_jwks_cache[jwks_url]
+
+    import urllib.request
+    try:
+        with urllib.request.urlopen(jwks_url, timeout=5) as resp:
+            data = json.loads(resp.read())
+            _cognito_jwks_cache[jwks_url] = data
+            return data
+    except Exception as e:
+        logger.error(f"Failed to fetch JWKS from {jwks_url}: {e}")
+        return {"keys": []}
 
 
 def _validate_cognito_token(token: str, db: Session) -> User:
@@ -97,8 +158,9 @@ def _validate_cognito_token(token: str, db: Session) -> User:
         logger.warning(f"Cognito JWT missing 'sub': {list(payload.keys())}")
         raise HTTPException(status_code=401, detail="Token Cognito invalide (sub manquant)")
 
-    # Stable numeric ID from cognito sub (deterministic)
-    cognito_ms_id = abs(hash(sub)) % 2**31
+    # Stable numeric ID from cognito sub (deterministic across restarts)
+    import hashlib
+    cognito_ms_id = int(hashlib.sha256(sub.encode()).hexdigest()[:8], 16)
 
     logger.info(f"Cognito JWT validated: sub={sub}, email={email}, cognito_ms_id={cognito_ms_id}")
 

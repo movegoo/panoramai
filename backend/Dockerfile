@@ -23,11 +23,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code (includes competitive_mcp/ package)
 COPY . .
 
-# Create cache directory
-RUN mkdir -p /app/cache/datagouv
+# Create cache directory and non-root user
+RUN mkdir -p /app/cache/datagouv && \
+    useradd -r -s /bin/false -d /app appuser && \
+    chown -R appuser:appuser /app
 
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
+
+# Run as non-root
+USER appuser
 
 # Expose port
 EXPOSE ${PORT:-8000}

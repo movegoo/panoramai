@@ -24,7 +24,10 @@ BLOCKED_TABLES = {"users", "system_settings", "prompt_templates", "user_advertis
 
 # SQL statements that are NOT allowed
 BLOCKED_KEYWORDS = re.compile(
-    r"\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|TRUNCATE|REPLACE|GRANT|REVOKE|EXEC|EXECUTE|MERGE)\b",
+    r"\b(DROP|DELETE|INSERT|UPDATE|ALTER|CREATE|TRUNCATE|REPLACE|GRANT|REVOKE|"
+    r"EXEC|EXECUTE|MERGE|COPY|LOAD|INTO\s+OUTFILE|INTO\s+DUMPFILE|"
+    r"pg_read_file|pg_write_file|pg_ls_dir|lo_import|lo_export|"
+    r"UNION\s+ALL\s+SELECT|;\s*SELECT)\b",
     re.IGNORECASE,
 )
 
@@ -283,16 +286,22 @@ Reponds a la question de l'utilisateur en analysant ces donnees. Sois strategiqu
             return "Erreur lors de l'analyse des donnees."
 
     def execute_sql(self, sql: str) -> tuple[list[dict], int]:
-        """Execute a sanitized SQL query and return results."""
+        """Execute a sanitized SQL query with safety limits."""
         from database import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         try:
+            # Set query timeout to prevent DoS (5 seconds max)
+            db.execute(text("SET statement_timeout = '5s'"))
             result = db.execute(text(sql))
             columns = list(result.keys())
             rows = []
-            for row in result.fetchall():
+            # Hard limit on returned rows to prevent memory exhaustion
+            MAX_ROWS = 500
+            for i, row in enumerate(result.fetchall()):
+                if i >= MAX_ROWS:
+                    break
                 rows.append(dict(zip(columns, row)))
             return rows, len(rows)
         finally:

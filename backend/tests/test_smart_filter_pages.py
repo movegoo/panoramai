@@ -138,35 +138,47 @@ class TestSmartFilterRequest:
 class TestSmartFilterEndpoint:
     """Test the /api/smart-filter endpoint."""
 
-    def test_endpoint_exists(self):
+    def _make_authed_client(self):
         from main import app
         from fastapi.testclient import TestClient
-        client = TestClient(app)
+        from core.auth import get_current_user
+        from unittest.mock import MagicMock
+        mock_user = MagicMock()
+        mock_user.id = 1
+        mock_user.email = "test@test.com"
+        mock_user.is_active = True
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        return TestClient(app), app
 
-        with patch("routers.smart_filter.smart_filter_service") as mock_svc:
-            mock_svc.parse_query = AsyncMock(return_value={
-                "filters": {"competitor_name": ["Leclerc"]},
-                "interpretation": "Pubs Leclerc",
-            })
-            response = client.post("/api/smart-filter", json={"query": "Leclerc", "page": "ads"})
-            assert response.status_code == 200
-            data = response.json()
-            assert "filters" in data
-            assert "interpretation" in data
+    def test_endpoint_exists(self):
+        client, app = self._make_authed_client()
+        try:
+            with patch("routers.smart_filter.smart_filter_service") as mock_svc:
+                mock_svc.parse_query = AsyncMock(return_value={
+                    "filters": {"competitor_name": ["Leclerc"]},
+                    "interpretation": "Pubs Leclerc",
+                })
+                response = client.post("/api/smart-filter", json={"query": "Leclerc", "page": "ads"})
+                assert response.status_code == 200
+                data = response.json()
+                assert "filters" in data
+                assert "interpretation" in data
+        finally:
+            app.dependency_overrides.clear()
 
     def test_endpoint_with_page_param(self):
-        from main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
-
-        with patch("routers.smart_filter.smart_filter_service") as mock_svc:
-            mock_svc.parse_query = AsyncMock(return_value={
-                "filters": {"platform": ["instagram"]},
-                "interpretation": "Instagram",
-            })
-            response = client.post("/api/smart-filter", json={"query": "Instagram", "page": "social"})
-            assert response.status_code == 200
-            mock_svc.parse_query.assert_called_once_with("Instagram", page="social")
+        client, app = self._make_authed_client()
+        try:
+            with patch("routers.smart_filter.smart_filter_service") as mock_svc:
+                mock_svc.parse_query = AsyncMock(return_value={
+                    "filters": {"platform": ["instagram"]},
+                    "interpretation": "Instagram",
+                })
+                response = client.post("/api/smart-filter", json={"query": "Instagram", "page": "social"})
+                assert response.status_code == 200
+                mock_svc.parse_query.assert_called_once_with("Instagram", page="social")
+        finally:
+            app.dependency_overrides.clear()
 
     def test_legacy_endpoint_still_works(self):
         """The old /api/creative/smart-filter should still work."""

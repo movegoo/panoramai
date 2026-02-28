@@ -14,7 +14,7 @@ from sqlalchemy import func
 
 from database import get_db, Competitor, GeoResult, Advertiser, SerpResult, User, AdvertiserCompetitor, UserAdvertiser
 from services.geo_analyzer import geo_analyzer, get_geo_queries
-from core.auth import get_current_user, get_optional_user
+from core.auth import get_current_user, get_optional_user, get_admin_user
 from core.permissions import parse_advertiser_header
 from core.sectors import get_sector_label
 
@@ -150,6 +150,7 @@ async def track_geo(
 @router.post("/track-all")
 async def track_all_geo(
     db: Session = Depends(get_db),
+    user: User = Depends(get_admin_user),
 ):
     """Run GEO tracking for ALL active advertisers (all verticals). No auth required (admin batch)."""
     advertisers = db.query(Advertiser).filter(Advertiser.is_active == True).all()

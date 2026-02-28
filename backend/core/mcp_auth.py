@@ -63,24 +63,22 @@ def _resolve_context(api_key: str) -> MCPUserContext | None:
         db.close()
 
 
-# Last authenticated context (set on SSE connect, reused on messages)
-_last_context: MCPUserContext | None = None
+# Session-scoped contexts (keyed by session_id, not a single global)
+_session_contexts: dict[str, MCPUserContext] = {}
 
 
 class MCPAuthMiddleware:
     """Wrap the MCP SSE ASGI app with API key authentication.
 
     Auth flow:
-    1. Client connects to /sse?api_key=pnrm_xxx → validates key, stores context
-    2. Client posts to /messages/?session_id=xxx → reuses last authenticated context
+    1. Client connects to /sse?api_key=pnrm_xxx → validates key, stores context by session
+    2. Client posts to /messages/?session_id=xxx → looks up context for that session
     """
 
     def __init__(self, app: ASGIApp):
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        global _last_context
-
         if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
@@ -90,16 +88,22 @@ class MCPAuthMiddleware:
         api_key = (qs.get("api_key") or [None])[0]
         session_id = (qs.get("session_id") or [None])[0]
 
-        # Messages endpoint: reuse last authenticated context
+        # Messages endpoint: look up context by session_id
         if "/messages" in path and session_id:
-            if _last_context:
-                token = mcp_user_context.set(_last_context)
+            ctx = _session_contexts.get(session_id)
+            if ctx:
+                token = mcp_user_context.set(ctx)
                 try:
                     await self.app(scope, receive, send)
                 finally:
                     mcp_user_context.reset(token)
             else:
-                await self.app(scope, receive, send)
+                # No context for this session — reject
+                response = JSONResponse(
+                    {"detail": "Session inconnue, reconnectez-vous via /sse"},
+                    status_code=401,
+                )
+                await response(scope, receive, send)
             return
 
         # SSE endpoint: validate api_key
@@ -120,8 +124,18 @@ class MCPAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        # Store as last authenticated context
-        _last_context = ctx
+        # Store context keyed by session_id (extracted from SSE response later)
+        # For SSE connect, use api_key as temporary session key
+        temp_session_key = api_key
+        if session_id:
+            temp_session_key = session_id
+        _session_contexts[temp_session_key] = ctx
+
+        # Evict old sessions (limit to 100)
+        while len(_session_contexts) > 100:
+            oldest = next(iter(_session_contexts))
+            del _session_contexts[oldest]
+
         logger.info(f"MCP context set for user {ctx.user_id}, advertiser {ctx.advertiser_id}, {len(ctx.competitor_ids)} competitors")
 
         token = mcp_user_context.set(ctx)

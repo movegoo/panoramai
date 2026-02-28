@@ -5,6 +5,8 @@ Endpoints for accessing French government open data from data.gouv.fr.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 
+from database import User
+from core.auth import get_admin_user
 from services.datagouv import datagouv_service
 
 router = APIRouter()
@@ -187,7 +189,7 @@ async def get_consumption_categories():
 # =============================================================================
 
 @router.post("/refresh")
-async def refresh_market_data():
+async def refresh_market_data(user: User = Depends(get_admin_user)):
     """Refresh all cached market data from data.gouv.fr."""
     try:
         await datagouv_service.refresh_all()
