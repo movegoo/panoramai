@@ -635,8 +635,9 @@ async def get_scheduler_status():
 
 
 @app.get("/api/debug/data-check")
-async def debug_data_check():
-    """Quick data check per advertiser. Temporary debug endpoint."""
+async def debug_data_check(user: User = Depends(get_current_user)):
+    """Quick data check per advertiser. Admin only."""
+    _require_admin(user)
     from sqlalchemy import text
     db = SessionLocal()
     result = {}
@@ -752,9 +753,16 @@ async def run_migration(user: User = Depends(get_current_user)):
     return {"migrations": results}
 
 
+def _require_admin(user: User):
+    """Raise 403 if user is not admin."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
+
+
 @app.post("/api/scheduler/run-now")
-async def trigger_manual_collection():
-    """Déclenche une collecte manuelle de toutes les données."""
+async def trigger_manual_collection(user: User = Depends(get_current_user)):
+    """Déclenche une collecte manuelle de toutes les données. Admin only."""
+    _require_admin(user)
     try:
         await scheduler.daily_data_collection()
         return {"message": "Collecte terminée", "timestamp": datetime.utcnow().isoformat()}
@@ -763,88 +771,99 @@ async def trigger_manual_collection():
 
 
 @app.post("/api/scheduler/run-creative-analysis")
-async def trigger_creative_analysis():
-    """Déclenche l'analyse créative Gemini sur les pubs non analysées."""
+async def trigger_creative_analysis(user: User = Depends(get_current_user)):
+    """Déclenche l'analyse créative Gemini sur les pubs non analysées. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_creative_analysis())
     return {"message": "Analyse créative lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-social-analysis")
-async def trigger_social_analysis():
-    """Déclenche la collecte + analyse IA des posts sociaux."""
+async def trigger_social_analysis(user: User = Depends(get_current_user)):
+    """Déclenche la collecte + analyse IA des posts sociaux. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_social_analysis())
     return {"message": "Collecte + analyse sociale lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-seo")
-async def trigger_seo_tracking():
-    """Déclenche le tracking SEO SERP pour toutes les enseignes."""
+async def trigger_seo_tracking(user: User = Depends(get_current_user)):
+    """Déclenche le tracking SEO SERP pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_seo_tracking())
     return {"message": "SEO tracking lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-geo")
-async def trigger_geo_tracking():
-    """Déclenche le tracking GEO (visibilité IA) pour toutes les enseignes."""
+async def trigger_geo_tracking(user: User = Depends(get_current_user)):
+    """Déclenche le tracking GEO (visibilité IA) pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_geo_tracking())
     return {"message": "GEO tracking lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-vgeo")
-async def trigger_vgeo_analysis():
-    """Déclenche l'analyse VGEO (Video GEO) pour toutes les enseignes."""
+async def trigger_vgeo_analysis(user: User = Depends(get_current_user)):
+    """Déclenche l'analyse VGEO (Video GEO) pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_vgeo_analysis())
     return {"message": "VGEO analysis lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-trends")
-async def trigger_google_trends():
-    """Déclenche la collecte Google Trends pour toutes les enseignes."""
+async def trigger_google_trends(user: User = Depends(get_current_user)):
+    """Déclenche la collecte Google Trends pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_google_trends())
     return {"message": "Google Trends lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-news")
-async def trigger_google_news():
-    """Déclenche la collecte Google News pour toutes les enseignes."""
+async def trigger_google_news(user: User = Depends(get_current_user)):
+    """Déclenche la collecte Google News pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_google_news())
     return {"message": "Google News lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-aso")
-async def trigger_aso_analysis():
-    """Déclenche l'analyse ASO (App Store Optimization) pour toutes les enseignes."""
+async def trigger_aso_analysis(user: User = Depends(get_current_user)):
+    """Déclenche l'analyse ASO (App Store Optimization) pour toutes les enseignes. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.daily_aso_analysis())
     return {"message": "ASO analysis lancée en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-gmb")
-async def trigger_gmb_enrichment():
-    """Déclenche l'enrichissement GMB (Google My Business) pour tous les magasins."""
+async def trigger_gmb_enrichment(user: User = Depends(get_current_user)):
+    """Déclenche l'enrichissement GMB (Google My Business) pour tous les magasins. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.weekly_gmb_enrichment())
     return {"message": "GMB enrichment lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-ereputation")
-async def trigger_ereputation_audit():
-    """Déclenche l'audit e-réputation pour tous les concurrents."""
+async def trigger_ereputation_audit(user: User = Depends(get_current_user)):
+    """Déclenche l'audit e-réputation pour tous les concurrents. Admin only."""
+    _require_admin(user)
     import asyncio
     asyncio.create_task(scheduler.weekly_ereputation_audit())
     return {"message": "Audit e-réputation lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
 @app.post("/api/scheduler/run-all")
-async def trigger_all_enrichment():
-    """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO."""
+async def trigger_all_enrichment(user: User = Depends(get_current_user)):
+    """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO. Admin only."""
+    _require_admin(user)
     import asyncio
 
     async def _run_all():

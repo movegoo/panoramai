@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db, VgeoReport, Advertiser, Competitor, AdvertiserCompetitor
 from core.auth import get_current_user
+from core.permissions import verify_advertiser_access
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ async def analyze_vgeo(
 ):
     """Launch a full VGEO analysis (async, can take 30-60s)."""
     adv_id = _get_advertiser_id(request)
+    verify_advertiser_access(db, adv_id, user)
 
     from services.vgeo_analyzer import vgeo_analyzer
 
@@ -72,6 +74,7 @@ async def get_vgeo_report(
 ):
     """Get the latest VGEO report for the current advertiser."""
     adv_id = _get_advertiser_id(request)
+    verify_advertiser_access(db, adv_id, user)
 
     report = (
         db.query(VgeoReport)
@@ -111,6 +114,7 @@ async def get_vgeo_comparison(
 ):
     """Get competitor comparison from the latest VGEO report."""
     adv_id = _get_advertiser_id(request)
+    verify_advertiser_access(db, adv_id, user)
 
     report = (
         db.query(VgeoReport)

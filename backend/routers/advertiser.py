@@ -480,7 +480,10 @@ async def _add_competitor_by_name(db: Session, name: str, sector: str, user_id: 
 @router.post("/migrate-links")
 def migrate_advertiser_links(
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     """One-time migration that fixes ALL legacy join-table gaps:
 
     1. user_advertisers: link advertisers to their creator (via advertiser.user_id)
@@ -599,12 +602,14 @@ async def seed_advertiser(
     company_name: str,
     sector: str,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """Admin seed: create an advertiser + all sector competitors for a user.
+    """Admin seed: create an advertiser + all sector competitors for a user. Admin only.
 
-    No auth required (temporary admin endpoint — remove after use).
     Example: POST /api/advertiser/seed?user_id=15&company_name=Auchan&sector=supermarche
     """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     # Validate sector
     sector_comps = get_competitors_for_sector(sector)
     if not sector_comps:

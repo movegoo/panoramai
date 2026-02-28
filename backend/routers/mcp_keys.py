@@ -107,8 +107,11 @@ def get_mcp_key(
 @router.post("/keys/force-generate")
 def force_generate_mcp_key(
     user_id: int,
+    user: User = Depends(get_current_user),
 ):
-    """Admin: force-generate an MCP key for a user (no auth, remove after use)."""
+    """Admin: force-generate an MCP key for a user. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     from sqlalchemy import text
     from database import engine
 
@@ -143,8 +146,12 @@ def force_generate_mcp_key(
 
 
 @router.get("/keys/diag")
-def diag_mcp_keys():
-    """Temporary diagnostic: check all data for all users (remove after fix)."""
+def diag_mcp_keys(
+    user: User = Depends(get_current_user),
+):
+    """Diagnostic: check all data for all users. Admin only."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin uniquement")
     from database import UserAdvertiser, AdvertiserCompetitor, Competitor, Advertiser
     from core.permissions import get_advertiser_competitor_ids
 
