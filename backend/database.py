@@ -662,6 +662,54 @@ class PromptTemplate(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class EReputationAudit(Base):
+    """E-Reputation audit results for a competitor."""
+    __tablename__ = "ereputation_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=False, index=True)
+    reputation_score = Column(Float)  # 0-100
+    nps = Column(Float)  # -100 to +100
+    sav_rate = Column(Float)  # % SAV comments
+    financial_risk_rate = Column(Float)  # % financial risk
+    engagement_rate = Column(Float)  # interactions/comments
+    earned_ratio = Column(Float)  # % earned vs owned
+    sentiment_breakdown = Column(Text)  # JSON {"positive": 45, "negative": 20, "neutral": 35}
+    platform_breakdown = Column(Text)  # JSON stats per platform
+    ai_synthesis = Column(Text)  # JSON {"insights": [...], "recommendations": [...]}
+    total_comments = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    comments = relationship("EReputationComment", back_populates="audit")
+
+
+class EReputationComment(Base):
+    """Individual comment collected for e-reputation analysis."""
+    __tablename__ = "ereputation_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_id = Column(Integer, ForeignKey("ereputation_audits.id"), nullable=True, index=True)
+    competitor_id = Column(Integer, ForeignKey("competitors.id"), nullable=False, index=True)
+    platform = Column(String(20), index=True)  # youtube/tiktok/instagram
+    comment_id = Column(String(200), unique=True)  # Deduplicated (prefixed yt_/tt_/ig_)
+    source_type = Column(String(10))  # "owned" or "earned"
+    source_url = Column(String(1000))
+    source_title = Column(String(1000))
+    author = Column(String(200))
+    text = Column(Text)
+    likes = Column(Integer, default=0)
+    replies = Column(Integer, default=0)
+    published_at = Column(DateTime)
+    collected_at = Column(DateTime, default=datetime.utcnow)
+    sentiment = Column(String(20), index=True)  # positive/negative/neutral
+    sentiment_score = Column(Float)  # -1 to +1
+    categories = Column(Text)  # JSON ["sav", "prix", "qualite"]
+    is_alert = Column(Boolean, default=False, index=True)
+    alert_reason = Column(String(200))
+
+    audit = relationship("EReputationAudit", back_populates="comments")
+
+
 def _run_migrations(engine):
     """Add missing columns and indexes to existing tables."""
     try:

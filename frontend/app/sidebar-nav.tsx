@@ -32,6 +32,7 @@ import {
   Sparkles,
   Bell,
   Lock,
+  MessageSquareWarning,
 } from "lucide-react";
 
 const HREF_TO_FEATURE: Record<string, string> = {
@@ -65,6 +66,7 @@ const navigation = [
       { name: "Part de Voix", href: "/ads-overview", icon: PieChart },
       { name: "Réseaux sociaux", href: "/social", icon: Activity },
       { name: "Applications", href: "/apps", icon: Smartphone },
+      { name: "E-Reputation", href: "/ereputation", icon: MessageSquareWarning },
     ],
   },
   {

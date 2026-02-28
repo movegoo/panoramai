@@ -132,6 +132,15 @@ class DataCollectionScheduler:
             replace_existing=True
         )
 
+        # Weekly E-Reputation audit (Mondays 3 AM)
+        self.scheduler.add_job(
+            self.weekly_ereputation_audit,
+            CronTrigger(day_of_week="mon", hour=3, minute=0),
+            id="weekly_ereputation_audit",
+            name="Weekly E-Reputation Audit",
+            replace_existing=True
+        )
+
         # Monthly Meta token refresh (1st of each month at 4 AM)
         self.scheduler.add_job(
             self.monthly_meta_token_refresh,
@@ -1870,6 +1879,32 @@ class DataCollectionScheduler:
                 logger.error(f"Meta token refresh failed: {result.get('error')}")
         except Exception as e:
             logger.error(f"Meta token refresh job failed: {e}")
+
+    async def weekly_ereputation_audit(self):
+        """Run e-reputation audit for all active competitors (max 10 per run)."""
+        import asyncio
+        logger.info(f"Starting weekly e-reputation audit at {datetime.utcnow()}")
+
+        try:
+            from services.ereputation_service import ereputation_service
+
+            db = SessionLocal()
+            try:
+                competitors = db.query(Competitor).filter(Competitor.is_active == True).all()
+                audited = 0
+                for comp in competitors[:10]:
+                    try:
+                        await ereputation_service.run_audit(comp, db)
+                        audited += 1
+                        logger.info(f"E-reputation audit done for {comp.name}")
+                    except Exception as e:
+                        logger.error(f"E-reputation audit failed for {comp.name}: {e}")
+                    await asyncio.sleep(2)
+                logger.info(f"Weekly e-reputation audit complete: {audited}/{len(competitors[:10])} competitors")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Weekly e-reputation audit failed: {e}")
 
     def get_status(self) -> dict:
         """Get scheduler status and next run times."""

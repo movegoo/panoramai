@@ -28,6 +28,7 @@ from routers import mcp_keys
 from routers import meta_ads
 from routers import smart_filter
 from routers import vgeo
+from routers import ereputation
 from services.scheduler import scheduler
 
 # Logging
@@ -539,6 +540,7 @@ app.include_router(mcp_keys.router, prefix="/api/mcp", tags=["MCP Integration"])
 app.include_router(meta_ads.router, prefix="/api/meta-ads", tags=["Meta Ad Library"])
 app.include_router(smart_filter.router, prefix="/api/smart-filter", tags=["Smart Filter IA"])
 app.include_router(vgeo.router, prefix="/api/vgeo", tags=["VGEO (Video GEO)"])
+app.include_router(ereputation.router, prefix="/api/ereputation", tags=["E-Réputation"])
 
 # Mount MCP SSE server (non-fatal if competitive-mcp not available)
 try:
@@ -832,6 +834,14 @@ async def trigger_gmb_enrichment():
     return {"message": "GMB enrichment lancé en background", "timestamp": datetime.utcnow().isoformat()}
 
 
+@app.post("/api/scheduler/run-ereputation")
+async def trigger_ereputation_audit():
+    """Déclenche l'audit e-réputation pour tous les concurrents."""
+    import asyncio
+    asyncio.create_task(scheduler.weekly_ereputation_audit())
+    return {"message": "Audit e-réputation lancé en background", "timestamp": datetime.utcnow().isoformat()}
+
+
 @app.post("/api/scheduler/run-all")
 async def trigger_all_enrichment():
     """Déclenche TOUT : collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO."""
@@ -848,6 +858,7 @@ async def trigger_all_enrichment():
         await scheduler.daily_google_trends()
         await scheduler.daily_google_news()
         await scheduler.daily_aso_analysis()
+        await scheduler.weekly_ereputation_audit()
 
     asyncio.create_task(_run_all())
-    return {"message": "Enrichissement complet lancé en background (collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO)", "timestamp": datetime.utcnow().isoformat()}
+    return {"message": "Enrichissement complet lancé en background (collecte + signaux + creative + social + SEO + GEO + VGEO + trends + news + ASO + e-réputation)", "timestamp": datetime.utcnow().isoformat()}

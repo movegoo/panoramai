@@ -648,6 +648,93 @@ class ScrapeCreatorsAPI:
         }
 
     # =========================================================================
+    # Comments (for E-Reputation)
+    # =========================================================================
+
+    async def fetch_youtube_comments(self, video_id: str, limit: int = 50) -> Dict:
+        """Fetch comments for a YouTube video."""
+        data = await self._get("/v1/youtube/video/comments", {
+            "videoId": video_id,
+            "limit": str(limit),
+        })
+
+        if not data.get("success"):
+            return data
+
+        try:
+            raw_comments = data.get("comments", data.get("data", []))
+            comments = []
+            for c in raw_comments[:limit]:
+                comments.append({
+                    "comment_id": c.get("commentId", c.get("id", "")),
+                    "author": c.get("authorText", c.get("author", "")),
+                    "text": c.get("textDisplay", c.get("text", c.get("content", ""))),
+                    "likes": int(c.get("likeCount", c.get("likes", 0)) or 0),
+                    "replies": int(c.get("replyCount", c.get("replies", 0)) or 0),
+                    "published_at": c.get("publishedTimeText", c.get("published_at", "")),
+                })
+            return {"success": True, "comments": comments, "count": len(comments)}
+        except Exception as e:
+            logger.error(f"Error parsing YouTube comments for {video_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def fetch_tiktok_comments(self, video_id: str, limit: int = 50) -> Dict:
+        """Fetch comments for a TikTok video."""
+        data = await self._get("/v1/tiktok/video/comments", {
+            "videoId": video_id,
+            "limit": str(limit),
+        })
+
+        if not data.get("success"):
+            return data
+
+        try:
+            raw_comments = data.get("comments", data.get("data", []))
+            comments = []
+            for c in raw_comments[:limit]:
+                user = c.get("user", {})
+                comments.append({
+                    "comment_id": c.get("cid", c.get("id", "")),
+                    "author": user.get("nickname", user.get("unique_id", c.get("author", ""))),
+                    "text": c.get("text", c.get("comment", "")),
+                    "likes": int(c.get("digg_count", c.get("likes", 0)) or 0),
+                    "replies": int(c.get("reply_comment_total", c.get("replies", 0)) or 0),
+                    "published_at": c.get("create_time", ""),
+                })
+            return {"success": True, "comments": comments, "count": len(comments)}
+        except Exception as e:
+            logger.error(f"Error parsing TikTok comments for {video_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def fetch_instagram_comments(self, shortcode: str, limit: int = 50) -> Dict:
+        """Fetch comments for an Instagram post."""
+        data = await self._get("/v2/instagram/post/comments", {
+            "shortcode": shortcode,
+            "limit": str(limit),
+        })
+
+        if not data.get("success"):
+            return data
+
+        try:
+            raw_comments = data.get("comments", data.get("data", data.get("edges", [])))
+            comments = []
+            for c in raw_comments[:limit]:
+                node = c.get("node", c) if isinstance(c, dict) else c
+                comments.append({
+                    "comment_id": node.get("id", node.get("pk", "")),
+                    "author": node.get("owner", {}).get("username", node.get("user", {}).get("username", node.get("author", ""))),
+                    "text": node.get("text", node.get("comment", "")),
+                    "likes": int(node.get("edge_liked_by", {}).get("count", node.get("likes", 0)) or 0),
+                    "replies": int(node.get("edge_threaded_comments", {}).get("count", node.get("replies", 0)) or 0),
+                    "published_at": node.get("created_at", node.get("timestamp", "")),
+                })
+            return {"success": True, "comments": comments, "count": len(comments)}
+        except Exception as e:
+            logger.error(f"Error parsing Instagram comments for {shortcode}: {e}")
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
     # Credits
     # =========================================================================
 

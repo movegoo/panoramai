@@ -1576,3 +1576,99 @@ export const smartFilterAPI = {
       { method: "POST", body: JSON.stringify({ query, page }) }
     ),
 };
+
+// E-Reputation API
+export interface EReputationAudit {
+  id: number;
+  competitor_id: number;
+  reputation_score: number;
+  nps: number;
+  sav_rate: number;
+  financial_risk_rate: number;
+  engagement_rate: number;
+  earned_ratio: number;
+  sentiment_breakdown: { positive: number; negative: number; neutral: number };
+  platform_breakdown: Record<string, { total: number; positive: number; negative: number; neutral: number }>;
+  ai_synthesis: { insights: string[]; recommendations: string[]; risk_summary?: string; strength_summary?: string };
+  total_comments: number;
+  created_at: string | null;
+}
+
+export interface EReputationComment {
+  id: number;
+  audit_id: number;
+  competitor_id: number;
+  platform: string;
+  comment_id: string;
+  source_type: string;
+  source_url: string;
+  source_title: string;
+  author: string;
+  text: string;
+  likes: number;
+  replies: number;
+  published_at: string | null;
+  collected_at: string | null;
+  sentiment: string;
+  sentiment_score: number;
+  categories: string[];
+  is_alert: boolean;
+  alert_reason: string;
+}
+
+export interface EReputationDashboard {
+  competitors: {
+    competitor_id: number;
+    competitor_name: string;
+    logo_url: string | null;
+    audit: EReputationAudit | null;
+  }[];
+  summary: {
+    avg_reputation_score: number;
+    avg_nps: number;
+    total_audited: number;
+    total_alerts: number;
+  };
+}
+
+export interface EReputationCompetitorDetail {
+  audit: EReputationAudit | null;
+  comments: EReputationComment[];
+  alerts: EReputationComment[];
+}
+
+export interface EReputationCommentList {
+  comments: EReputationComment[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export const eReputationAPI = {
+  getDashboard: () =>
+    fetchAPI<EReputationDashboard>("/ereputation/dashboard"),
+
+  getCompetitorDetail: (competitorId: number) =>
+    fetchAPI<EReputationCompetitorDetail>(`/ereputation/competitor/${competitorId}`),
+
+  getComments: (opts?: { competitor_id?: number; platform?: string; sentiment?: string; source_type?: string; page?: number; page_size?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.competitor_id) params.set("competitor_id", String(opts.competitor_id));
+    if (opts?.platform) params.set("platform", opts.platform);
+    if (opts?.sentiment) params.set("sentiment", opts.sentiment);
+    if (opts?.source_type) params.set("source_type", opts.source_type);
+    if (opts?.page) params.set("page", String(opts.page));
+    if (opts?.page_size) params.set("page_size", String(opts.page_size));
+    const qs = params.toString();
+    return fetchAPI<EReputationCommentList>(`/ereputation/comments${qs ? `?${qs}` : ""}`);
+  },
+
+  getAlerts: (limit = 50) =>
+    fetchAPI<{ alerts: EReputationComment[]; total: number }>(`/ereputation/alerts?limit=${limit}`),
+
+  runAudit: (competitorId?: number) =>
+    fetchAPI<{ message: string; competitors: string[] }>(`/ereputation/run-audit${competitorId ? `?competitor_id=${competitorId}` : ""}`, {
+      method: "POST",
+    }),
+};
